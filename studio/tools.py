@@ -160,8 +160,8 @@ def fit_length(film):
         return None
     lines = tl.get("lines") or []
     rec = film.record()
-    if not lines or rec.get("template"):
-        return None
+    if not lines or rec.get("template") or rec.get("localized"):
+        return None  # a translation keeps its original's length: its picture is timed to it
     asked, now = film.asked, film.length
     ends = max(float(L.get("end") or 0) for L in lines)
     top = may_run_to(asked, rec.get("frame"))

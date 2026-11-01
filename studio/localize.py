@@ -195,11 +195,47 @@ def create_args(src):
     }
 
 
+def source_vo(src):
+    """The original's narration: its vo.json, or the "vo" its manifest holds inline (a film built
+    by hand and imported, such as a Short cut from a long film). {} when it has none."""
+    vo = _read(src.path("vo.json"), None)
+    if isinstance(vo, dict):
+        return vo
+    m = _read(src.manifest, {}) or {}
+    return dict(m["vo"]) if isinstance(m.get("vo"), dict) else {}
+
+
 def narrated(src):
     """Whether the original has a narration to translate (a template's is often music only)."""
     if src.record().get("narration") is False:
         return False
-    return bool((_read(src.path("vo.json"), {}) or {}).get("lines"))
+    return bool(source_vo(src).get("lines"))
+
+
+GAP_S = 0.12  # the least quiet kept between one line's last word and the next line
+FADE_S = 0.6  # the last line ends this far before the film does (the closing fade)
+
+
+def slots(vo, timeline, duration):
+    """Where each line of the original was said, and by when its translation must be done: the
+    picture's clock is the original's, so line i starts where it did and ends before line i+1
+    starts (or, the last, before the closing fade). [{i, start, end_by}]."""
+    said = {int(L["i"]): L for L in (timeline or {}).get("lines") or [] if "i" in L}
+    lines = vo.get("lines") or []
+    starts = []
+    for i, ln in enumerate(lines):
+        L = said.get(i) or {}
+        st = L.get("start", ln.get("start") if isinstance(ln, dict) else None)
+        starts.append(None if st is None else float(st))
+    out = []
+    for i, st in enumerate(starts):
+        if st is None:
+            return []  # a narration that was never timed: nothing to hold it to
+        nxt = next((x for x in starts[i + 1 :] if x is not None), None)
+        was_end = float((said.get(i) or {}).get("end") or st)
+        end_by = (nxt - GAP_S) if nxt is not None else (float(duration) - FADE_S)
+        out.append({"i": i, "start": round(st, 3), "end_by": round(max(end_by, was_end), 3)})
+    return out
 
 
 def _ignore(_dir, names):
@@ -234,12 +270,22 @@ def seed(film, src, lang, version, key):
     os.makedirs(film.path(SOURCE), exist_ok=True)
     voiced = narrated(src)
     if voiced:
-        vo = _read(src.path("vo.json"), {}) or {}
+        vo = source_vo(src)
         _write_json(film.path(SOURCE, "vo.json"), vo)
         tl = src.path("audio", "vo", "timeline.json")
         if os.path.exists(tl):
             shutil.copyfile(tl, film.path(SOURCE, "timeline.json"))
-        _write_json(film.path("vo.json"), {**vo, "language": lang})
+        # every line starts where the original's did: the picture keeps the original's clock
+        held = slots(vo, _read(tl, {}), (_read(src.manifest, {}) or {}).get("duration") or 0)
+        lines = [dict(x) if isinstance(x, dict) else {"text": str(x)} for x in vo["lines"]]
+        for sl in held:
+            lines[sl["i"]]["start"] = sl["start"]
+            lines[sl["i"]].pop("pause", None)
+        _write_json(film.path(SOURCE, "slots.json"), held)
+        _write_json(film.path("vo.json"), {**vo, "language": lang, "lines": lines})
+        if isinstance(m.get("vo"), dict):  # inline in the manifest: the studio's own vo.json now
+            m["vo"] = "vo.json"
+            _write_json(film.manifest, m)
     elif os.path.exists(film.path("vo.json")):
         os.remove(film.path("vo.json"))  # Film.create's empty one: nothing is recorded
     rec = src.record()
@@ -254,15 +300,15 @@ def seed(film, src, lang, version, key):
 
 
 def ask(film):
-    """Claude's first message for a translation: what to change (every word said and shown), and
-    what to keep (everything else).
+    """Claude's first message for a translation: the words said and shown change, and nothing
+    else does -- not a number, a colour, a size, a position or a line of code (check_film holds
+    it to that afterwards).
     """
     from film import limits  # noqa: PLC0415
 
     loc = film.record().get("localized") or {}
     lang = LANGUAGES.get(loc.get("language"), loc.get("language"))
     n = film.length
-    lines = len((_read(film.path("vo.json"), {}) or {}).get("lines") or [])
     data = (
         " Its facts -- names, dates, places, people, every word it shows -- are in content.json "
         "(SK.DATA.content), which film.js reads: translate the words there, never its keys, "
@@ -270,63 +316,76 @@ def ask(film):
         if os.path.exists(film.path("content.json"))
         else ""
     )
+    same = (
+        "The rule: ONLY WORDS CHANGE. Change only the text inside quotes that the film shows on "
+        "screen (titles, labels, captions, lists, units, the words in content.json and the "
+        "cast). Never change a number, a colour, a font, a size, a weight, an opacity, a "
+        "position, a time, a file name, a key or any code -- not even to fit a longer word. "
+        "Where a translation does not fit the space its original had, choose a shorter %s "
+        "wording (an abbreviation a native designer would use) instead. Keep names, brands and "
+        "numbers as they are unless %s writes them differently. After you stop, the studio "
+        "compares every file with the original's and sends back anything else that changed."
+        % (lang, lang)
+    )
+    keep = (
+        "Keep everything else exactly as it is: the scenes, the pictures (never paint or draw "
+        "new ones; words inside a picture stay), the people, the camera, the motion, the "
+        "colours, the music and the sounds. It is a translation, not a new version."
+    )
+    work = "Your working time: about %d minutes (waiting for the machine is not counted)." % (
+        limits(n)["claude_s"] // 60
+    )
     if film.record().get("narration") is False:
         return "\n\n".join(
             [
                 "Translate the film into %s. It is a finished film with no narration -- its music "
-                "carries it -- so what changes is every word it shows on screen; change nothing "
-                "else." % lang,
-                "Length: %d seconds, the original's. Your working time: about %d minutes "
-                "(waiting for the machine is not counted)." % (n, limits(n)["claude_s"] // 60),
-                "What you have: the original's own code (film.js, its cast in cast/, its engine), "
-                "its pictures and its music, all yours.%s Do not write a vo.json and do not "
-                "record anything." % data,
-                "Do this: translate every word the film shows (titles, labels, captions, lists, "
-                "dates' month and day names, numbers' units) into natural %s, as a native designer "
-                "would write it. Keep names, brands and numbers as they are unless %s writes them "
-                "differently. Keep the type, the sizes and the layout; where a translation is "
-                "longer, fit it the way the film already fits text (a smaller size, a second "
-                "line), never by cutting words. Call check, look at stills where words changed "
-                "length, and stop." % (lang, lang),
-                "Keep everything else as it is: the scenes and their order, the pictures (never "
-                "paint or draw new ones; words inside a picture stay as they are), the people, "
-                "the camera, the motion, the colours, the music and the sounds. It is a "
-                "translation.",
+                "carries it -- so the only thing that changes is the words it shows on screen."
+                % lang,
+                "What you have: the original's own code (film.js, its cast in cast/, its "
+                "engine), its pictures and its music.%s Do not write a vo.json and do not record "
+                "anything. %s" % (data, work),
+                same + " Call check, look at stills where words changed length, and stop.",
+                keep,
             ]
         )
+    held = _read(film.path(SOURCE, "slots.json"), []) or []
+    table = "\n".join(
+        "  line %d: starts at %.2f s, must be said by %.2f s (%.1f s)"
+        % (x["i"], x["start"], x["end_by"], x["end_by"] - x["start"])
+        for x in held
+    )
     return "\n\n".join(
         [
-            "Translate the film into %s. It is a finished film; make it again in %s and change "
-            "nothing else." % (lang, lang),
-            "Length: about %d seconds, the original's: a translation may come out a little longer "
-            "or shorter; let it, and do not pad or rush the voice to match. Your working time: "
-            "about %d minutes (waiting for the machine is not counted)."
-            % (n, limits(n)["claude_s"] // 60),
+            "Translate the film into %s: the same film, said and written in %s. Only the words "
+            "change; the picture, its timing and everything else stay the original's."
+            % (lang, lang),
             "What you have: the original's own code (film.js, its cast in cast/, its engine), its "
-            "pictures and its music, all yours. vo.json is its narration -- the voice, the way it "
-            "is read (style), the characters' voices and its %d lines, still in the original "
-            "language; vo.json's language is %s already. localize/vo.json and localize/timeline.json "
-            "are the original's narration and its word times, to read.%s" % (lines, lang, data),
+            "pictures and its music. vo.json is its narration -- the voice, the way it is read "
+            "(style), the characters' voices and its %d lines, still in the original language "
+            "(vo.json's language is %s already). localize/vo.json and localize/timeline.json are "
+            "the original's narration and its word times, to read.%s %s"
+            % (
+                len(held) or len((_read(film.path("vo.json"), {}) or {}).get("lines") or []),
+                lang,
+                data,
+                work,
+            ),
+            "The picture keeps the original's clock: every line of vo.json carries its `start`, "
+            "where the original said it -- never change it -- and its translation must be said "
+            "before the next line starts:\n%s" % (table or "  (the lines as they are)"),
             "Do this:\n"
             "1. Translate every narration line in vo.json into natural, spoken %s -- what a native "
-            "narrator would say, not word for word -- keeping the number of lines, what each says "
-            "and about its length, and the same tone. Keep names, brands and numbers as they are "
-            "unless %s writes them differently.\n"
-            "2. Translate every word the film shows on screen (titles, labels, captions, lists, "
-            "numbers' units, anything written in film.js, content.json or the cast) into %s. Keep the type, the "
-            "sizes and the layout; where a translation is longer, fit it the way the film already "
-            "fits text (a smaller size, a second line), never by cutting words.\n"
-            "3. Record the narration with the voice tool, in the same voice.\n"
-            "4. Fit what moves to the new recording: cues placed on words (SK.w(line, 'word')) "
-            "point at the translated word that carries the same meaning; times written in seconds "
-            "on the old narration (sfx.json, and any in film.js) move with their line "
-            "(localize/timeline.json has where each line and word was)." % (lang, lang, lang),
-            "Keep everything else as it is: the scenes and their order, the pictures (never paint "
-            "or draw new ones; words inside a picture stay as they are), the characters, the "
-            "camera, the motion, the colours, the music and the sounds. People drawn from photos "
-            "(SK.head) stay; their mouths follow the new recording by themselves. Do not improve, "
-            "shorten or "
-            "rewrite the story: it is a translation.",
+            "narrator would say -- keeping the number of lines, what each says and the tone, and "
+            "short enough to be said comfortably in its time above (a %s line runs longer than "
+            "English: say it more briefly rather than faster).\n"
+            "2. Translate the words on screen, under the rule below.\n"
+            "3. Record the narration with the voice tool, in the same voice. A line that runs past "
+            "its time: say it more briefly in vo.json and record that line again.\n"
+            "4. A cue placed on a word (SK.w(line, 'word')) now names the translated word that "
+            "carries the same meaning; that is the one kind of quoted text that is not shown."
+            % (lang, lang),
+            same,
+            keep,
         ]
     )
 
@@ -404,6 +463,411 @@ LEFTOVERS = (
     "These words are still in the original's language on screen: %s. Translate each one where "
     "it is written, in film.js or content.json (keep a name or a brand as it is), call check, "
     "and stop with one sentence."
+)
+
+
+# ---------------------------------------------------------------- only the words changed
+# check_film compares the translation with its original, file by file, after Claude's part: any
+# change that is not a word on screen or a word said is a problem, sent back once to be put back,
+# and a film that still has one fails (its credits go back). Its report is localize/check.json.
+
+CODE_FILES = ("film.js",)
+SAME_FILES = ("score.json", "sfx.json", "paint.json")  # the same, as JSON
+PAINT_PINS = {"backend", "model", "style_ref", "quality"}
+SAME_DIRS = ("images", "web", "assets", "template", "rigs", "inputs", "music")
+# words a film's code uses as settings, never shown: never translated
+SETTINGS = set(
+    """left right center centre middle top bottom start end top-left top-right bottom-left
+    bottom-right bold bolder lighter normal italic oblique round butt square miter bevel
+    source-over multiply screen overlay lighten darken destination-out destination-in
+    lighter copy xor transparent white black red green blue yellow orange purple pink grey gray
+    none auto alphabetic hanging ideographic ltr rtl inherit evenodd nonzero""".split()
+)
+WORDY = re.compile(r"[^\W\d_]", re.UNICODE)  # a letter
+KEYISH = re.compile(r"^[A-Za-z0-9_$./:#@-]+$")
+TS = re.compile(r"[ \t\r\n]+")
+
+
+def _js_tokens(code):
+    """film.js as tokens, comments dropped: [(kind, text, line)], kind in str|tpl|num|code."""
+    out, i, n, line = [], 0, len(code), 1
+    prev = ""
+
+    def regex_ok():
+        return (
+            prev == ""
+            or prev in set("(,=:[!&|?{};+-*%<>~^")
+            or prev
+            in (
+                "return",
+                "typeof",
+                "case",
+                "=>",
+                "in",
+                "of",
+                "new",
+                "delete",
+                "void",
+                "throw",
+            )
+        )
+
+    while i < n:
+        c = code[i]
+        if c == "\n":
+            line += 1
+            i += 1
+        elif c in " \t\r":
+            i += 1
+        elif code.startswith("//", i):
+            j = code.find("\n", i)
+            i = n if j < 0 else j
+        elif code.startswith("/*", i):
+            j = code.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            line += code.count("\n", i, j)
+            i = j
+        elif c in "'\"":
+            j = i + 1
+            while j < n and code[j] != c:
+                j += 2 if code[j] == "\\" else 1
+            out.append(("str", code[i + 1 : j], line))
+            i, prev = j + 1, "str"
+        elif c == "`":
+            j, depth = i + 1, 0
+            while j < n and not (code[j] == "`" and depth == 0):
+                if code[j] == "\\":
+                    j += 2
+                    continue
+                if code.startswith("${", j):
+                    depth += 1
+                    j += 2
+                    continue
+                if code[j] == "}" and depth:
+                    depth -= 1
+                elif code[j] == "\n":
+                    line += 1
+                j += 1
+            out.append(("tpl", code[i + 1 : j], line))
+            i, prev = j + 1, "str"
+        elif c.isdigit() or (c == "." and i + 1 < n and code[i + 1].isdigit()):
+            m = re.match(
+                r"0[xX][0-9a-fA-F_]+|(?:\d[\d_]*\.?\d*|\.\d+)(?:[eE][+-]?\d+)?n?", code[i:]
+            )
+            out.append(("num", m.group(0), line))
+            i, prev = i + len(m.group(0)), "num"
+        elif c == "/" and regex_ok():
+            j, cls = i + 1, False
+            while j < n and code[j] != "\n":
+                if code[j] == "\\":
+                    j += 2
+                    continue
+                if code[j] == "[":
+                    cls = True
+                elif code[j] == "]":
+                    cls = False
+                elif code[j] == "/" and not cls:
+                    break
+                j += 1
+            m = re.match(r"[a-z]*", code[j + 1 :])
+            out.append(("code", code[i : j + 1 + len(m.group(0))], line))
+            i, prev = j + 1 + len(m.group(0)), "re"
+        elif c.isalpha() or c in "_$":
+            m = re.match(r"[\w$]+", code[i:])
+            out.append(("code", m.group(0), line))
+            i, prev = i + len(m.group(0)), m.group(0)
+        else:
+            three = code[i : i + 3]
+            tok = (
+                three
+                if three in ("===", "!==", "...", "**=", ">>>", "<<=", ">>=")
+                else (
+                    code[i : i + 2]
+                    if code[i : i + 2]
+                    in (
+                        "=>",
+                        "==",
+                        "!=",
+                        "<=",
+                        ">=",
+                        "&&",
+                        "||",
+                        "??",
+                        "?.",
+                        "++",
+                        "--",
+                        "+=",
+                        "-=",
+                        "*=",
+                        "/=",
+                        "**",
+                    )
+                    else c
+                )
+            )
+            out.append(("code", tok, line))
+            i, prev = i + len(tok), tok
+    return out
+
+
+def _tpl_parts(t):
+    """A template literal's text and its ${...} expressions, apart."""
+    texts, exprs, i, depth, cur = [], [], 0, 0, ""
+    while i < len(t):
+        if depth == 0 and t.startswith("${", i):
+            texts.append(cur)
+            cur, depth, i = "", 1, i + 2
+            continue
+        if depth:
+            if t[i] == "{":
+                depth += 1
+            elif t[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    exprs.append(TS.sub(" ", cur).strip())
+                    cur, i = "", i + 1
+                    continue
+        cur += t[i]
+        i += 1
+    texts.append(cur)
+    return texts, exprs
+
+
+def _reserved(film):
+    """Strings a film uses as names, never shown: its pictures', fonts', cast's and sounds' keys."""
+    m = _read(film.manifest, {}) or {}
+    names = set((m.get("images") or {}).keys())
+    names |= {str(f.get("family")) for f in m.get("fonts") or [] if isinstance(f, dict)}
+    for d in ("cast", "actors"):
+        if os.path.isdir(film.path(d)):
+            names |= {os.path.splitext(x)[0] for x in os.listdir(film.path(d))}
+    return names
+
+
+def wordish(s, reserved=()):
+    """Whether a quoted string is words a person reads or hears (it may be translated), not a
+    setting, a key, a colour, a font or a file."""
+    t = s.strip()
+    if not t or not WORDY.search(t) or t in reserved or t.lower() in SETTINGS:
+        return False
+    if CODEISH.search(t) or re.search(
+        r"\d(?:px|em|rem|pt|%)\b|\.(?:png|jpe?g|webp|svg|mp3|wav|json|js|ttf|otf)\b", t
+    ):
+        return False
+    if " " not in t and KEYISH.match(t) and re.search(r"[_./#:$@]|^[A-Za-z]+\d+$", t):
+        return False  # web_logo, p1, L01, assets/x.png, #fff and 12:30 stay; "21st" is a word
+    return True
+
+
+def _code_diff(name, was, now, reserved):
+    """What changed in one code file beyond its words: [problem]."""
+    a, b = _js_tokens(was), _js_tokens(now)
+    probs = []
+    if len(a) != len(b):
+        k = next(
+            (
+                k
+                for k, (x, y) in enumerate(zip(a, b))
+                if x[0] != y[0] or (x[0] in ("code", "num") and x[1] != y[1])
+            ),
+            min(len(a), len(b)),
+        )
+        ln = b[k][2] if k < len(b) else (b[-1][2] if b else 0)
+        return [
+            "%s: the code changed near line %d (%d tokens, the original had %d)"
+            % (name, ln, len(b), len(a))
+        ]
+    for x, y in zip(a, b):
+        if x[0] != y[0]:
+            probs.append("%s line %d: %s became %s" % (name, y[2], x[1][:40], y[1][:40]))
+        elif x[0] in ("code", "num"):
+            if x[1] != y[1]:
+                probs.append("%s line %d: %s changed to %s" % (name, y[2], x[1][:40], y[1][:40]))
+        elif x[0] == "str":
+            if x[1] != y[1] and not wordish(x[1], reserved):
+                probs.append(
+                    "%s line %d: '%s' is not a word on screen; it changed to '%s'"
+                    % (name, y[2], x[1][:40], y[1][:40])
+                )
+        else:  # a template literal: its ${...} parts are code
+            (ta, ea), (tb, eb) = _tpl_parts(x[1]), _tpl_parts(y[1])
+            if ea != eb:
+                probs.append("%s line %d: the code inside `...${}` changed" % (name, y[2]))
+            elif ta != tb and not any(wordish(t, reserved) for t in ta):
+                probs.append(
+                    "%s line %d: `%s` is not words on screen; it changed" % (name, y[2], x[1][:40])
+                )
+        if len(probs) >= 12:
+            break
+    return probs
+
+
+def _json_diff(name, was, now, reserved, path=""):
+    """What changed in a JSON file beyond its words (strings may change only where they are
+    words): [problem]."""
+    if type(was) is not type(now):
+        return ["%s %s: changed from %r" % (name, path or "(whole)", str(was)[:40])]
+    if isinstance(was, dict):
+        if set(was) != set(now):
+            return [
+                "%s %s: keys changed (%s)"
+                % (name, path or "(top)", ", ".join(sorted(set(was) ^ set(now)))[:80])
+            ]
+        out = []
+        for k in was:
+            out += _json_diff(name, was[k], now[k], reserved, "%s.%s" % (path, k) if path else k)
+        return out
+    if isinstance(was, list):
+        if len(was) != len(now):
+            return ["%s %s: %d items, the original had %d" % (name, path, len(now), len(was))]
+        out = []
+        for k, (x, y) in enumerate(zip(was, now)):
+            out += _json_diff(name, x, y, reserved, "%s[%d]" % (path, k))
+        return out
+    if isinstance(was, str):
+        return (
+            []
+            if was == now or wordish(was, reserved)
+            else ["%s %s: '%s' changed to '%s'" % (name, path, was[:40], now[:40])]
+        )
+    return [] if was == now else ["%s %s: %r changed to %r" % (name, path, was, now)]
+
+
+def _files(root):
+    out = {}
+    for dp, _dn, fn in os.walk(root):
+        for f in fn:
+            if f in NOT_CARRIED_FILES or f.lower().endswith(NOT_CARRIED_EXT):
+                continue
+            p = os.path.join(dp, f)
+            out[os.path.relpath(p, root).replace(os.sep, "/")] = p
+    return out
+
+
+def _same_bytes(a, b):
+    try:
+        if os.path.getsize(a) != os.path.getsize(b):
+            return False
+        with open(a, "rb") as fa, open(b, "rb") as fb:
+            return fa.read() == fb.read()
+    except OSError:
+        return False
+
+
+VO_SAME = ("tts", "voice", "style", "cast", "takes")  # the narrator, as the original had it
+
+
+def overruns(film):
+    """Lines of the translation's recording that run past their slot, or start elsewhere:
+    [problem]."""
+    held = _read(film.path(SOURCE, "slots.json"), []) or []
+    tl = _read(film.path("audio", "vo", "timeline.json"), {}) or {}
+    said = {int(L["i"]): L for L in tl.get("lines") or [] if "i" in L}
+    out = []
+    for sl in held:
+        L = said.get(sl["i"])
+        if L is None:
+            out.append("line %d was not recorded" % sl["i"])
+            continue
+        if abs(float(L.get("start", 0)) - sl["start"]) > 0.02:
+            out.append(
+                "line %d starts at %.2f s; the original's started at %.2f s"
+                % (sl["i"], float(L["start"]), sl["start"])
+            )
+        if float(L.get("end", 0)) > sl["end_by"] + 0.05:
+            out.append(
+                "line %d ends at %.2f s, %.2f s past its time (it must be said by %.2f s): say it more briefly"
+                % (sl["i"], float(L["end"]), float(L["end"]) - sl["end_by"], sl["end_by"])
+            )
+    return out
+
+
+def check_film(film):
+    """Everything in the translation that is not the original's words, translated: {"ok",
+    "problems", "words", "files"}. Words said and shown may change; nothing else may."""
+    loc = film.record().get("localized") or {}
+    src = Film.open(loc.get("from") or "")
+    if src is None:
+        return {"ok": True, "problems": [], "words": 0, "files": 0, "note": "no original"}
+    reserved = _reserved(src)
+    probs, files, words = [], 0, 0
+    # the code: film.js and the cast, token by token
+    code = (
+        [n for n in CODE_FILES] + ["cast/" + x for x in sorted(os.listdir(src.path("cast")))]
+        if os.path.isdir(src.path("cast"))
+        else list(CODE_FILES)
+    )
+    for name in code:
+        was, now = _text(src.path(*name.split("/"))), _text(film.path(*name.split("/")))
+        if was is None:
+            continue
+        files += 1
+        if now is None:
+            probs.append("%s is gone" % name)
+            continue
+        probs += _code_diff(name, was, now, reserved)
+        words += sum(
+            1
+            for x, y in zip(_js_tokens(was), _js_tokens(now))
+            if x[0] in ("str", "tpl") and x[1] != y[1]
+        )
+    # the data, the manifest and the sound: as JSON, only words may change
+    m_was, m_now = _read(src.manifest, {}) or {}, _read(film.manifest, {}) or {}
+    for d in (m_was, m_now):
+        for k in ("vo", "fps", "_from"):
+            d.pop(k, None)
+    files += 1
+    probs += _json_diff("sketch.json", m_was, m_now, reserved)
+    if os.path.exists(src.path("content.json")):
+        files += 1
+        probs += _json_diff(
+            "content.json",
+            _read(src.path("content.json")),
+            _read(film.path("content.json")),
+            reserved,
+        )
+    for name in SAME_FILES:
+        if os.path.exists(src.path(name)):
+            files += 1
+            a, b = _read(src.path(name)), _read(film.path(name))
+            if name == "paint.json" and isinstance(a, dict) and isinstance(b, dict):
+                # which service paints is the studio's setting (pin_paint), not the film's: the
+                # pictures themselves are compared byte for byte below
+                a, b = ({k: v for k, v in x.items() if k not in PAINT_PINS} for x in (a, b))
+            if a != b:
+                probs.append("%s changed: it must stay the original's" % name)
+    for d in SAME_DIRS:
+        a, b = _files(src.path(d)), _files(film.path(d))
+        for rel, pa in a.items():
+            files += 1
+            if rel not in b or not _same_bytes(pa, b[rel]):
+                probs.append("%s/%s changed or is gone" % (d, rel))
+        for rel in sorted(set(b) - set(a)):
+            if d != "rigs":
+                probs.append(
+                    "%s/%s is new: nothing is drawn or painted for a translation" % (d, rel)
+                )
+    # the narrator: the same voice and way of reading, the same number of lines
+    if narrated(src):
+        vw, vn = source_vo(src), _read(film.path("vo.json"), {}) or {}
+        files += 1
+        for k in VO_SAME:
+            if vw.get(k) != vn.get(k):
+                probs.append("vo.json %s changed: the narrator stays the original's" % k)
+        if len(vw.get("lines") or []) != len(vn.get("lines") or []):
+            probs.append(
+                "vo.json has %d lines; the original had %d"
+                % (len(vn.get("lines") or []), len(vw.get("lines") or []))
+            )
+        probs += overruns(film)
+    return {"ok": not probs, "problems": probs[:40], "words": words, "files": files}
+
+
+PUT_BACK = (
+    "The studio compared the translation with the original. Only words may change, and these "
+    "changed beyond that:\n%s\n\nPut each back exactly as the original has it (a line that runs "
+    "long: say it more briefly in vo.json and record that line again), call check, and stop with "
+    "one sentence."
 )
 
 
