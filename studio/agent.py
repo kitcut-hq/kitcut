@@ -594,6 +594,49 @@ async def localize_leftovers(film, emit, meter, tools, auth):
         )
 
 
+PUT_BACK_TURNS = 2  # turns a translation gets to put back what changed beyond its words
+
+
+async def localize_strict(film, emit, meter, tools, auth):
+    """A translation (localize.py) is the original with only its words said and shown changed:
+    localize.check_film compares every file, and what else changed goes back to Claude to put
+    back (PUT_BACK_TURNS turns). Still changed after that: the film fails, so its credits go
+    back. The last report is localize/check.json, the proof of what changed."""
+    report = await asyncio.to_thread(localize.check_film, film)
+    sid = film.record().get("claude_session")
+    for _ in range(PUT_BACK_TURNS):
+        if report["ok"] or not sid:
+            break
+        emit(
+            {
+                "type": "stage",
+                "name": "claude",
+                "text": "Claude is putting back what changed beyond the words",
+            }
+        )
+        with contextlib.suppress(TimeoutError):
+            await _within(
+                run_claude(
+                    film,
+                    emit,
+                    meter,
+                    tools,
+                    auth,
+                    prompt=localize.PUT_BACK % "\n".join("- " + p for p in report["problems"]),
+                    resume=sid,
+                ),
+                Clock(),
+                {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 240},
+            )
+        report = await asyncio.to_thread(localize.check_film, film)
+    with open(film.path(localize.SOURCE, "check.json"), "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=1, ensure_ascii=False)
+    if not report["ok"]:
+        raise RuntimeError(
+            "The translation changed more than the words: %s" % "; ".join(report["problems"][:3])
+        )
+
+
 async def episode_leftovers(film, emit, meter, tools, auth):
     """An episode that started from its last one's code (episode.py) with words of that one's
     story still in film.js: one short turn to take them out. Never fails the film: the words are
@@ -1956,6 +1999,7 @@ async def make_film(
                 raise RuntimeError("Claude finished without translating the film")
             if film.record().get("localized"):
                 await localize_leftovers(film, emit, meter, tools, auth)
+                await localize_strict(film, emit, meter, tools, auth)
             elif film.record().get("template"):
                 await no_leftovers(film, emit, meter, tools, auth)
             elif episode.carried(film):
@@ -1965,8 +2009,14 @@ async def make_film(
             s = time.time()
             import review  # noqa: PLC0415 -- it imports this module
 
-            rv = await review.gate(
-                film, emit, meter, tools, auth, overtime=bool(summary.get("overtime"))
+            # a translation is not reviewed: its original was, and a fix would change more than
+            # its words (localize_strict has just proved it changed nothing else)
+            rv = (
+                None
+                if film.record().get("localized")
+                else await review.gate(
+                    film, emit, meter, tools, auth, overtime=bool(summary.get("overtime"))
+                )
             )
             if rv:
                 stages["review"] = time.time() - s

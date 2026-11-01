@@ -295,6 +295,144 @@ async def main():
     check(localize.leftovers(new) == [], "none once translated")
     check(episode.wanted(new) is False, "a translation is never an episode's next one")
 
+    # ---- only the words change: the clock, the code, the sound and the pictures are the original's
+    strict = original()
+    touch(
+        strict.path("film.js"),
+        'const T = "How bees make honey";\nSK.text(T, {size: 64, color: "#ffcc00", font: "Sofia Sans"});\n'
+        "SK.at(2.5, () => SK.image('web_logo', 0, 0));\nconst cue = SK.w(1, 'nectar');\n",
+    )
+    _write_json(
+        strict.path("audio", "vo", "timeline.json"),
+        {
+            "duration": 30.0,
+            "lines": [
+                {"i": 0, "start": 0.5, "end": 3.0},
+                {"i": 1, "start": 3.4, "end": 7.0},
+                {"i": 2, "start": 8.0, "end": 12.0},
+            ],
+        },
+    )
+    sl = localize.slots(
+        {"lines": LINES}, localize._read(strict.path("audio", "vo", "timeline.json")), 30
+    )
+    check(
+        [x["start"] for x in sl] == [0.5, 3.4, 8.0]
+        and abs(sl[0]["end_by"] - 3.28) < 1e-6
+        and abs(sl[2]["end_by"] - 29.4) < 1e-6,
+        "each line's slot: where the original said it, to the next line (or the fade)",
+        sl,
+    )
+    s_new = Film.create("How bees make honey", 30, "drawn", client=ALICE)
+    localize.seed(s_new, strict, "es", 2, "hold-s")
+    with open(s_new.path("vo.json"), encoding="utf-8") as fh:
+        s_vo = json.load(fh)
+    check(
+        [ln.get("start") for ln in s_vo["lines"]] == [0.5, 3.4, 8.0],
+        "the translation's lines start where the original's did",
+        s_vo["lines"],
+    )
+    check(localize.check_film(s_new)["ok"] is False, "untranslated and unrecorded: not passed")
+
+    def record_es(ends=(2.9, 7.1, 11.0), starts=(0.5, 3.4, 8.0)):
+        os.makedirs(s_new.path("audio", "vo"), exist_ok=True)
+        _write_json(
+            s_new.path("audio", "vo", "timeline.json"),
+            {
+                "lines": [
+                    {"i": i, "start": a, "end": b} for i, (a, b) in enumerate(zip(starts, ends))
+                ]
+            },
+        )
+
+    record_es()
+    js_es = (
+        'const T = "Cómo hacen miel las abejas";\nSK.text(T, {size: 64, color: "#ffcc00", font: "Sofia Sans"});\n'
+        "SK.at(2.5, () => SK.image('web_logo', 0, 0));\nconst cue = SK.w(1, 'néctar');\n"
+    )
+    touch(s_new.path("film.js"), js_es)
+    rep = localize.check_film(s_new)
+    check(
+        rep["ok"] and rep["words"] == 2, "words said and shown changed, nothing else: passed", rep
+    )
+    for what, js in (
+        ("a size", js_es.replace("size: 64", "size: 72")),
+        ("a colour", js_es.replace("#ffcc00", "#ff0000")),
+        ("a font", js_es.replace('"Sofia Sans"', '"Arial"')),
+        ("a time", js_es.replace("2.5", "3.0")),
+        ("a picture's name", js_es.replace("'web_logo'", "'web_other'")),
+        ("a line of code", js_es + "SK.text('extra');\n"),
+    ):
+        touch(s_new.path("film.js"), js)
+        check(localize.check_film(s_new)["ok"] is False, "%s changed: caught" % what)
+    touch(s_new.path("film.js"), js_es + "// un comentario traducido\n")
+    check(localize.check_film(s_new)["ok"], "a comment is not the film: passed")
+    touch(s_new.path("film.js"), js_es)
+    touch(s_new.path("sfx.json"), '[{"t": 1}]')
+    check(localize.check_film(s_new)["ok"] is False, "the sounds moved: caught")
+    touch(s_new.path("sfx.json"), "[]")
+    touch(s_new.path("images", "new.png"))
+    check(localize.check_film(s_new)["ok"] is False, "a new picture: caught")
+    os.remove(s_new.path("images", "new.png"))
+    touch(s_new.path("web", "logo.png"), "other bytes")
+    check(localize.check_film(s_new)["ok"] is False, "a picture changed: caught")
+    touch(s_new.path("web", "logo.png"))
+    check(localize.check_film(s_new)["ok"], "all put back: passed")
+    record_es(ends=(3.6, 7.1, 11.0))
+    rep = localize.check_film(s_new)
+    check(
+        not rep["ok"] and any("line 0 ends" in x for x in rep["problems"]),
+        "a line said past its time: caught",
+        rep["problems"],
+    )
+    record_es(starts=(0.5, 3.9, 8.0))
+    check(localize.check_film(s_new)["ok"] is False, "a line that starts elsewhere: caught")
+    record_es()
+    vo_bad = dict(s_vo, voice="Puck")
+    _write_json(s_new.path("vo.json"), vo_bad)
+    check(localize.check_film(s_new)["ok"] is False, "another narrator: caught")
+    _write_json(s_new.path("vo.json"), s_vo)
+    msg_s = localize.ask(s_new)
+    check(
+        "ONLY WORDS CHANGE" in msg_s and "must be said by 3.28 s" in msg_s,
+        "its first message: only words, and each line's time",
+        msg_s[:300],
+    )
+    check(
+        localize.wordish("21st")
+        and not localize.wordish("p1")
+        and not localize.wordish("#fff")
+        and not localize.wordish("left")
+        and not localize.wordish("assets/a.png")
+        and localize.wordish("Shop now")
+        and not localize.wordish("700 48px Sofia Sans"),
+        "what is a word and what is a setting",
+    )
+
+    # ---- a film whose narration is in its manifest (a Short built by hand and imported)
+    inl = original()
+    os.remove(inl.path("vo.json"))
+    with open(inl.manifest, encoding="utf-8") as fh:
+        im = json.load(fh)
+    im["vo"] = {
+        "voice": "Iapetus",
+        "language": "en",
+        "lines": [dict(x, start=1.0 + 4 * k) for k, x in enumerate(LINES)],
+    }
+    _write_json(inl.manifest, im)
+    check(localize.narrated(inl), "a narration in the manifest is a narration")
+    i_new = Film.create("How bees make honey", 30, "drawn", client=ALICE)
+    localize.seed(i_new, inl, "es", 2, "hold-i")
+    with open(i_new.manifest, encoding="utf-8") as fh:
+        check(json.load(fh).get("vo") == "vo.json", "it becomes the translation's vo.json")
+    with open(i_new.path("vo.json"), encoding="utf-8") as fh:
+        i_vo = json.load(fh)
+    check(
+        i_vo.get("voice") == "Iapetus" and i_vo.get("language") == "es" and len(i_vo["lines"]) == 3,
+        "the same narrator, in Spanish",
+        i_vo,
+    )
+
     # ---- the YouTube draft
     check(
         ytdraft.options({"language": "es", "fresh": True}) == {"language": "es", "fresh": True},

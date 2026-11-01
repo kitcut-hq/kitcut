@@ -683,13 +683,25 @@ kitcut.ai's Translate. The site asks as the original's own client with a film's 
   no `vo.json`, `narration: false` on the record, a first message about the words on screen only;
   it fails if film.js and content.json are both the original's word for word
   (`localize.unchanged`).
-- **Claude's first message** (`localize.ask`): translate every narration line and every word on
-  screen, record the narration in the same voice, move word cues and timed sounds to the new
-  recording, keep everything else. Afterwards a narration still the original's (a third of its
-  longer lines word for word) fails the film, so the site gives its credits back
-  (`localize.untranslated`); words of the original still in film.js or content.json get one short turn
-  (`localize.leftovers`), never a failure. A translation is never an episode's next one
-  (`episode.wanted`).
+- **Only the words change** (2026-11-01, the owner's rule: "absolutely nothing is changed except
+  the voice"). The picture keeps the original's clock: `localize.slots` reads where each line was
+  said (the original's timeline) and the translation's vo.json lines carry that `start`, each to be
+  said before the next begins (`end_by`; the last before the closing fade). Narration kept inline
+  in the manifest (a Short built by hand and imported) becomes the translation's vo.json. The film
+  never changes length (`tools.fit_length` skips it) and is not reviewed (a fix would change more).
+- **Claude's first message** (`localize.ask`): translate the lines to fit their times, translate
+  the words on screen, never change a number, colour, font, size, position, time, key or line of
+  code; a translation that does not fit takes a shorter wording.
+- **The proof** (`localize.check_film`, after Claude's part): film.js and the cast token by token
+  (comments ignored; a quoted string may change only if it is words, `localize.wordish`, never a
+  setting, key, colour, font or file), the manifest and content.json as JSON on the same rule,
+  score/sfx/paint.json the same (paint.json less the studio's painting service), every file under
+  images/ web/ assets/ template/ rigs/ inputs/ music/ byte for byte, the same narrator (tts, voice,
+  style, cast) and number of lines, and each line recorded at its start and inside its time
+  (`localize.overruns`). What else changed goes back to Claude to put back (`agent.localize_strict`,
+  two turns); still changed, the film fails and its credits go back. The report is
+  `localize/check.json`. Words of the original left on screen still get one turn
+  (`localize.leftovers`), never a failure.
 - **Refused before anything is made**: 400 `language` for any language not in `LANGUAGES` (the
   site's 19; never Russian); 404 for another's film; 409 with `reason`: `state` (not finished),
   `round` (a new version being made), `own_voice` (the person's own ElevenLabs narrator),
