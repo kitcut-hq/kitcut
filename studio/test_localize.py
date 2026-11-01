@@ -115,6 +115,23 @@ async def main():
             refused({**spec, "from": f.id}),
         )
 
+    ov = original(narrator={"source": "elevenlabs", "voice": "v" * 20, "model": "eleven_v3"})
+    ov_spec = {**spec, "from": ov.id}
+    grant = {"source": "elevenlabs", "voice": "v" * 20, "model": "eleven_v3", "grant": "g" * 43}
+
+    def refused_with(narrator):
+        try:
+            localize.check(ov_spec, ALICE, None, narrator)
+        except localize.Refused as e:
+            return e.status, e.reason
+        return None
+
+    check(refused_with(None) == (409, "own_voice"), "its own voice, asked with no pass: refused")
+    check(refused_with(grant) is None, "its own voice, asked with a pass to that voice: taken")
+    check(
+        refused_with({**grant, "voice": "w" * 20}) == (409, "own_voice"),
+        "a pass to another voice: refused",
+    )
     for what, rec in (
         ("a template's", {"template": {"id": "t-x", "version": 1}}),
         ("people from photos", {"people": [{"id": "p1", "name": "Ann"}]}),
@@ -421,6 +438,8 @@ async def main():
     }
     _write_json(inl.manifest, im)
     check(localize.narrated(inl), "a narration in the manifest is a narration")
+    inl.update(length=23)
+
     i_new = Film.create("How bees make honey", 30, "drawn", client=ALICE)
     localize.seed(i_new, inl, "es", 2, "hold-i")
     with open(i_new.manifest, encoding="utf-8") as fh:
@@ -432,6 +451,7 @@ async def main():
         "the same narrator, in Spanish",
         i_vo,
     )
+    check(i_new.record().get("length") == 23, "the original's length, exactly (23 s, not 5)")
 
     # ---- the YouTube draft
     check(

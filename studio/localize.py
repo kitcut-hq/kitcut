@@ -19,8 +19,9 @@ so its YouTube words and thumbnails are written for it, never copied (the site s
 and `fresh` with the draft ask too: ytdraft.py).
 
 Refused, before anything is made (409 {reason}): a film that is not finished (state), one whose next
-version is being made (round), one told in the person's own ElevenLabs voice (own_voice: its pass
-to their account was for the making of that film), one already in that language (same), one that
+version is being made (round), one told in the person's own ElevenLabs voice asked without a
+fresh pass to that same voice (own_voice: the site mints one, lib/narrator.js prepare, and sends it
+as `voice`), one already in that language (same), one that
 has a film in that language done or being made (exists, with its id), and, not yet supported, a
 film made scene by scene (long). 400 for a language that is not one of LANGUAGES (never Russian).
 404 for a film that is not the asker's.
@@ -140,9 +141,11 @@ def made_in(src_id, lang, films=None):
     return None
 
 
-def check(spec, client, films=None):
+def check(spec, client, films=None, narrator=None):
     """The original and the language asked for, checked: (source Film, language, key, version).
-    Raises Refused. client: the asker (the site sends the original's own client).
+    Raises Refused. client: the asker (the site sends the original's own client). narrator: the
+    request's own voice (server.narrator_of) -- a film told in its person's own ElevenLabs voice
+    is translated only with a fresh pass to that same voice.
     """
     if not isinstance(spec, dict):
         raise Refused(400, "localize", 'localize must be {"from", "version", "language", "key"}')
@@ -162,8 +165,23 @@ def check(spec, client, films=None):
         raise Refused(409, "state", "the film is not finished")
     if _round_making(src):
         raise Refused(409, "round", "a new version of the film is being made")
-    if (rec.get("narrator") or {}).get("source") == "elevenlabs":
-        raise Refused(409, "own_voice", "the film is told in its person's own ElevenLabs voice")
+    own = rec.get("narrator") or {}
+    if own.get("source") == "elevenlabs":
+        n = narrator or {}
+        if n.get("source") != "elevenlabs" or not n.get("grant"):
+            raise Refused(
+                409,
+                "own_voice",
+                "the film is told in its person's own ElevenLabs voice: ask "
+                "with a pass to it (voice)",
+            )
+        if n.get("voice") != own.get("voice"):
+            raise Refused(
+                409,
+                "own_voice",
+                "the voice asked with is not the one the film is told in",
+                voice=own.get("voice"),
+            )
     if rec.get("mode") == "scenes" or os.path.isdir(src.path("scenes")):
         raise Refused(409, "long", "A film made scene by scene cannot be translated yet.")
     if language_of(src) == lang:
@@ -291,8 +309,16 @@ def seed(film, src, lang, version, key):
     rec = src.record()
     film.update(
         localized={"from": src.id, "version": version, "language": lang, "key": key},
+        # the original's length, exactly (Film.create keeps only multiples of 5: a 23 s Short was 5)
+        **({"length": rec["length"]} if rec.get("length") else {}),
         caps=rec.get("caps") or film.record().get("caps"),
-        **({"narrator": rec["narrator"]} if rec.get("narrator") else {}),
+        # the original's narrator; a film asked with its own voice's pass keeps the one it was
+        # created with (the pass is in temp/voice.json, never in the record)
+        **(
+            {"narrator": rec["narrator"]}
+            if rec.get("narrator") and not film.record().get("narrator")
+            else {}
+        ),
         **({"paint_quality": rec["paint_quality"]} if rec.get("paint_quality") else {}),
         **({"music": "none"} if rec.get("music") == "none" else {}),
         **({} if voiced else {"narration": False}),
