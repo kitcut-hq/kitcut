@@ -680,7 +680,8 @@ def wordish(s, reserved=()):
         r"\d(?:px|em|rem|pt|%)\b|\.(?:png|jpe?g|webp|svg|mp3|wav|json|js|ttf|otf)\b", t
     ):
         return False
-    if " " not in t and KEYISH.match(t) and re.search(r"[_./#:$@]|^[A-Za-z]+\d+$", t):
+    bare = t.rstrip(":;,.!?")  # "Source:" is a word with its colon
+    if " " not in bare and KEYISH.match(bare) and re.search(r"[_./#:$@]|^[A-Za-z]+\d+$", bare):
         return False  # web_logo, p1, L01, assets/x.png, #fff and 12:30 stay; "21st" is a word
     return True
 
@@ -780,7 +781,8 @@ def _same_bytes(a, b):
         return False
 
 
-VO_SAME = ("tts", "voice", "style", "cast", "takes")  # the narrator, as the original had it
+VO_SAME = ("voice", "style", "cast")  # the narrator, as the original had it (tts, model and
+# takes are the studio's own settings, pinned on every film: guard.pin_vo)
 
 
 def overruns(film):
