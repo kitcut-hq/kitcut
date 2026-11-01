@@ -904,7 +904,12 @@ class Film:
         )
         return (
             base
-            + (("content.json",) if rec.get("template") else ())
+            + (
+                ("content.json",)
+                if rec.get("template")
+                or (rec.get("localized") and os.path.exists(self.path("content.json")))
+                else ()
+            )
             + (("paint.json",) if paint_kinds(self.caps) else ())
             + (("scenes.json",) if self.mode == "scenes" else ())
             # an episode's named sounds and themes, kept for the series (library.py)
