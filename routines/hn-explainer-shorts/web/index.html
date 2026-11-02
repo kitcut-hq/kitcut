@@ -82,12 +82,15 @@
   tr:last-child td { border-bottom: 0; }
   table { table-layout: fixed; }
   tbody tr.own-row td { border-bottom: 2px solid var(--line); }
-  textarea[rows="1"] { min-height: 34px; margin: 0; font-size: 13px; }
+  textarea[rows="1"] { min-height: 30px; margin: 0; font-size: 13px; border-style: dashed; background: transparent; resize: vertical; }
   .ang { padding: 6px 0; border-bottom: 1px dashed var(--line); }
   .ang:last-of-type { border-bottom: 0; }
   .fmt { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
   .why, .muted { color: var(--muted); font-size: 13px; }
-  button.sm { padding: 4px 10px; font-size: 13px; margin-top: 4px; }
+  button.sm, button.sm.primary { background: transparent; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  button.sm:hover { border-color: var(--accent); color: var(--accent); }
+  button.sm.confirm { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .pub { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
   .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
     padding: 10px 14px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); display: none; }
@@ -163,7 +166,7 @@
     const angles = idea.angles || [];
     const n = angles.length + 1;
     const statusFor = (aid) => (idea.picks || []).filter((p) => p.angle_id === aid).map(pickHtml).join("");
-    const make = (aid, own) => `<button class="primary sm" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" ${own ? "data-own" : `data-angle="${esc(aid)}"`}>${own ? "Make mine" : "Make"}</button>`;
+    const make = (aid, own) => `<button class="primary sm" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" ${own ? "data-own" : `data-angle="${esc(aid)}"`}>Make</button>`;
     const head = `<td rowspan="${n}" class="topic">${kind ? `<span class="kind ${esc(kind)}">${esc(kind)}</span> ` : ""}<span class="muted">${esc(idea.news_date || "")}</span>
         <div><b>${esc(idea.topic)}</b></div>${idea.stakes ? `<div class="why">${esc(idea.stakes)}</div>` : ""}${links ? `<div class="links">${links}</div>` : ""}
         <label class="pub"><input type="checkbox" data-publish checked> publish when done</label></td>
@@ -204,9 +207,9 @@
     const b = e.target.closest("button[data-make]");
     if (!b) return;
     if (!b.classList.contains("confirm")) {
-      main.querySelectorAll("button.confirm").forEach((x) => { x.classList.remove("confirm"); x.textContent = x.dataset.own !== undefined ? "Make my angle" : "Make this"; });
-      b.classList.add("confirm"); b.textContent = "Tap again to make it";
-      clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove("confirm"); b.textContent = b.dataset.own !== undefined ? "Make my angle" : "Make this"; }, 5000);
+      main.querySelectorAll("button.confirm").forEach((x) => { x.classList.remove("confirm"); x.textContent = "Make"; });
+      b.classList.add("confirm"); b.textContent = "Confirm";
+      clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove("confirm"); b.textContent = "Make"; }, 5000);
       return;
     }
     const card = b.closest("tr");
