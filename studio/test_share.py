@@ -567,6 +567,32 @@ async def main():
         share._call, thumbs.sheet, thumbs.make = real
         await blob.close()
 
+    # ---------------------------------------------------------------- a film in another language
+    lf = fixture_film()
+    lf.update(localized={"from": f.id, "version": 1, "language": "es", "key": "h1"}, title=None)
+    mem.saves.clear()
+    await share.save(lf, {"title": "Cómo se hace la miel", "language": "es"})
+    check(
+        lf.record().get("title") == "Cómo se hace la miel"
+        and any(d.get("title") == "Cómo se hace la miel" for _, d in mem.saves),
+        "a translation's share title is its own title, on its record and in studio_runs",
+        lf.record(),
+    )
+    lf.update(title=None)
+    mem.saves.clear()
+    await asyncio.to_thread(share.titles, True)
+    check(lf.record().get("title") is None and not mem.saves, "--titles --dry-run writes nothing")
+    await asyncio.to_thread(share.titles)
+    check(
+        lf.record().get("title") == "Cómo se hace la miel"
+        and mem.saves == [(lf.id, {"title": "Cómo se hace la miel"})],
+        "--titles gives the translations their share's title",
+        mem.saves,
+    )
+    before = f.record().get("title")
+    await share.save(f, {"title": "How honey is made", "language": "en"})
+    check(f.record().get("title") == before, "an original's title is left alone")
+
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")
     sys.exit(1 if bad else 0)
