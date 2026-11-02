@@ -228,11 +228,11 @@ it shows that the top videos do not, with the number or document that would carr
 it. Do not research beyond what steps 2 to 5 already read: the owner picks first, and the maker
 researches only what was picked.
 
-Then POST the run, once, with the URL and token the routine prompt gives (never write them into
-this repository):
+Then send the run, once, through kc-local (it holds the page's write token; nothing secret is in
+this repository or the prompt):
 
 ```bash
-curl -sS -X POST "$IDEAS_URL/api/runs" -H "authorization: Bearer $IDEAS_WRITE_TOKEN"   -H "content-type: application/json" --data-binary @run.json
+ssh kc-local hn-ideas-post < run.json      # answers {"ok":true,"run_id":...,"ideas":N}
 ```
 
 `run.json` (the `//` notes are for you; send plain JSON):
@@ -262,7 +262,8 @@ curl -sS -X POST "$IDEAS_URL/api/runs" -H "authorization: Bearer $IDEAS_WRITE_TO
 ```
 
 Every link must be one you actually opened in this run; never write a URL from memory. Then
-notify the owner (PushNotification): the number of ideas and the page link from the prompt.
+notify the owner (PushNotification): the number of ideas, the best one in a line, and the page:
+https://hn-ideas-iota.vercel.app
 
 ## 6b. Quick research check, before anything is made (maker only)
 
