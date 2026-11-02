@@ -52,6 +52,27 @@ curl -sS -X POST "$STATUS_URL" -H "content-type: application/json" \
 2. **Research and write** the three documents (ROUTINE.md 7), **60 to 120 seconds**, as long as
    the evidence needs; a `recreation` is a timeline with the time on screen at every step.
    `check_research` until clean, `check_sources` on every row.
+   **Real screenshots, from kc-local's real browser** (owner, 2026-11-02: "do sceenshots using
+   kc-local when applicable. as we did for the yandex video. it allows user to see that something
+   is really happened. real browser helps. it also allows opening social media sites like threads
+   or reddit"). For the pages the film rests on (the source's own page, the dashboard, the filing,
+   a post on Threads or X), take the picture yourself in the headed Edge on kc-local:
+
+   ```bash
+   ssh kc-local 'xb reader open "<url>" >/dev/null; sleep 8; xb reader url' # check where it landed
+   ssh kc-local 'xb reader eval "document.dispatchEvent(new KeyboardEvent(\"keydown\",{key:\"Escape\"}))"' # close a login pop-up
+   ssh kc-local 'xb reader shot' > page-1.png                               # 1600x1000 PNG
+   ```
+
+   Look at every picture before using it: the right page, the line that matters visible, no
+   sign-in wall or cookie banner over it. Then put them into the film: `get_upload_link`, upload
+   each with `curl -T page-1.png "<put_url>"`, `list_uploads` for their ids, and pass them to
+   `make_film` as `upload_ids` with `picture_roles` `show`, naming each in doc3's directions ("the
+   attached screenshot of TRM Labs' blog"). Measured 2026-11-02: Threads and news sites load;
+   **Reddit answers "Prove your humanity"** even there: never solve a CAPTCHA or get around it;
+   leave Reddit out (or use a post's official embed page if it shows without a check). Pages that
+   need a login stay out.
+
 3. **Make** (ROUTINE.md 8): `make_film` in project `p-mlgnibpqat`, 9:16, collage, the idea starting
    with the title (and `FORMAT: recreation, timestamps on screen` for a recreation). Then
    **`making`** with the film's link. Follow it with `get_film` until done. A film whose status is

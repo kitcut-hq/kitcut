@@ -70,6 +70,10 @@
   .err { color: var(--bad); }
   form.key { max-width: 420px; margin: 60px auto; display: grid; gap: 10px; }
   form.key input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: flex-end; justify-content: center; z-index: 5; }
+  .sheet[hidden] { display: none; }
+  .sheet-in { background: var(--card); color: var(--ink); width: 100%; max-width: 560px; border-radius: 14px 14px 0 0; padding: 16px; display: grid; gap: 10px; }
+  .sheet-in input { font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
   .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
     padding: 10px 14px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); display: none; }
 </style>
@@ -77,10 +81,16 @@
 <body>
 <header><div class="bar">
   <div class="grow"><h1>Video ideas</h1><div class="sub" id="sub">From Hacker News, every 12 hours. Pick an angle to make it.</div></div>
+  <button id="phone" title="This page's link, for another device">Link</button>
   <button id="refresh" title="Refresh">↻</button>
 </div></header>
 <main id="main"><div class="empty">Loading…</div></main>
 <div class="toast" id="toast"></div>
+<div class="sheet" id="sheet" hidden><div class="sheet-in">
+  <div>Open this link on your phone once; the page remembers it there.</div>
+  <input id="link" readonly>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button id="copy" class="primary">Copy</button><button id="close">Close</button></div>
+</div></div>
 <script>
 (() => {
   const $ = (s, el = document) => el.querySelector(s);
@@ -201,6 +211,16 @@
   });
 
   $("#refresh").onclick = load;
+  $("#phone").onclick = () => {
+    if (!key) return askKey();
+    $("#link").value = `${location.origin}/?k=${encodeURIComponent(key)}`;
+    $("#sheet").hidden = false; $("#link").select();
+  };
+  $("#close").onclick = () => ($("#sheet").hidden = true);
+  $("#copy").onclick = async () => {
+    try { await navigator.clipboard.writeText($("#link").value); toast("Copied."); }
+    catch { $("#link").select(); toast("Select the link and copy it."); }
+  };
   load();
   // Refresh every minute, but never while the owner is typing an angle or has a button armed.
   setInterval(() => {
