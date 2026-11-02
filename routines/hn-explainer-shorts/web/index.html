@@ -103,8 +103,7 @@
 <body>
 <header><div class="bar">
   <div class="grow"><h1>Video ideas</h1><div class="sub" id="sub">From Hacker News, every 12 hours. Pick an angle to make it.</div></div>
-  <button id="phone" title="This page's link, for another device">Link</button>
-  <button id="refresh" title="Refresh">↻</button>
+  <button id="phone" title="This page's link, for your phone">Phone link</button>
 </div></header>
 <main id="main"><div class="empty">Loading…</div></main>
 <div class="toast" id="toast"></div>
@@ -187,7 +186,7 @@
   function render(state) {
     const runs = state.runs || [];
     if (!runs.length) { main.innerHTML = `<div class="empty">No ideas yet. The routine adds them here every 12 hours.</div>`; return; }
-    $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)}. Pick an angle to make it.`;
+    $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)} · updates by itself · checked ${new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
     main.innerHTML = runs.map((run) => `<section class="run">
       <h2>${esc(when(run.run_at || run.received_at))} · ${(run.ideas || []).length} ideas</h2>
       ${run.summary ? `<details class="summary"><summary>What the scout read and dropped</summary><p>${esc(run.summary)}</p></details>` : ""}
@@ -228,7 +227,6 @@
     load();
   });
 
-  $("#refresh").onclick = load;
   $("#phone").onclick = () => {
     if (!key) return askKey();
     $("#link").value = `${location.origin}/?k=${encodeURIComponent(key)}`;
@@ -244,7 +242,8 @@
   setInterval(() => {
     const busy = main.querySelector("button.confirm, details[open]");
     if (document.visibilityState === "visible" && key && !busy) load();
-  }, 60000);
+  }, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && key) load(); });
 })();
 </script>
 </body>
