@@ -106,7 +106,6 @@ async def main():
     for what, rec, reason in (
         ("not finished", {"state": "running"}, "state"),
         ("its own voice", {"narrator": {"source": "elevenlabs"}}, "own_voice"),
-        ("scene by scene", {"mode": "scenes"}, "long"),
     ):
         f = original(**rec)
         check(
@@ -133,6 +132,7 @@ async def main():
         "a pass to another voice: refused",
     )
     for what, rec in (
+        ("made scene by scene", {"mode": "scenes"}),
         ("a template's", {"template": {"id": "t-x", "version": 1}}),
         ("people from photos", {"people": [{"id": "p1", "name": "Ann"}]}),
         ("no narration", {"narration": False}),
@@ -421,6 +421,39 @@ async def main():
     check(
         s_new.writable(s_new.path("engine", "court.js")),
         "a translation may write its engine modules",
+    )
+    # a film made a scene at a time: its scenes/ carried, its words translated there, one conversation
+    sc = original(mode="scenes")
+    touch(
+        sc.path("scenes", "01-hive.js"),
+        "SK.scene('hive', () => SK.text('Inside the hive', {size: 50}));\n",
+    )
+    sc_new = Film.create("How bees make honey", 30, "drawn", client=ALICE)
+    localize.seed(sc_new, sc, "de", 1, "hold-sc")
+    check(
+        os.path.exists(sc_new.path("scenes", "01-hive.js")) and sc_new.mode == "single",
+        "its scenes are carried, and it is made in one conversation",
+    )
+    check(
+        sc_new.writable(sc_new.path("scenes", "01-hive.js")), "a translation may write its scenes"
+    )
+    check("scenes/" in localize.ask(sc_new), "its first message names scenes/")
+    touch(
+        sc_new.path("scenes", "01-hive.js"),
+        "SK.scene('hive', () => SK.text('Im Bienenstock', {size: 50}));\n",
+    )
+    check(
+        not any("scenes/" in x for x in localize.check_film(sc_new)["problems"]),
+        "a scene's words translated: no problem there",
+        localize.check_film(sc_new)["problems"],
+    )
+    touch(
+        sc_new.path("scenes", "01-hive.js"),
+        "SK.scene('hive', () => SK.text('Im Bienenstock', {size: 60}));\n",
+    )
+    check(
+        any("scenes/" in x for x in localize.check_film(sc_new)["problems"]),
+        "a size changed in a scene: caught",
     )
     msg_s = localize.ask(s_new)
     check(
