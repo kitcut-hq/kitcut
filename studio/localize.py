@@ -888,7 +888,9 @@ def words_in_code(film, limit=10):
     for i, (kind, s, _ln) in enumerate(toks):
         if kind != "str" or not wordish(s, reserved):
             continue
-        if not (" " in s.strip() or s[:1].isupper()):
+        if not (" " in s.strip() or s[:1].isupper()) or s.strip() in ("use strict", "use asm"):
+            continue
+        if sum(c.isalpha() for c in s) < 2:  # an SVG path command ('M', 'C'), a unit
             continue
         cue = i >= 4 and toks[i - 1][1] == "," and toks[i - 3][1] == "(" and toks[i - 4][1] == "w"
         if not cue and s not in out:
