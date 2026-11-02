@@ -148,7 +148,23 @@ a day. Read it as:
   - what it changes for the viewer, the number nobody put in scale, the precedent everyone forgot.
 
   Two things are never an angle: an answer everybody already knows ("it was North Korea"), and a
-  retelling of what the top videos already told. A hype story with a real angle is a **strong**
+  retelling of what the top videos already told.
+
+  **A recreation is a format of its own, for catastrophes, heists, crashes, attacks and killings**
+  (owner, 2026-11-02: "a recreation of what happended might be a good format. it works for
+  catastropes, kills etc"). It is not a retelling: it rebuilds the event step by step from its
+  evidence, with times on screen, and shows the detail the news segments skipped. Binance is the
+  model case: TRM Labs' on-chain record has Binance's own hot wallet signing 50 authorizations that
+  handed it to a sweeper contract, emptied in 3 minutes 24 seconds, then swept six more times over
+  the next three and a half hours, with no private key stolen. Choose it when such a primary record
+  exists (on-chain data, flight or ship tracking, logs, court filings, official timelines).
+
+  **Write the angle, and later the title, as the question or the recreation, never as a news
+  summary** (owner, 2026-11-02: "the titles sound all like reprinting existing news. at least the
+  first part. the second part that starts with why or what or explaining is better"). Not
+  "Proton's CTO says most human code review will end. So who checks the code?" but "Who checks
+  Proton's code now?"; not "Binance lost $6.3B to North Korea" but "Binance's $6.3B hack, recreated
+  minute by minute". A hype story with a real angle is a **strong**
   pick: demand is at its peak and the big videos feed searches for the name. Supply is then
   counted for that angle's own question.
 - **Bot channels do not count as supply, and they warn you.** Auto-made news Shorts (channels like
@@ -200,7 +216,8 @@ fetch, nothing else). Give each the story, what the top videos already say, and 
 and ask it to find whether the evidence actually settles the angle's question, and to return:
 
 ```
-ANGLE: the one question the film answers
+ANGLE: the question the film answers (or the recreation it rebuilds), as a title would say it:
+       no news summary in front
 ANSWER IN ONE SENTENCE: what the evidence says
 KEY EVIDENCE: 3-5 facts/numbers, each with source and URL, read on the page
 WHAT THE TOP VIDEOS DON'T SAY: one line
@@ -278,7 +295,8 @@ For each finished film:
    doc1 does not, do **not** publish it; say so in the report.
 2. `publish_to_youtube`: `film`, `channel: "UC2PK9SXpePZSRkT3LqiOgeg"`, `privacy: "public"`,
    `thumbnail: "youtube"`, and your own
-   - `title`: starts with the searched name, says the question or the answer, no claim the film
+   - `title`: the question, the answer or the recreation, never a news summary ("Who checks
+     Proton's code now?"), with the searched name in its first words, no claim the film
      does not support, ends with ` #shorts`, 70 characters at most before it;
    - `description`: two or three plain sentences of what the film finds, `Data as of <date>.`,
      then `Sources:` and one line per source (outlet, title, URL), then `Made with KitCut:
