@@ -132,23 +132,25 @@ a day. Read it as:
 - 0 to 2 on the angle, none above ~20k views: **open**.
 - a few small ones that only repeat the headline: **open** (we bring the research).
 - big news channels with 1M+ on the same angle, or ten fresh explainers: that **angle** is
-  crowded. **Do not drop the story: look for the angle they all left out.** Read the titles and
-  descriptions of the top videos and write down what every one of them says (usually "what
-  happened" and "who did it"). Then name the question none of them answers, that research can:
-  what it means for the viewer, the number nobody put in context, how it compares with the last
-  time. **Climb the question ladder** a curious viewer climbs after the headline: (1) what happened, (2) who
-did it, (3) how it happened, step by step, (4) **how was that even possible** (what design, rule or
-choice let it happen), (5) **why them** (why this company, this city, this product), (6) **why now**,
-(7) what it means for me. The coverage nearly always stops at 1 to 3, and an answer everybody
-already knows ("it was North Korea") is no angle at all. Our film answers one question from 4 to 7,
-one the evidence can settle. Example, the Binance $6.3B hack (measured 2026-11-02): rungs 1 to 3 are
-taken (CNN 1.4M, IGR 1.2M, Gloam 844k "How Binance Lost $6.3B in One Night", Coin Bureau 424k, DW,
-BBC "why is North Korea being blamed"); "how could one engineer's laptop be allowed to move $6.3
-billion?" (rung 4: hot wallets, signing limits, what exchanges are supposed to do) and "why Binance?"
-(rung 5: the biggest target, and why the "safest" exchange was the one that fell) had one 1.2k-view
-Short between them. Those are the films. A hype story with such an angle is a **strong**
-  pick: demand is at its peak and the big videos feed searches for the name. Supply is then counted
-  for that angle's own question.
+  crowded. **Do not drop the story: look for the angle they all left out.**
+
+  **Finding the angle is judgement, not a checklist.** Read the titles and descriptions of the top
+  videos and write down what they all already say. Then ask: *after watching all of them, what
+  would a sharp viewer still want to know, that we can settle with evidence?* The answer differs
+  with every story, and its shape is never fixed in advance. Shapes it has taken:
+  - **checking a claim everyone repeats**: Yandex. The viral claim was "russian bots went quiet
+    after the strike"; nobody had measured it; the film measured it (Cloudflare Radar, NetBlocks)
+    and said what the data does not show;
+  - **how something was even possible**: Binance's $6.3B hack (2026-11-02). Everyone told the
+    night step by step (CNN 1.4M, IGR 1.2M, Gloam 844k, Coin Bureau 424k, DW, BBC); nobody asked
+    how one engineer's laptop could be allowed to move $6.3 billion, or why it was Binance, the
+    biggest and supposedly safest exchange (one 1.2k-view Short between them);
+  - what it changes for the viewer, the number nobody put in scale, the precedent everyone forgot.
+
+  Two things are never an angle: an answer everybody already knows ("it was North Korea"), and a
+  retelling of what the top videos already told. A hype story with a real angle is a **strong**
+  pick: demand is at its peak and the big videos feed searches for the name. Supply is then
+  counted for that angle's own question.
 - **Bot channels do not count as supply, and they warn you.** Auto-made news Shorts (channels like
   "Daily Tech", "Shield Matrix", "Isetnews") cover HN's front page within hours and get 5 to 100
   views (measured 2026-11-02 on the Flock story: four of them, 5-11 views each). Ignore them when
