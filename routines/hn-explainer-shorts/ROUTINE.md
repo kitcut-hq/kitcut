@@ -136,7 +136,7 @@ a day. Read it as:
   descriptions of the top videos and write down what every one of them says (usually "what
   happened" and "who did it"). Then name the question none of them answers, that research can:
   what it means for the viewer, the number nobody put in context, how it compares with the last
-  time, where the money or data goes next. **Climb the question ladder** a curious viewer climbs after the headline: (1) what happened, (2) who
+  time. **Climb the question ladder** a curious viewer climbs after the headline: (1) what happened, (2) who
 did it, (3) how it happened, step by step, (4) **how was that even possible** (what design, rule or
 choice let it happen), (5) **why them** (why this company, this city, this product), (6) **why now**,
 (7) what it means for me. The coverage nearly always stops at 1 to 3, and an answer everybody
