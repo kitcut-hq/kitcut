@@ -76,6 +76,29 @@ Drop at once, with a word why:
   side of Russia's war on Ukraine is fine, told from Ukraine's side);
 - a name that is the generic topic itself with no new angle ("AI", "Nvidia", "OpenAI" alone).
 
+### The stakes test (before any numbers)
+
+A big searched name is not enough: "Postgres 19 is late" had an 823k-a-month name, a fresh angle
+and good data, and the owner rejected it at once: "the update itself isnt significant. who care if
+it is going to be released today or next week?" Every candidate gets one sentence in this exact
+form:
+
+> **[who]** now **[what changes for them]**
+
+and passes only if all three hold:
+
+1. **It changes something people care about**: their money, safety, privacy, job, rights, a
+   product or service they use every day, or a war. "Postgres users now get version 19 three weeks
+   later" fails; "everyone online now sees fewer russian bot posts, if the claim holds" (Yandex)
+   passes; "every car in 5,000 US towns is now logged by a company a city could not switch off"
+   passes.
+2. **There is tension**: something broke, someone got caught, a big claim needs checking, one side
+   is fighting another. A release, a launch, a benchmark, a niche product existing: no tension.
+3. **Someone who is not a developer would tap it.** HN's readers care about release dates;
+   YouTube's do not.
+
+Write the sentence into the table. A candidate that fails is dropped here, whatever its numbers.
+
 ## 3. Demand
 
 One `keyword_volume` call for every candidate, `language: "en"`, worldwide, `include_monthly:
@@ -99,6 +122,11 @@ a day. Read it as:
 - 0 to 2 on the angle, none above ~20k views: **open**.
 - a few small ones that only repeat the headline: **open** (we bring the research).
 - big news channels with 1M+ on the same angle, or ten fresh explainers: **crowded**, drop it.
+- **Bot channels do not count as supply, and they warn you.** Auto-made news Shorts (channels like
+  "Daily Tech", "Shield Matrix", "Isetnews") cover HN's front page within hours and get 5 to 100
+  views (measured 2026-11-02 on the Flock story: four of them, 5-11 views each). Ignore them when
+  counting, but know that a headline retold in 40 seconds is already free: our film must carry what
+  research found, not the headline.
 - **Weigh supply against demand, not alone.** One 30k-view Short on a name searched a million times
   a month is still an open shelf (the Yandex film went up beside DW and 1M-subscriber channels and
   won on search); the same Short on a name searched 2,000 times is the whole market. Say which.
@@ -112,7 +140,7 @@ headline, or there is no primary source) is dropped.
 
 ## 6. Pick two
 
-A table of every candidate, with columns: anchor, new thing, **news date** (the event's own date,
+A table of every candidate, with columns: anchor, new thing, **stakes sentence**, **news date** (the event's own date,
 not the HN post's age: HN often surfaces week-old news), kind, anchor searches/month, pair or
 question searches, supply (videos on the angle, top views), value (1-5), verdict and why.
 
