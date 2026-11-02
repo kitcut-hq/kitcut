@@ -1139,6 +1139,15 @@ mirror of the studio's home that does not exist yet (`studio/deploy/README.md`, 
 **Lesson.** A step that writes scratch files inside a film says, in the same change, who removes
 them; and a number that can stop production (disk, memory: KI-045) gets a threshold and a
 warning the day it is first printed.
+**Two more leftovers, 2026-11-01 (kc-local, 72 % full and growing).** The prune never looked
+outside `temp/`, and inside `temp/thumbs` it took only the PNGs. Left behind: the stills Claude
+draws while writing a film (`sketch-render.py --stills` writes `outputs/review/<t>.png`, about
+3.7 MB each; 15,772 files, 58 GB) and the page each thumbnail still is drawn in
+(`temp/thumbs/**/manifest/outputs/thumbs.html` and its `artifact/` copy, about 8 MB each, 9 GB).
+Both are written again before they are next needed, so `prune.py` now takes them too. The sheets
+the site serves (`review/sheet.png`, `film-NN.jpg`, `look-NN.jpg`, `motion.png`,
+`fix-check.jpg`, `preview.html`) stay. The first plan: 60.3 GB from 683 films. The lesson above
+held: neither writer said who removes what it wrote.
 
 ### KI-064 · fixed · studio · Everything needed to work on a film again was on one disk, with one snapshot fourteen days old
 

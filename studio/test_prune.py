@@ -4,7 +4,8 @@
     python studio/test_prune.py
 
 A finished film loses its working pictures and nothing else: the frames the review read, the
-thumbnail stills, the silent render -- and keeps what it is made of, the Free plan's closing in
+thumbnail stills and the pages they were drawn in, the stills Claude drew while writing it, the
+silent render -- and keeps what it is made of, the Free plan's closing in
 temp/brand, its record lock, the thumbnails' moments sheet and recorded look. A plan removes
 nothing. A film being made, waiting for a voice, being changed or drawn again is left alone, and
 so is a piece something wrote to lately. A folder a dead run left renamed goes. The review renders
@@ -64,6 +65,11 @@ GOES = (
     "temp/thumbs/stills-0123456789abcdef/012.40.png",
     "temp/thumbs/stills-0123456789abcdef/4012.40.png",
     "temp/thumbs/probe/003.00.png",
+    "temp/thumbs/stills-0123456789abcdef/manifest/outputs/thumbs.html",
+    "temp/thumbs/stills-0123456789abcdef/manifest/outputs/artifact/thumbs.html",
+    "temp/thumbs/work/round0/manifest/outputs/thumbs.html",
+    "outputs/review/000.50.png",
+    "outputs/review/012.40.png",
     "temp/film_silent.mp4",
     "temp/film_silent_segments/0001.mp4",
     "temp/motion.pruned-4242/000.50.png",
@@ -77,6 +83,10 @@ STAYS = (
     "audio/vo/timeline.json",
     "outputs/film.mp4",
     "outputs/review/sheet-1.jpg",
+    "outputs/review/sheet.png",
+    "outputs/review/motion.png",
+    "outputs/review/film-01.jpg",
+    "outputs/review/preview.html",
     "outputs/youtube/UCx/thumb-1.jpg",
     "temp/brand/outro.js",
     "temp/brand/kitcut.png",
@@ -117,8 +127,18 @@ def finished_film():
     check(have(f, GOES) == list(GOES), "a plan removes nothing", have(f, GOES))
     kinds = set(res["kinds"])
     want = {"motion", "motion-before", "motion-after", "strip", "thumbs", "silent", "leftover"}
+    want.add("review stills")
     check(kinds == want, "and names every kind it would", kinds)
-    check(res["kinds"]["thumbs"]["files"] == 6, "the thumbnail stills of both films, counted", res)
+    check(
+        res["kinds"]["thumbs"]["files"] == 12,
+        "the thumbnail stills and the pages they were drawn in, of both films, counted",
+        res,
+    )
+    check(
+        res["kinds"]["review stills"]["files"] == 4,
+        "the stills drawn while writing both films, counted",
+        res,
+    )
     planned = res["bytes"]
 
     res = prune.sweep(only=f.id)

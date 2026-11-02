@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Remove the working pictures a finished film leaves in its temp/ folder.
+"""Remove the working pictures a finished film leaves in its temp/ and outputs/review/ folders.
 
     python studio/prune.py --plan [--older-than 6] [--film <id>]   what would go; removes nothing
     python studio/prune.py [--older-than 6] [--film <id>]          remove it
@@ -22,6 +22,16 @@ What goes:
     temp/thumbs/**/*.png        the thumbnail stills: _thumb.render_stills renders the ones that
                                 are missing. The moments sheet, style.json and boxes.json beside
                                 them stay (the draft reads the sheet and never waits for a render)
+    temp/thumbs/**/manifest/outputs/*
+                                the page those stills were drawn in (thumbs.html and its artifact
+                                copy, ~8 MB each, one per stills folder and per option round):
+                                _thumb.clean_manifest and sketch-render.py write it again before
+                                every still they draw
+    outputs/review/<t>.png      the stills Claude drew while writing the film (sketch-render.py
+                                --stills, ~3.7 MB each, 15,772 files and 58 GB on kc-local by
+                                2026-11-01). Read only while the film is being written; the
+                                sheets the site shows (sheet.png, film-NN.jpg, look-NN.jpg,
+                                motion.png, fix-check.jpg) and preview.html stay
     temp/*_silent.mp4,          the render before its sound was added (sketch-render.py): the
     temp/*_silent_segments      film itself is outputs/film.mp4
 
@@ -51,6 +61,8 @@ OLDER_H = 6.0
 WHOLE = ("motion", "motion-before", "motion-after", "strip")  # folders that go whole
 STILLS = ("thumbs",)  # folders that lose only their *.png
 SILENT = re.compile(r"_silent(\.mp4|_segments)$")
+PAGE = os.sep + os.path.join("manifest", "outputs") + os.sep  # a stills page, under temp/thumbs
+REVIEW_STILL = re.compile(r"^(\._)?\d+(\.\d+)?\.png$")  # outputs/review/012.40.png, not sheet.png
 GONE = re.compile(r"\.pruned-\d+$")  # a folder renamed to be removed, left by a run that died
 # the same paths and words rounds.py and unbrand.py use (test_prune.py holds them to it): not
 # imported, because both import the whole studio and this runs every hour beside the films
@@ -132,7 +144,7 @@ def pieces(f, older_s=OLDER_H * 3600, now=None):
             only, size = [], 0
             for root, _, files in os.walk(p):
                 for x in files:
-                    if x.lower().endswith(".png"):
+                    if x.lower().endswith(".png") or PAGE in os.path.join(root, x):
                         q = os.path.join(root, x)
                         try:
                             size += os.lstat(q).st_size
@@ -143,6 +155,32 @@ def pieces(f, older_s=OLDER_H * 3600, now=None):
                 out.append(
                     {"kind": name, "path": p, "bytes": size, "files": len(only), "only": only}
                 )
+    review = f.path("outputs", "review")
+    try:
+        names = os.listdir(review)
+    except OSError:
+        names = []
+    only, size, newest = [], 0, 0.0
+    for x in names:
+        if REVIEW_STILL.match(x):
+            q = os.path.join(review, x)
+            try:
+                st = os.lstat(q)
+            except OSError:
+                continue
+            only.append(q)
+            size += st.st_size
+            newest = max(newest, st.st_mtime)
+    if only and now - newest >= older_s:
+        out.append(
+            {
+                "kind": "review stills",
+                "path": review,
+                "bytes": size,
+                "files": len(only),
+                "only": only,
+            }
+        )
     return out
 
 
