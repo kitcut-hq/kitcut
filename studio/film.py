@@ -942,6 +942,10 @@ class Film:
         if parent == _norm(self.path("scenes")):  # a scene of a film made in scenes
             asked = os.path.basename(os.path.realpath(raw))
             return self.mode == "scenes" and bool(SCENE_FILE.match(asked))
+        if parent == _norm(self.path("engine")) and self.record().get("localized"):
+            # a translation may put the words of any of its engine modules into its language (a
+            # film's own scene layer pins labels on things); localize.check_film holds it to words
+            return name.endswith(".js") and os.path.isfile(p)
         return parent == _norm(self.path("engine")) and name in self.engine_files()
 
     # ---------------------------------------------------------------- the engine copy

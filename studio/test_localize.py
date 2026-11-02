@@ -409,6 +409,19 @@ async def main():
     _write_json(s_new.path("vo.json"), vo_bad)
     check(localize.check_film(s_new)["ok"] is False, "another narrator: caught")
     _write_json(s_new.path("vo.json"), s_vo)
+    # the film's own engine module (a scene layer pinning labels): its words may change, nothing else
+    touch(strict.path("engine", "court.js"), "label('STEP IN TO THE BALL', 10, 20);\n")
+    touch(s_new.path("engine", "court.js"), "label('PASO HACIA LA BOLA', 10, 20);\n")
+    check(localize.own_modules(s_new) == ["engine/court.js"], "the film's own modules are found")
+    check(localize.check_film(s_new)["ok"], "a label in the film's own module translated: passed")
+    touch(s_new.path("engine", "court.js"), "label('PASO HACIA LA BOLA', 10, 24);\n")
+    check(localize.check_film(s_new)["ok"] is False, "a number in the module changed: caught")
+    touch(s_new.path("engine", "court.js"), "label('PASO HACIA LA BOLA', 10, 20);\n")
+    s_new.update(localized=s_new.record()["localized"])
+    check(
+        s_new.writable(s_new.path("engine", "court.js")),
+        "a translation may write its engine modules",
+    )
     msg_s = localize.ask(s_new)
     check(
         "ONLY WORDS CHANGE" in msg_s and "must be said by 3.28 s" in msg_s,
