@@ -518,6 +518,10 @@ async def main():
         "words still written in film.js are named (never a cue word or a font)",
         localize.words_in_code(fresh),
     )
+    keep_js = localize._text(fresh.path("film.js"))
+    touch(fresh.path("film.js"), "'use strict';\nctx.path('M', 1, 2);\n")
+    check(localize.words_in_code(fresh) == [], "'use strict' and a path command are not words")
+    touch(fresh.path("film.js"), keep_js)
     _write_json(fresh.path("vo.json"), {"language": "en", "voice": "kc-warm", "lines": LINES})
     _write_json(fresh.path("words.json"), {"title": "How bees make honey", "tag": "Open Dec 21"})
     fresh.update(state="done", ok=True)
