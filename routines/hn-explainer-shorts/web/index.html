@@ -36,6 +36,7 @@
   button:disabled { opacity: .55; cursor: default; }
   .run { margin-top: 22px; }
   .run > h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 4px; font-weight: 600; }
+  .run details.summary { margin: 0 0 10px; color: var(--muted); font-size: 14px; } .run details.summary summary { cursor: pointer; }
   .run > p.summary { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 10px 0; }
   .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
@@ -75,7 +76,7 @@
   .sheet-in { background: var(--card); color: var(--ink); width: 100%; max-width: 560px; border-radius: 14px 14px 0 0; padding: 16px; display: grid; gap: 10px; }
   .sheet-in input { font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
   .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
-  table { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
   th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
     padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--chip); }
   td { vertical-align: top; padding: 10px; border-bottom: 1px solid var(--line); }
@@ -86,6 +87,9 @@
   .ang { padding: 6px 0; border-bottom: 1px dashed var(--line); }
   .ang:last-of-type { border-bottom: 0; }
   .fmt { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  .q { font-weight: 700; font-size: 16px; line-height: 1.3; margin: 4px 0 2px; }
+  .at { font-weight: 650; font-size: 15px; line-height: 1.3; }
+  .at .fmt { margin-left: 6px; font-weight: 600; }
   .why, .muted { color: var(--muted); font-size: 13px; }
   button.sm, button.sm.primary { background: transparent; color: var(--ink); border: 1px solid var(--line);
     border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -168,12 +172,11 @@
     const statusFor = (aid) => (idea.picks || []).filter((p) => p.angle_id === aid).map(pickHtml).join("");
     const make = (aid, own) => `<button class="primary sm" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" ${own ? "data-own" : `data-angle="${esc(aid)}"`}>Make</button>`;
     const head = `<td rowspan="${n}" class="topic">${kind ? `<span class="kind ${esc(kind)}">${esc(kind)}</span> ` : ""}<span class="muted">${esc(idea.news_date || "")}</span>
-        <div><b>${esc(idea.topic)}</b></div>${idea.stakes ? `<div class="why">${esc(idea.stakes)}</div>` : ""}${links ? `<div class="links">${links}</div>` : ""}
+        ${idea.question ? `<div class="q">${esc(idea.question)}</div><div class="why">${esc(idea.topic)}</div>` : `<div class="q">${esc(idea.topic)}</div>`}${idea.stakes ? `<div class="why">${esc(idea.stakes)}</div>` : ""}${links ? `<div class="links">${links}</div>` : ""}
         <label class="pub"><input type="checkbox" data-publish checked> publish when done</label></td>
-      <td rowspan="${n}">${esc(idea.searches || "")}</td>
-      <td rowspan="${n}">${esc(idea.supply || "")}</td>`;
+`;
     const rows = angles.map((a, j) => `<tr data-idea-row="${esc(idea.id)}">${j === 0 ? head : ""}
-      <td><span class="fmt">${esc(a.format || "explainer")}</span><div><b>${esc(a.title)}</b></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}</td>
+      <td><div class="at">${esc(a.title)} <span class="fmt">${esc(a.format || "explainer")}</span></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}</td>
       <td>${make(a.id)}</td><td>${statusFor(a.id)}</td></tr>`);
     rows.push(`<tr data-idea-row="${esc(idea.id)}" class="own-row">${angles.length ? "" : head}
       <td><textarea rows="1" placeholder="Own angle: the question the film should answer"></textarea></td>
@@ -187,10 +190,10 @@
     $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)}. Pick an angle to make it.`;
     main.innerHTML = runs.map((run) => `<section class="run">
       <h2>${esc(when(run.run_at || run.received_at))} · ${(run.ideas || []).length} ideas</h2>
-      ${run.summary ? `<p class="summary">${esc(run.summary)}</p>` : ""}
+      ${run.summary ? `<details class="summary"><summary>What the scout read and dropped</summary><p>${esc(run.summary)}</p></details>` : ""}
       <div class="scroll"><table>
-        <colgroup><col style="width:27%"><col style="width:10%"><col style="width:14%"><col style="width:29%"><col style="width:8%"><col style="width:12%"></colgroup>
-        <thead><tr><th>Topic · stakes</th><th>Searched</th><th>YouTube now</th><th>Angle</th><th></th><th>Status</th></tr></thead>
+        <colgroup><col style="width:34%"><col style="width:46%"><col style="width:8%"><col style="width:12%"></colgroup>
+        <thead><tr><th>The question</th><th>Angle</th><th></th><th>Status</th></tr></thead>
         <tbody>${(run.ideas || []).map((i) => ideaRows(run, i)).join("")}</tbody>
       </table></div>
     </section>`).join("");

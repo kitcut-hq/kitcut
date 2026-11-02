@@ -221,7 +221,9 @@ repeat it in the report.
 
 ## 6c. Send the shortlist to the owner's page (the scout's last step)
 
-For each shortlisted topic write **two or three angles**, each a different film that could be
+The page leads with the question, not the metadata (owner, 2026-11-02: "focus more on the most core
+and base question instead of un focusing on metadat"): for each topic write first its **one core
+question**, the base question a curious viewer has, in plain words. Then, for each shortlisted topic, write **two or three angles**, each a different film that could be
 made: its `format` (`explainer`, `recreation`, `claim check`, or another you can name), its `title`
 written as the film's question or recreation (never a news summary), and `why`: one line on what
 it shows that the top videos do not, with the number or document that would carry it if you know
@@ -245,6 +247,7 @@ ssh kc-local hn-ideas-post < run.json      # answers {"ok":true,"run_id":...,"id
     {
       "id": "binance",                       // short, unique in the run
       "topic": "Binance loses $6.3B in the largest crypto hack",
+      "question": "How could one laptop move $6.3 billion out of the biggest exchange?",  // the ONE core question the story raises: the page shows it largest
       "kind": "breaking | hype | evergreen",
       "news_date": "Oct 29",                 // the event's own date
       "stakes": "[who] now [what changes for them]",
