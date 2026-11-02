@@ -216,3 +216,27 @@ pass of about 3 shots in 11.
 
 Dad's legs: in 5 shots → 0. Car interior: 3 different colours → grey in every shot. Garbled signs: 2 → 0.
 The two-door coupe reads right (S08), and every written cut landed. Machine time: 89 min for 71.6 s of film.
+
+## Re-shooting a three.js scene Short (padel sample, 2026-11-01)
+
+The owner asked for the padel Shorts' three.js court scenes "in higher, more realistic quality, but animated, not
+photoreal", as a 30-second sample: "The Backhand Off the Glass" (6frclr), 4 shots, 24 s of court picture, 37 min of
+GPU time. What worked, measured:
+
+- **Only the picture box is re-shot.** The Short's headline, source line, captions and end card stay KitCut's;
+  the H3 shots are laid into the box (15, 364, 1050x944 of the 1080x1920 frame) with its white border kept,
+  and the original render's audio (voice and quiet pops) stays. Slots are the narration's line starts
+  (0-6.2, 6.2-12.4, 12.4-16.4, 16.4-24.1 s); the film keeps its length.
+- **Generate at the box's own shape, not 16:9:** `"resolution": "1072x960"` (about the pixels of 1344x768) came out
+  as 1056x960 and held the look. No cropping of a wide frame.
+- **References are clean engine frames, labels off:** a copy of the film with the line that draws the pills
+  (`for (const q of items) pill(...)`) commented out, `sketch-render.py --stills 0.4,13`, cropped to the box.
+  Two pictures per shot (the wide court, the close glass wall with the mannequin), `video_prompt_type: "I"`, no
+  first or last frame. The look stays the series' (the references drive it); the gain is shading, smoother
+  motion, a ball trail and a real racket, not a new look.
+- **Quoted labels render clean:** all seven of the original's pills ("TURN EARLY", "BETWEEN THE WALL AND THE BALL",
+  "MEET IT IN FRONT" with a check mark...) came out legible, timed with `At 00:03.000 a rounded ... label reading
+  "..."`. The first prompt's label was too big (a two-line banner): say "a small rounded label".
+- **Machine time** (kc-local, FastH3 Q4, 2 references): 6.2 s shot 9.3 min, 6.2 s 9.4, 4.0 s 6.3, 7.7 s 11.7.
+- The builder and assembler are in the 2026-11-01 session's scratch (`h3padel/build.py`, `assemble.py`); they
+  become `scripts/` tools if the owner adopts this for the Shorts.
