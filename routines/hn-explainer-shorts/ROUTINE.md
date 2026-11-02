@@ -130,6 +130,22 @@ One sub-agent per topic (Task tool), both launched together. Each follows the pl
   last line is the open question. Each line's direction names what is on screen (which page, with
   its URL and `keep`, what is underlined; which chart; EXPLAINER and its small diagram).
 
+**A page that will not load** (WebFetch or curl gets 403, an empty page, a "verify you are human"
+wall, or a page that needs JavaScript): open it in the real browser on kc-local, the owner's
+studio machine, which this environment reaches over ssh. It is a headed Edge (profile `reader`,
+no sign-ins), so sites that refuse a headless fetch usually load (measured: fortune.com, 403 to
+curl, loads there):
+
+```bash
+ssh kc-local 'xb reader open "https://fortune.com/..." >/dev/null; sleep 5; xb reader text' | head -c 20000
+ssh kc-local 'xb reader url'      # where it actually landed
+```
+
+One page at a time; `reader` only (never `VideoMakers_io`, that is a signed-in X account). This is
+for public pages: never get around a paywall or a login, and never solve a CAPTCHA. A page that
+still will not show its text is left out, or replaced by another page that says the same. Tell the
+sub-agents this too.
+
 Then you (not the sub-agent) run the checks for each:
 
 1. `check_research` until clean. It gives the seconds; if it says more than 75, cut lines.
