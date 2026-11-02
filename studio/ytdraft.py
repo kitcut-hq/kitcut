@@ -598,7 +598,25 @@ async def _call(
     return await ask_json(text, mat["sheet"], auth, film, model, effort, WRITER, "youtube-draft")
 
 
+# what the login says when its plan is spent for now (Claude Code's own words)
+SPENT = re.compile(r"session limit|usage limit|rate.?limit|resets \d|billing", re.I)
+
+
 async def ask_json(text, sheet, auth, film, model, effort, system, session):
+    """One Claude call, carrying on on the key when the login's plan is spent (ask_json_once).
+
+    Films do the same (agent.PlanLimit, make_film): the studio's login has a plan limit that a
+    key does not, so a spent login costs only what the key bills for the rest of this call."""
+    try:
+        return await ask_json_once(text, sheet, auth, film, model, effort, system, session)
+    except RuntimeError as e:
+        if auth != "login" or not SPENT.search(str(e)):
+            raise
+        print("ask_json %s: PLAN LIMIT, on the key: %s" % (session, str(e)[:120]), file=sys.stderr)
+        return await ask_json_once(text, sheet, "api", film, model, effort, system, session)
+
+
+async def ask_json_once(text, sheet, auth, film, model, effort, system, session):
     """One Claude call with no tools -- the text, and the sheet (JPEG bytes, or a list of them,
     in order) as images before it -- on the film's key (auth "api") or this machine's login: (the
     parsed JSON object, cost in USD). share.py, canon.py and review.py ask through it too. It has
