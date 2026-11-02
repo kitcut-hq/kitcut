@@ -73,6 +73,11 @@ LENGTHS = tuple(range(5, 1805, 5))
 # The person's choice; each is a recipe of capabilities (RECIPES, below)
 LOOKS = ("drawn", "painted", "collage")
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
+# Every word a film shows on screen, by name ({"title": "How bees make honey"}), read by film.js as
+# SK.DATA.words.<name>: a new film's words live apart from its code, so a translation (localize.py)
+# changes this file and leaves the code byte for byte, and a typo or a date is a data edit. A film
+# made before 2026-11-01, or from a template (content.json), has none.
+WORDS = "words.json"
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
 # the film's own copy, in engine\; Claude may extend it. Its capabilities' modules join it
 ENGINE = ("engine.js", "props.js")
@@ -910,6 +915,7 @@ class Film:
                 or (rec.get("localized") and os.path.exists(self.path("content.json")))
                 else ()
             )
+            + ((WORDS,) if os.path.exists(self.path(WORDS)) else ())
             + (("paint.json",) if paint_kinds(self.caps) else ())
             + (("scenes.json",) if self.mode == "scenes" else ())
             # an episode's named sounds and themes, kept for the series (library.py)
@@ -1231,6 +1237,8 @@ class Film:
             m["frame"] = FRAMES[frame]
             if frame == "9:16":
                 m["cover"] = False
+        if not template:  # its words on screen, apart from its code (prompt.md "Your folder")
+            m["data"] = {**(m.get("data") or {}), "words": WORDS}
         tall = frame if not template else None  # whose first word comes at once (vo_lead)
         quiet = music is False and not template
         if quiet:
@@ -1297,6 +1305,8 @@ class Film:
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
         _write_json(film.manifest, m)
+        if not template and not os.path.exists(film.path(WORDS)):
+            _write_json(film.path(WORDS), {})
         picked = (
             (narrator or {}).get("voice") if (narrator or {}).get("source") == "kitcut" else None
         )

@@ -523,6 +523,21 @@ class Tools:
         said = (
             "film.js, the engine and the cast parse." if cast else "film.js and the engine parse."
         )
+        rec = self.film.record()
+        if (
+            os.path.exists(self.film.path("words.json"))
+            and not rec.get("localized")
+            and self.film.mode != "scenes"  # a scene pass writes its own file only
+        ):
+            import localize  # noqa: PLC0415
+
+            inline = localize.words_in_code(self.film)
+            if inline:  # never a failure: a word left in the code is still a working film
+                said += (
+                    " These words on screen are written in film.js: put each in words.json under "
+                    "a name and draw SK.DATA.words.<name> instead: %s."
+                    % "; ".join('"%s"' % w for w in inline)
+                )
         misses = validate.cue_misses(self.film)
         if misses:  # they parse, and would happen at 0 s
             said += (

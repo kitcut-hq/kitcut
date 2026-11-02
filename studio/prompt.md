@@ -17,6 +17,12 @@ Your working directory is this film's own folder, and every path here is relativ
 
 - `vo.json` -- the narration (already there, with no lines yet; see "The voice" below).
 {LOOK_FILES}- `film.js` -- the picture: one `SK.film({...})` call.
+- `words.json` -- every word the film shows on screen, by name: `{"title": "How bees make honey",
+  "tag_open": "Open Dec 21-23", "button": "Book in the app"}`, and film.js draws
+  `SK.DATA.words.title`, never the words themselves. Titles, labels, captions, lists, buttons,
+  dates and prices as text all go here; names of pictures, fonts, colours and cue words
+  (`SK.w(line, 'word')`) stay in the code. A film keeps its words apart from its code so it can be
+  made in another language, or have a typo fixed, without its code changing.
 - `score.json` -- the music (notation below).
 - `sfx.json` -- the sound cues (notation below).
 - `engine/props.js` and `engine/engine.js` -- this film's own copy of the props and the engine

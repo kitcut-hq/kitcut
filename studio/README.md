@@ -665,6 +665,15 @@ plan's frame rate (`X-Fps`, `X-Priority`). No Claude and no voice: a render, min
 - `test_server.py` covers it on the Free-plan film it makes: refused for another client, a forced
   failure that changes nothing, then 5 s at 60 fps, still the film it was.
 
+**A film's words on screen live in `words.json`** (since 2026-11-01, `film.WORDS`): a new film from an
+idea gets an empty `words.json` and `"data": {"words": "words.json"}` in its manifest, and prompt.md
+asks Claude to put every word it shows there by name and draw `SK.DATA.words.<name>`. The check tool
+names words still written in film.js (`localize.words_in_code`; never a failure, never in a scene
+pass). An episode that starts from the last one's code gets its words.json too (`episode.CODE`). A
+translation then changes words.json and the narration, and film.js only by its cue words. Films
+made before, and template films (content.json), have none. `import_film.py` also turns a narration
+kept inline in a manifest into vo.json.
+
 **A film in another language** (`localize.py`, `POST /api/films {"localize": {...}}`, 2026-11-01):
 kitcut.ai's Translate. The site asks as the original's own client with a film's usual headers:
 `{"localize": {"from": <film id>, "version", "language", "key": <the site's hold id>}, "listed"?}`.
