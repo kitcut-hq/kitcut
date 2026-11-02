@@ -353,6 +353,14 @@ def ask(film):
         "compares every file with the original's and sends back anything else that changed."
         % (lang, lang)
     )
+    mods = own_modules(film)
+    if mods:
+        same += (
+            " Words on screen may also be in the film's own engine modules (%s: a scene layer "
+            "that pins labels on things): translate those strings there too, under the same rule. "
+            "A string such code looks something up by -- a cue word of another film's timeline, a "
+            "key, a name -- is not a word: leave it." % ", ".join(mods)
+        )
     keep = (
         "Keep everything else exactly as it is: the scenes, the pictures (never paint or draw "
         "new ones; words inside a picture stay), the people, the camera, the motion, the "
@@ -469,6 +477,22 @@ def _strings(code):
     return {s for _, s in WORDS.findall(code or "") if " " in s and not CODEISH.search(s)}
 
 
+KIT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sketch")
+
+
+def own_modules(film):
+    """The film's own engine modules: engine/*.js that are not the kit's (sketch/) -- a scene
+    layer built for this film or its series, which may pin words on things (engine/padel.js)."""
+    d = film.path("engine")
+    if not os.path.isdir(d):
+        return []
+    return sorted(
+        "engine/" + x
+        for x in os.listdir(d)
+        if x.endswith(".js") and not os.path.exists(os.path.join(KIT, x))
+    )
+
+
 def leftovers(film):
     """Words the original showed that film.js or content.json still shows word for word: at most
     eight."""
@@ -478,8 +502,8 @@ def leftovers(film):
     if src is None:
         return []
     left = set()
-    for name in WORDS_IN:
-        was, now = _text(src.path(name)), _text(film.path(name))
+    for name in WORDS_IN + tuple(own_modules(src)):
+        was, now = _text(src.path(*name.split("/"))), _text(film.path(*name.split("/")))
         if was is not None and now is not None:
             left |= _strings(was) & _strings(now)
     return sorted(left)[:8]
@@ -820,11 +844,13 @@ def check_film(film):
     reserved = _reserved(src)
     probs, files, words = [], 0, 0
     # the code: film.js and the cast, token by token
-    code = (
-        [n for n in CODE_FILES] + ["cast/" + x for x in sorted(os.listdir(src.path("cast")))]
-        if os.path.isdir(src.path("cast"))
-        else list(CODE_FILES)
-    )
+    code = list(CODE_FILES) + [
+        "%s/%s" % (d, x)
+        for d in ("cast", "engine")
+        if os.path.isdir(src.path(d))
+        for x in sorted(os.listdir(src.path(d)))
+        if x.endswith(".js")
+    ]
     for name in code:
         was, now = _text(src.path(*name.split("/"))), _text(film.path(*name.split("/")))
         if was is None:
