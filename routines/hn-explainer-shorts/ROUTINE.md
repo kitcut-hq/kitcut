@@ -19,16 +19,20 @@ not show) was worth watching. Its top search terms were "yandex" (1,574 views) a
 center" (1,114). **An established name with a new event** is the pattern: the name brings the
 searches, the newness empties the shelf, the research is the value.
 
-Two kinds of topic, both allowed:
+**This is not a breaking-news desk.** The owner (2026-11-02): "its not only about breaking news
+reporting. we are happy to hype as long as we contribute extra value". Riding a story everyone is
+talking about is welcome; retelling it is not. What we sell is the part the coverage left out.
 
-| | breaking | evergreen |
-|---|---|---|
-| shape | a searched name + a new event, hours to two days old | a lasting "why X" / "what X actually means" about a searched name |
-| demand | the name's monthly searches (the pair is too new for any keyword data) and how fast it climbs on HN | the question's own monthly searches |
-| supply | English videos on the pair in the last 3 days: near zero is the opening | videos on the question ranked by views: thin, old or poor is the opening |
-| timing | now: hours matter, the big channels arrive a day later | no rush |
+Three kinds of topic, all allowed:
 
-At most **one** evergreen a run, so a breaking story always has room.
+| | breaking | hype | evergreen |
+|---|---|---|---|
+| shape | a searched name + a new event, hours to two days old | a story the whole internet is on right now, any age, while searches for it are still hot | a lasting "why X" / "what X actually means" about a searched name |
+| demand | the name's monthly searches and how fast it climbs on HN | the name's searches, plus the views a day the big videos on it are still getting (they show the wave is still rising) | the question's own monthly searches |
+| supply | English videos on the pair in the last 3 days: near zero is the opening | **crowded is fine**: judge the supply of OUR ANGLE, not of the story (see step 4) | videos on the question ranked by views: thin, old or poor is the opening |
+| timing | now: hours matter | while the wave lasts (days) | no rush |
+
+At most **one** evergreen a run.
 
 ---
 
@@ -127,7 +131,18 @@ a day. Read it as:
 
 - 0 to 2 on the angle, none above ~20k views: **open**.
 - a few small ones that only repeat the headline: **open** (we bring the research).
-- big news channels with 1M+ on the same angle, or ten fresh explainers: **crowded**, drop it.
+- big news channels with 1M+ on the same angle, or ten fresh explainers: that **angle** is
+  crowded. **Do not drop the story: look for the angle they all left out.** Read the titles and
+  descriptions of the top videos and write down what every one of them says (usually "what
+  happened" and "who did it"). Then name the question none of them answers, that research can:
+  what it means for the viewer, the number nobody put in context, how it compares with the last
+  time, where the money or data goes next. Example: the Binance $6.3B hack (2026-11-02) had CNN 1.4M,
+  BBC, DW and a 15-minute "how it happened" with 838k: all retell the heist. Open angles: "Where does
+  $6.3 billion of stolen crypto actually go, and how much ever comes back?" (laundering and
+  recovery data from the FBI, Chainalysis, past hacks) or "Is your money safe on an exchange?" (what
+  Binance covered, what its reserve reports say). A hype story with such an angle is a **strong**
+  pick: demand is at its peak and the big videos feed searches for the name. Supply is then counted
+  for that angle's own question.
 - **Bot channels do not count as supply, and they warn you.** Auto-made news Shorts (channels like
   "Daily Tech", "Shield Matrix", "Isetnews") cover HN's front page within hours and get 5 to 100
   views (measured 2026-11-02 on the Flock story: four of them, 5-11 views each). Ignore them when
@@ -155,8 +170,10 @@ Two hard gates before the balance:
   want this film. "Postgres" (823k) leads a Postgres-19 film; a film titled "Seoul Viosys..." (320)
   or "Rare-earth-free LEDs..." (50) has no searchers, even if "rare earth" (49.5k) is nearby. If the
   only big name is a loose neighbour of the story, it fails demand.
-- **Breaking means the event is under 48 hours old.** Older news is judged as evergreen (and counts
-  as the run's one evergreen).
+- **Breaking means the event is under 48 hours old.** Older news is hype (if searches and the big
+  videos' views a day are still high) or evergreen; say which.
+- **The angle adds something the top videos do not.** Write the angle as a question, and next to it
+  what the top three videos on the story already say. If our film would say the same, drop it.
 
 Then pick the best **two** by the balance of all three, at most one evergreen. If only one passes,
 make one; if none passes, make none and say why. Never lower the bar to reach two.
