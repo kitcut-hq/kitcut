@@ -573,6 +573,8 @@ async def prepare(film):
     if not os.path.isfile(os.path.join(out, STRIP_FILE)) or (
         cur is not None and cur.get("rev") != rev
     ):
+        if not any(os.path.isfile(os.path.join(out, x)) for x in media.LOCAL):
+            await asyncio.to_thread(media.bring_back, film, "film_web.mp4")
         await asyncio.to_thread(make_strip, out)
     fresh = entry_of(film, n)
     url = await media.publish_one(film, STRIP_FILE, "image/jpeg")

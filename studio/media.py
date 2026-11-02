@@ -120,6 +120,54 @@ def old_base():
     return (os.environ.get("STUDIO_MEDIA_OLD_BASE") or "").strip().rstrip("/")
 
 
+# A finished film's videos live online, not on this disk: prune.py removes outputs/film.mp4 and
+# film_web.mp4 of a film nobody has touched for a while, once their online copies are proven the
+# same size. What still reads them here asks bring_back() first (a YouTube send, a round's
+# filmstrip, a share's frame thumbnail); the files route sends the browser to the copy instead.
+LOCAL = {"film.mp4": "video", "film_web.mp4": "web"}  # file in outputs/ -> key in record["media"]
+
+
+def stored(film, name):
+    """The online copy of outputs/<name> (film.mp4, film_web.mp4) as the record names it."""
+    url = ((film.record().get("media") or {}).get(LOCAL.get(name, ""))) or ""
+    return url if url.startswith(("https://", "http://127.0.0.1:")) else None
+
+
+def bring_back(film, name="film.mp4", timeout=1800):
+    """outputs/<name> on this disk, fetched from its online copy when it is not here. The path, or
+    None when there is neither. The download lands beside the file and is renamed into place, so a
+    reader finds the whole film or none."""
+    import urllib.request
+
+    p = film.path("outputs", name)
+    if os.path.isfile(p):
+        return p
+    url = stored(film, name)
+    if not url:
+        return None
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    part = "%s.part-%d" % (p, os.getpid())
+    req = urllib.request.Request(url, headers={"User-Agent": "kitcut-studio"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r, open(part, "wb") as f:
+            want = int(r.headers.get("Content-Length") or -1)
+            while True:
+                chunk = r.read(8 << 20)
+                if not chunk:
+                    break
+                f.write(chunk)
+        if want >= 0 and os.path.getsize(part) != want:
+            raise OSError("%s came back short" % url)
+        os.replace(part, p)
+    except OSError:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        return None
+    return p
+
+
 def enabled():
     # plain http only to this machine (test_media.py's stand-in for the storage)
     return bool(base().startswith(("https://", "http://127.0.0.1:")) and (r2() or sas()))

@@ -1148,6 +1148,15 @@ Both are written again before they are next needed, so `prune.py` now takes them
 the site serves (`review/sheet.png`, `film-NN.jpg`, `look-NN.jpg`, `motion.png`,
 `fix-check.jpg`, `preview.html`) stay. The first plan: 60.3 GB from 683 films. The lesson above
 held: neither writer said who removes what it wrote.
+**And the films themselves live on R2, 2026-11-01.** Every finished film's master and web copy
+were already copied to R2 (`media.kitcut.ai`, `record["media"]`) and kept on the disk as well:
+126 GB on kc-local. `prune.py` now removes `outputs/film.mp4` and `film_web.mp4` of a film that is
+done and untouched for 7 days (`--videos-days`), each only after its online copy answers with the
+same size. What still reads them on the machine fetches them back first (`media.bring_back`: a
+YouTube send, a round's filmstrip, a share's frame thumbnail), and `/files/{id}/film*.mp4` sends
+the browser to the online copy. The first plan: 94 GB from 674 films. The narration, the code and
+older versions stay on the disk; the backup mirror lets the removed videos go after its 30 days of
+history, so R2's media bucket is then their one copy.
 
 ### KI-064 · fixed · studio · Everything needed to work on a film again was on one disk, with one snapshot fourteen days old
 

@@ -29,6 +29,7 @@ import prune  # noqa: E402
 import review  # noqa: E402
 import rounds  # noqa: E402
 import unbrand  # noqa: E402
+import media  # noqa: E402
 
 bad = []
 OLD = time.time() - 48 * 3600
@@ -243,6 +244,76 @@ def same_as_the_studio():
           "an unbranding's own folder in temp/ is not one this removes")  # fmt: skip
 
 
+def videos_go_online():
+    """A finished film's videos leave the disk only once their online copies are proven, and come
+    back from there when something needs them."""
+    import threading
+    import functools
+    from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+
+    check(prune.VIDEOS == media.LOCAL, "the videos this removes are the ones media.py brings back")
+    online = tempfile.mkdtemp(prefix="studio-prune-online-")
+    quiet = type("Quiet", (SimpleHTTPRequestHandler,), {"log_message": lambda *a: None})
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(quiet, directory=online))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = "http://127.0.0.1:%d" % srv.server_address[1]
+    long_ago = time.time() - 40 * 86400
+    try:
+
+        def made(state="done", web_body="web!", online_web="web!", at=long_ago):
+            f = film(state)
+            for name, body in (("film.mp4", "master"), ("film_web.mp4", web_body)):
+                touch(f.path("outputs", name), body, at=at)
+            os.makedirs(os.path.join(online, f.id), exist_ok=True)
+            for name, body in (("film.mp4", "master"), ("film_web.mp4", online_web)):
+                with open(os.path.join(online, f.id, name), "w", encoding="utf-8") as o:
+                    o.write(body)
+            urls = {k: "%s/%s/%s" % (base, f.id, n) for n, k in media.LOCAL.items()}
+            rec = json.loads(open(f.path("studio.json"), encoding="utf-8").read())
+            touch(f.path("studio.json"), json.dumps({**rec, "media": urls}), at=at)
+            return f
+
+        old, short, recent, failed = (
+            made(),
+            made(online_web="w"),
+            made(at=time.time()),
+            made("failed"),
+        )
+        res = prune.sweep(plan=True)
+        k = res["kinds"].get("videos") or {}
+        check(k.get("files") == 3,
+              "videos of films untouched for 7 days go, each proven online", k)  # fmt: skip
+        check(os.path.isfile(old.path("outputs", "film.mp4")), "a plan removes no video")
+        prune.sweep(only=old.id)
+        prune.sweep(only=short.id)
+        prune.sweep(only=recent.id)
+        prune.sweep(only=failed.id)
+        check(
+            not os.path.exists(old.path("outputs", "film.mp4")), "the master is gone from the disk"
+        )
+        check(not os.path.exists(old.path("outputs", "film_web.mp4")), "and the web copy")
+        check(os.path.isfile(short.path("outputs", "film_web.mp4")) and
+              not os.path.exists(short.path("outputs", "film.mp4")),
+              "a copy whose online twin differs stays; its proven master goes")  # fmt: skip
+        check(os.path.isfile(recent.path("outputs", "film.mp4")), "a film touched lately keeps its")
+        check(
+            os.path.isfile(failed.path("outputs", "film.mp4")), "a film that is not done keeps its"
+        )
+        check(prune.sweep(only=old.id, video_days=0)["bytes"] == 0, "--videos-days 0 takes none")
+
+        got = media.bring_back(old, "film.mp4")
+        body = open(got, encoding="utf-8").read() if got else None
+        check(body == "master", "media.bring_back fetches the master again", body)
+        check(not [n for n in os.listdir(old.path("outputs")) if ".part-" in n],
+              "and leaves no part-file behind", os.listdir(old.path("outputs")))  # fmt: skip
+        nowhere = film()
+        os.remove(nowhere.path("outputs", "film.mp4"))
+        check(media.bring_back(nowhere, "film.mp4") is None, "a film with no copy anywhere: None")
+    finally:
+        srv.shutdown()
+        shutil.rmtree(online, ignore_errors=True)
+
+
 if __name__ == "__main__":
     try:
         finished_film()
@@ -250,6 +321,7 @@ if __name__ == "__main__":
         in_use()
         review_renders_again()
         same_as_the_studio()
+        videos_go_online()
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")

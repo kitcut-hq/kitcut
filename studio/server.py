@@ -1832,6 +1832,8 @@ async def youtube_send(req):
         key = body.get("key")
         if isinstance(key, str) and youtube.get(key) is None and peer_has("sends", key):
             return web.json_response({"key": key, "film": f.id, "state": "sending"}, status=202)
+        if isinstance(key, str) and youtube.get(key) is None:  # online only: fetch it back
+            await asyncio.to_thread(media.bring_back, f, "film.mp4")
         job = youtube.start(f, client, body.get("to"), key)
     except (ValueError, AttributeError):
         return web.json_response({"error": "expected JSON"}, status=400)
@@ -2855,7 +2857,9 @@ def film_urls(req, jid, rec):
             out["poster_url"] = signed(req, jid, "film_poster.png")
         return out
     f = Film.open(jid)
-    web = f is not None and os.path.isfile(f.path("outputs", "film_web.mp4"))
+    web = f is not None and (
+        os.path.isfile(f.path("outputs", "film_web.mp4")) or bool(media.stored(f, "film_web.mp4"))
+    )
     return {
         "video_url": signed(req, jid, "film_web.mp4" if web else "film.mp4"),
         "download_url": signed(req, jid, "film.mp4") + "&dl=1",
@@ -3075,6 +3079,10 @@ async def files(req):
                 media.make_card, d, f.record().get("runs") or f.record().get("length") or f.length
             )
     if not os.path.isfile(p):
+        # a finished film's videos live online once prune.py let the disk copy go
+        url = media.stored(film_of(req.match_info["id"]), req.match_info["path"])
+        if url:
+            raise web.HTTPFound(url)
         raise web.HTTPNotFound()
     headers = {"Cache-Control": "no-cache"}
     if p.endswith(".html"):

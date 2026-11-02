@@ -35,6 +35,14 @@ What goes:
     temp/*_silent.mp4,          the render before its sound was added (sketch-render.py): the
     temp/*_silent_segments      film itself is outputs/film.mp4
 
+And the film itself, from a film nobody has touched for --videos-days days (7):
+
+    outputs/film.mp4,           the master and the web copy. Both live online (media.py copies
+    outputs/film_web.mp4        them to R2 when the film is done; record["media"] names them),
+                                and each goes only when its online copy answers with the same
+                                size. What reads them here fetches them back first
+                                (media.bring_back); the files route sends a browser online
+
 The four folders go whole, in one rename and then removed, so a reader finds a cache or none,
 never half of one (a motion folder with its report and no frames would be read as a film in which
 nothing is drawn). What never goes: temp/brand (the Free plan's closing, which the film's manifest
@@ -58,6 +66,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import film as films  # noqa: E402 -- the stdlib and locks.py only: this runs from a timer
 
 OLDER_H = 6.0
+VIDEO_DAYS = 7.0
+VIDEOS = {"film.mp4": "video", "film_web.mp4": "web"}  # media.LOCAL, held to it by test_prune.py
 WHOLE = ("motion", "motion-before", "motion-after", "strip")  # folders that go whole
 STILLS = ("thumbs",)  # folders that lose only their *.png
 SILENT = re.compile(r"_silent(\.mp4|_segments)$")
@@ -184,6 +194,50 @@ def pieces(f, older_s=OLDER_H * 3600, now=None):
     return out
 
 
+def online_size(url, timeout=30):
+    """The size the online copy answers with, or None (not there, not reachable)."""
+    import urllib.request
+
+    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "kitcut-studio"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return int(r.headers.get("Content-Length") or -1)
+    except (OSError, ValueError):
+        return None
+
+
+def videos(f, days=VIDEO_DAYS, now=None, size_of=online_size):
+    """The film's videos that may go: [piece], each proven online at the same size. Only a film
+    that is done, and only when neither its record nor its videos changed for `days` days."""
+    if days <= 0 or f.state != "done":
+        return []
+    now = time.time() if now is None else now
+    media = f.record().get("media") or {}
+    here = []
+    for name, key in VIDEOS.items():
+        p = f.path("outputs", name)
+        try:
+            st = os.lstat(p)
+        except OSError:
+            continue
+        here.append((p, st, media.get(key) or ""))
+    if not here:
+        return []
+    try:
+        touched = max(
+            [os.lstat(f.path("studio.json")).st_mtime] + [st.st_mtime for _, st, _ in here]
+        )
+    except OSError:
+        return []
+    if now - touched < days * 86400:
+        return []
+    out = []
+    for p, st, url in here:
+        if url.startswith(("https://", "http://127.0.0.1:")) and size_of(url) == st.st_size:
+            out.append({"kind": "videos", "path": p, "bytes": st.st_size, "files": 1, "only": None})
+    return out
+
+
 def remove(piece):
     """Remove one piece; the bytes that went (0 when it could not be touched)."""
     if piece["only"] is not None:
@@ -213,7 +267,9 @@ def remove(piece):
     return piece["bytes"]
 
 
-def sweep(older_h=OLDER_H, only=None, plan=False, now=None):
+def sweep(
+    older_h=OLDER_H, only=None, plan=False, now=None, video_days=VIDEO_DAYS, size_of=online_size
+):
     """Every film's pieces, removed unless `plan`. -> {"kinds": {kind: {"films", "files",
     "bytes"}}, "films": how many films had something, "skipped": {why: n}, "bytes", "left":
     bytes that could not be removed}."""
@@ -225,7 +281,7 @@ def sweep(older_h=OLDER_H, only=None, plan=False, now=None):
         if why:
             skipped[why] = skipped.get(why, 0) + 1
             continue
-        got = pieces(f, older_h * 3600, now)
+        got = pieces(f, older_h * 3600, now) + videos(f, video_days, now, size_of)
         if got:
             touched += 1
         for piece in got:
@@ -283,10 +339,18 @@ if __name__ == "__main__":
         metavar="H",
         help="only pieces nothing has written to for H hours (default %g)" % OLDER_H,
     )
+    ap.add_argument(
+        "--videos-days",
+        type=float,
+        default=VIDEO_DAYS,
+        metavar="D",
+        help="a film's videos go once it is untouched for D days and online (default %g; 0: never)"
+        % VIDEO_DAYS,
+    )
     ap.add_argument("--film", help="only this film's")
     ap.add_argument("--json", action="store_true", help="the result as JSON")
     a = ap.parse_args()
     if a.older_than < 0:
         ap.error("--older-than is hours, 0 or more")
-    res = sweep(a.older_than, a.film, a.plan)
+    res = sweep(a.older_than, a.film, a.plan, video_days=a.videos_days)
     print(json.dumps(res, indent=1) if a.json else report(res, a.plan, a.older_than))

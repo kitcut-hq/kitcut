@@ -405,6 +405,7 @@ def frame_of(share):
 async def frame_thumb(film, at):
     """thumb.jpg from the film's frame at `at` seconds, copied online: {"thumb": url}, or {} when
     copying is off."""
+    await asyncio.to_thread(media.bring_back, film, "film.mp4")
     await asyncio.to_thread(media.make_frame_thumb, film.path("outputs"), at)
     urls = await media.publish_share(film, only=("thumb",))
     return {k: urls[k] for k in ("thumb",) if urls.get(k)}
