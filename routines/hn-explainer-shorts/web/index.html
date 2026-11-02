@@ -24,11 +24,11 @@
   body { margin: 0; background: var(--bg); color: var(--ink);
     font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
-  .bar { max-width: 760px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; }
+  .bar { max-width: 1280px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; }
   .bar h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
   .bar .sub { color: var(--muted); font-size: 13px; }
   .bar .grow { flex: 1; min-width: 0; }
-  main { max-width: 760px; margin: 0 auto; padding: 8px 16px 64px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 8px 16px 64px; }
   button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
     background: var(--card); color: var(--ink); padding: 8px 12px; }
   button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
@@ -74,6 +74,21 @@
   .sheet[hidden] { display: none; }
   .sheet-in { background: var(--card); color: var(--ink); width: 100%; max-width: 560px; border-radius: 14px 14px 0 0; padding: 16px; display: grid; gap: 10px; }
   .sheet-in input { font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 14px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--chip); }
+  td { vertical-align: top; padding: 10px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  table { table-layout: fixed; }
+  tbody tr.own-row td { border-bottom: 2px solid var(--line); }
+  textarea[rows="1"] { min-height: 34px; margin: 0; font-size: 13px; }
+  .ang { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .ang:last-of-type { border-bottom: 0; }
+  .fmt { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  .why, .muted { color: var(--muted); font-size: 13px; }
+  button.sm { padding: 4px 10px; font-size: 13px; margin-top: 4px; }
+  .pub { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
   .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
     padding: 10px 14px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); display: none; }
 </style>
@@ -141,34 +156,26 @@
       <div class="links">picked ${esc(when(p.picked_at))}${p.updated_at && p.updated_at !== p.picked_at ? ` · updated ${esc(when(p.updated_at))}` : ""}</div></div>`;
   }
 
-  function ideaHtml(run, idea) {
+  function ideaRows(run, idea) {
     const kind = String(idea.kind || "").toLowerCase();
-    const facts = [
-      idea.searches && `<span class="fact">searched <b>${esc(idea.searches)}</b></span>`,
-      idea.supply && `<span class="fact">YouTube: <b>${esc(idea.supply)}</b></span>`,
-      idea.news_date && `<span class="fact">news <b>${esc(idea.news_date)}</b></span>`,
-    ].filter(Boolean).join("");
     const links = [...(idea.hn || []).map((h) => `<a href="${esc(h.url)}" target="_blank" rel="noopener">HN ${esc(h.points ?? "")}▲</a>`),
                    ...(idea.sources || []).map((s) => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || "source")}</a>`)].join(" · ");
-    const angles = (idea.angles || []).map((a) => `
-      <div class="angle"><div class="fmt">${esc(a.format || "explainer")}</div>
-        <div class="t">${esc(a.title)}</div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}
-        <div class="row"><button class="primary" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" data-angle="${esc(a.id)}">Make this</button></div>
-      </div>`).join("");
-    const picks = (idea.picks || []).map(pickHtml).join("");
-    return `<article class="card">
-      <div class="top">${kind ? `<span class="kind ${esc(kind)}">${esc(kind)}</span>` : ""}<h3>${esc(idea.topic)}</h3></div>
-      ${idea.stakes ? `<div class="stakes">${esc(idea.stakes)}</div>` : ""}
-      ${facts ? `<div class="facts">${facts}</div>` : ""}
-      ${links ? `<div class="links">${links}</div>` : ""}
-      <div class="angles">${angles}</div>
-      <details class="own"><summary>Write my own angle</summary>
-        <textarea placeholder="The question the film should answer, or the format you want"></textarea>
-        <div class="row" style="display:flex;justify-content:flex-end"><button class="primary" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" data-own>Make my angle</button></div>
-      </details>
-      <div class="opts"><label><input type="checkbox" data-publish checked> Publish on YouTube when done</label></div>
-      ${picks}
-    </article>`;
+    const angles = idea.angles || [];
+    const n = angles.length + 1;
+    const statusFor = (aid) => (idea.picks || []).filter((p) => p.angle_id === aid).map(pickHtml).join("");
+    const make = (aid, own) => `<button class="primary sm" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" ${own ? "data-own" : `data-angle="${esc(aid)}"`}>${own ? "Make mine" : "Make"}</button>`;
+    const head = `<td rowspan="${n}" class="topic">${kind ? `<span class="kind ${esc(kind)}">${esc(kind)}</span> ` : ""}<span class="muted">${esc(idea.news_date || "")}</span>
+        <div><b>${esc(idea.topic)}</b></div>${idea.stakes ? `<div class="why">${esc(idea.stakes)}</div>` : ""}${links ? `<div class="links">${links}</div>` : ""}
+        <label class="pub"><input type="checkbox" data-publish checked> publish when done</label></td>
+      <td rowspan="${n}">${esc(idea.searches || "")}</td>
+      <td rowspan="${n}">${esc(idea.supply || "")}</td>`;
+    const rows = angles.map((a, j) => `<tr data-idea-row="${esc(idea.id)}">${j === 0 ? head : ""}
+      <td><span class="fmt">${esc(a.format || "explainer")}</span><div><b>${esc(a.title)}</b></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}</td>
+      <td>${make(a.id)}</td><td>${statusFor(a.id)}</td></tr>`);
+    rows.push(`<tr data-idea-row="${esc(idea.id)}" class="own-row">${angles.length ? "" : head}
+      <td><textarea rows="1" placeholder="Own angle: the question the film should answer"></textarea></td>
+      <td>${make("own", true)}</td><td>${statusFor("own")}</td></tr>`);
+    return rows.join("");
   }
 
   function render(state) {
@@ -178,7 +185,11 @@
     main.innerHTML = runs.map((run) => `<section class="run">
       <h2>${esc(when(run.run_at || run.received_at))} · ${(run.ideas || []).length} ideas</h2>
       ${run.summary ? `<p class="summary">${esc(run.summary)}</p>` : ""}
-      ${(run.ideas || []).map((i) => ideaHtml(run, i)).join("")}
+      <div class="scroll"><table>
+        <colgroup><col style="width:27%"><col style="width:10%"><col style="width:14%"><col style="width:29%"><col style="width:8%"><col style="width:12%"></colgroup>
+        <thead><tr><th>Topic · stakes</th><th>Searched</th><th>YouTube now</th><th>Angle</th><th></th><th>Status</th></tr></thead>
+        <tbody>${(run.ideas || []).map((i) => ideaRows(run, i)).join("")}</tbody>
+      </table></div>
     </section>`).join("");
   }
 
@@ -198,8 +209,9 @@
       clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove("confirm"); b.textContent = b.dataset.own !== undefined ? "Make my angle" : "Make this"; }, 5000);
       return;
     }
-    const card = b.closest(".card");
-    const body = { run_id: b.dataset.run, idea_id: b.dataset.idea, publish: $("input[data-publish]", card).checked };
+    const card = b.closest("tr");
+    const ideaRowsEls = main.querySelectorAll(`tr[data-idea-row="${CSS.escape(b.dataset.idea)}"]`);
+    const body = { run_id: b.dataset.run, idea_id: b.dataset.idea, publish: [...ideaRowsEls].map((r) => r.querySelector("input[data-publish]")).find(Boolean)?.checked !== false };
     if (b.dataset.own !== undefined) {
       body.custom_angle = $("textarea", card).value.trim();
       if (!body.custom_angle) { toast("Write the angle first."); return; }
