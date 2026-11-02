@@ -217,7 +217,7 @@ Then you (not the sub-agent) run the checks for each:
   photograph if not all are in doc3's directions; how to say any name the voice could get wrong.
 
 Then follow both with `get_film` (`wait_seconds: 50`, again and again) until done; a 60-second film
-takes about 15 to 30 minutes. A film that did not finish: read why; `remake_film` once only if the
+takes about 15 to 30 minutes. **A film whose status is `cancelled` was stopped by a person: never make it again, and do not publish anything for that topic** (2026-11-02: the owner stopped two films and the run re-made both). A film that did not finish: read why; `remake_film` once only if the
 reason was the studio's, not the documents'.
 
 ## 9. Publish
