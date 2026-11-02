@@ -269,9 +269,13 @@ ssh kc-local hn-ideas-post < run.json      # answers {"ok":true,"run_id":...,"id
 }
 ```
 
-Every link must be one you actually opened in this run; never write a URL from memory. Then
-notify the owner (PushNotification): the number of ideas, the best one in a line, and the page:
-https://hn-ideas-iota.vercel.app
+Every link must be one you actually opened in this run; never write a URL from memory. Then tell
+the owner, **both** ways (2026-11-02: the push alone went unseen, "it didnt send me this page"):
+
+1. **Email** (Gmail connector, `send_message`) to alex@botmakers.net, subject `HN ideas: <n> new
+   to pick`, a short plain body: one line per topic with its core question, then the page link
+   https://hn-ideas-iota.vercel.app on its own line.
+2. **PushNotification** with the same count, the best question and the link.
 
 ## 6b. Quick research check, before anything is made (maker only)
 
