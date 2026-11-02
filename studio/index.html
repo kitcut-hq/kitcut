@@ -156,6 +156,18 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .side .docs a[aria-current] { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line); }
 .side .more { display: grid; gap: 4px; margin: 10px 10px 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
 .side .more a { color: var(--ink-3); }
+/* the sidebar's Make a film button, its group labels, "All N projects", and the invite card */
+.side .go { justify-content: flex-start; height: 38px; margin: 0 0 6px; }
+.side .go.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent-soft); }
+.side .label.grp { margin-top: 14px; }
+.side a.all { padding: 4px 10px 4px 40px; font-size: 12.5px; color: var(--ink-3); text-decoration: none; }
+.side a.all:hover { color: var(--ink); }
+.side a.invite { margin: 16px 4px 0; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); text-decoration: none; }
+.side a.invite:hover, .side a.invite.on { box-shadow: inset 0 0 0 1px var(--accent); }
+.side a.invite svg { color: var(--accent); flex: none; }
+.side a.invite span { display: grid; line-height: 1.3; }
+.side a.invite b { font-size: 13px; font-weight: 600; }
+.side a.invite small { font-size: 12px; color: var(--ink-2); }
 .swatch { width: 22px; height: 22px; border-radius: 6px; flex: none; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 700; font-style: normal; }
 /* a project whose episodes go to a YouTube channel wears the channel's picture, round as YouTube shows it */
 .swatch { position: relative; overflow: hidden; }
