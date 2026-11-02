@@ -176,7 +176,8 @@
         <button class="sm" data-skip="0" data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}">Bring back</button></td></tr>`;
     }
     const n = angles.length + 1;
-    const statusFor = (aid) => (idea.picks || []).filter((p) => p.angle_id === aid).map(pickHtml).join("");
+    const statusFor = (aid) => (idea.picks || []).filter((p) => p.angle_id === aid).map(pickHtml).join("")
+      + (idea.external && aid === (angles[0] || {}).id ? pickHtml(idea.external) : "");
     const make = (aid, own) => `<button class="primary sm" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" ${own ? "data-own" : `data-angle="${esc(aid)}"`}>Make</button>`;
     const head = `<td rowspan="${n}" class="topic">${kind ? `<span class="kind ${esc(kind)}">${esc(kind)}</span> ` : ""}<span class="muted">${esc(idea.news_date || "")}</span>
         ${idea.question ? `<div class="q">${esc(idea.question)}</div><div class="why">${esc(idea.topic)}</div>` : `<div class="q">${esc(idea.topic)}</div>`}${idea.stakes ? `<div class="why">${esc(idea.stakes)}</div>` : ""}${links ? `<div class="links">${links}</div>` : ""}
