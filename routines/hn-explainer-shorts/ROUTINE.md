@@ -99,6 +99,9 @@ a day. Read it as:
 - 0 to 2 on the angle, none above ~20k views: **open**.
 - a few small ones that only repeat the headline: **open** (we bring the research).
 - big news channels with 1M+ on the same angle, or ten fresh explainers: **crowded**, drop it.
+- **Weigh supply against demand, not alone.** One 30k-view Short on a name searched a million times
+  a month is still an open shelf (the Yandex film went up beside DW and 1M-subscriber channels and
+  won on search); the same Short on a name searched 2,000 times is the whole market. Say which.
 
 ## 5. Value of the research
 
@@ -109,10 +112,23 @@ headline, or there is no primary source) is dropped.
 
 ## 6. Pick two
 
-A table of every candidate, with columns: anchor, new thing, kind, anchor searches/month, pair or
-question searches, supply (videos on the angle, top views), value (1-5), verdict and why. Pick the
-best **two** by the balance of all three, at most one evergreen. If only one passes, make one; if
-none passes, make none and say why. Never lower the bar to reach two.
+A table of every candidate, with columns: anchor, new thing, **news date** (the event's own date,
+not the HN post's age: HN often surfaces week-old news), kind, anchor searches/month, pair or
+question searches, supply (videos on the angle, top views), value (1-5), verdict and why.
+
+Two hard gates before the balance:
+- **The title's first words are a searched name ≥ 10,000 a month**, and a viewer typing them would
+  want this film. "Postgres" (823k) leads a Postgres-19 film; a film titled "Seoul Viosys..." (320)
+  or "Rare-earth-free LEDs..." (50) has no searchers, even if "rare earth" (49.5k) is nearby. If the
+  only big name is a loose neighbour of the story, it fails demand.
+- **Breaking means the event is under 48 hours old.** Older news is judged as evergreen (and counts
+  as the run's one evergreen).
+
+Then pick the best **two** by the balance of all three, at most one evergreen. If only one passes,
+make one; if none passes, make none and say why. Never lower the bar to reach two.
+
+**Print the whole table as a message before launching any research**, so the run's log shows how
+the topics were chosen, and repeat it in the report.
 
 ## 7. Research and write (both topics in parallel)
 
