@@ -97,7 +97,9 @@ export async function loadState() {
   events.sort((a, b) => (a.at < b.at ? -1 : 1)); // oldest first, so later events win
 
   const picks = {};
+  const skips = {};
   for (const ev of events) {
+    if (ev.type === "skip") { skips[`${ev.run_id}|${ev.idea_id}`] = ev.skip; continue; }
     const p = (picks[ev.pick_id] ||= { pick_id: ev.pick_id, history: [] });
     if (ev.type === "picked") Object.assign(p, ev.pick, { state: "picked", picked_at: ev.at });
     if (ev.type === "fired") Object.assign(p, { state: "started", session: ev.session || null });
@@ -111,6 +113,7 @@ export async function loadState() {
   for (const run of runs) {
     for (const idea of run.ideas || []) {
       idea.picks = Object.values(picks).filter((p) => p.run_id === run.run_id && p.idea_id === idea.id);
+      idea.skipped = skips[`${run.run_id}|${idea.id}`] === true;
     }
   }
   return { runs };

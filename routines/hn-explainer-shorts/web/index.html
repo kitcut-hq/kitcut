@@ -90,6 +90,9 @@
   .q { font-weight: 700; font-size: 16px; line-height: 1.3; margin: 4px 0 2px; }
   .at { font-weight: 650; font-size: 15px; line-height: 1.3; }
   .at .fmt { margin-left: 6px; font-weight: 600; }
+  tr.skipped td { background: var(--chip); opacity: .6; padding: 8px 10px; }
+  tr.skipped .q { font-size: 14px; font-weight: 600; }
+  tr.skipped button { margin-left: 8px; }
   .why, .muted { color: var(--muted); font-size: 13px; }
   button.sm, button.sm.primary { background: transparent; color: var(--ink); border: 1px solid var(--line);
     border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
@@ -167,12 +170,18 @@
     const links = [...(idea.hn || []).map((h) => `<a href="${esc(h.url)}" target="_blank" rel="noopener">HN ${esc(h.points ?? "")}▲</a>`),
                    ...(idea.sources || []).map((s) => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || "source")}</a>`)].join(" · ");
     const angles = idea.angles || [];
+    if (idea.skipped) {
+      return `<tr class="skipped"><td colspan="4"><span class="q">${esc(idea.question || idea.topic)}</span>
+        <span class="muted"> · skipped</span>
+        <button class="sm" data-skip="0" data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}">Bring back</button></td></tr>`;
+    }
     const n = angles.length + 1;
     const statusFor = (aid) => (idea.picks || []).filter((p) => p.angle_id === aid).map(pickHtml).join("");
     const make = (aid, own) => `<button class="primary sm" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" ${own ? "data-own" : `data-angle="${esc(aid)}"`}>Make</button>`;
     const head = `<td rowspan="${n}" class="topic">${kind ? `<span class="kind ${esc(kind)}">${esc(kind)}</span> ` : ""}<span class="muted">${esc(idea.news_date || "")}</span>
         ${idea.question ? `<div class="q">${esc(idea.question)}</div><div class="why">${esc(idea.topic)}</div>` : `<div class="q">${esc(idea.topic)}</div>`}${idea.stakes ? `<div class="why">${esc(idea.stakes)}</div>` : ""}${links ? `<div class="links">${links}</div>` : ""}
-        <label class="pub"><input type="checkbox" data-publish checked> publish when done</label></td>
+        <label class="pub"><input type="checkbox" data-publish checked> publish when done</label>
+        <button class="sm" data-skip="1" data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}">Skip topic</button></td>
 `;
     const rows = angles.map((a, j) => `<tr data-idea-row="${esc(idea.id)}">${j === 0 ? head : ""}
       <td><div class="at">${esc(a.title)} <span class="fmt">${esc(a.format || "explainer")}</span></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}</td>
@@ -206,6 +215,13 @@
 
   // Two taps: the first arms the button, the second makes the film. Nothing fires by accident.
   main.addEventListener("click", async (e) => {
+    const sk = e.target.closest("button[data-skip]");
+    if (sk) {
+      sk.disabled = true;
+      try { await api("/api/skip", { method: "POST", body: JSON.stringify({ run_id: sk.dataset.run, idea_id: sk.dataset.idea, skip: sk.dataset.skip === "1" }) }); }
+      catch (err) { if (err.message !== "key") toast(`Not saved: ${err.message}`); }
+      return load();
+    }
     const b = e.target.closest("button[data-make]");
     if (!b) return;
     if (!b.classList.contains("confirm")) {
