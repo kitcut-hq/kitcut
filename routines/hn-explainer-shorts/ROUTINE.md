@@ -183,13 +183,38 @@ Two hard gates before the balance:
 - **The angle adds something the top videos do not.** Write the angle as a question, and next to it
   what the top three videos on the story already say. If our film would say the same, drop it.
 
-Then pick the best **two** by the balance of all three, at most one evergreen. If only one passes,
-make one; if none passes, make none and say why. Never lower the bar to reach two.
+Then **shortlist three to five** by the balance of all three. If none passes, make none and say why.
 
 **Print the whole table as a message before launching any research**, so the run's log shows how
 the topics were chosen, and repeat it in the report.
 
-## 7. Research and write (both topics in parallel)
+## 6b. Quick research check, before anything is made
+
+The owner (2026-11-02): "what if we do a shortlist using this algo and then a quick research check
+if we can contribute and make a strong video before actually making it?" A topic can pass every
+number and still have nothing behind its angle; finding that out costs minutes here and a film
+later.
+
+One sub-agent per shortlisted topic, all launched together, each about 15 tool calls (web search and
+fetch, nothing else). Give each the story, what the top videos already say, and the candidate angle,
+and ask it to find whether the evidence actually settles the angle's question, and to return:
+
+```
+ANGLE: the one question the film answers
+ANSWER IN ONE SENTENCE: what the evidence says
+KEY EVIDENCE: 3-5 facts/numbers, each with source and URL, read on the page
+WHAT THE TOP VIDEOS DON'T SAY: one line
+THE MOMENT: the one fact or document the film is built around
+GAPS/RISKS: unverified, claim-only, paywalled, legal
+VERDICT: STRONG / MAYBE / NO, and why
+```
+
+The sub-agent may propose a better angle than the one it was given; take it if the evidence is
+better. **Make only STRONG topics**, at most **two**, at most one evergreen. A MAYBE is not made; a
+NO is dropped. Print every brief in the log and in the report, the dropped ones too: they show what
+the gate caught.
+
+## 7. Research and write (the chosen topics in parallel)
 
 One sub-agent per topic (Task tool), both launched together. Each follows the playbook's sections
 3 and 4 and returns the three documents:
@@ -268,9 +293,11 @@ End the run with this, and nothing after it:
 ```
 HN explainer Shorts, <date> <time> UTC
 
-| candidate | kind | anchor/mo | pair or question | supply on the angle | value | verdict |
-|---|---|---|---|---|---|---|
+| candidate | kind | stakes | anchor/mo | pair or question | supply on the angle | value | verdict |
+|---|---|---|---|---|---|---|---|
 ...
+
+Quick checks (6b): one brief per shortlisted topic, STRONG / MAYBE / NO and why
 
 Made:
 1. <title> - why it won (the three numbers) - film <link> - YouTube <link>
