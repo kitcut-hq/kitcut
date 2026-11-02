@@ -355,8 +355,12 @@ def utc_now():
 
 async def save(film, share):
     """The share on the film's record (studio.json) and in studio_runs: `share` alone is set, the
-    rest of the record is left as it is."""
+    rest of the record is left as it is. A film in another language (localize.py) is also given
+    the share's title as its own: it has none (its idea is the original's, in the original's
+    language), so every list that names it by title names it in its language."""
     fields = {"share": share}
+    if film.record().get("localized") and share.get("title"):
+        fields["title"] = share["title"]
     if film.record().get("share_error"):
         fields["share_error"] = None
     film.update(**fields)
@@ -513,6 +517,23 @@ def estimate(f, model=MODEL):
     return ytdraft.estimate(mat, ask_text(mat), model)[1]
 
 
+def titles(dry_run=False):
+    """Every film in another language whose title is not its share's: given it (no model call).
+    The films translated before save() did so."""
+    n = 0
+    for f in films.Film.all():
+        rec = f.record()
+        title = (rec.get("share") or {}).get("title")
+        if not rec.get("localized") or not title or rec.get("title") == title:
+            continue
+        print("  %s  %r -> %r" % (f.id, rec.get("title"), title), flush=True)
+        n += 1
+        if not dry_run:
+            f.update(title=title)
+            asyncio.run(agent.save(f.id, {"title": title}))
+    print("%d films%s" % (n, " (dry run: nothing written)" if dry_run else ""))
+
+
 async def _main(a):
     if a.film:
         f = films.Film(a.film) if os.path.isdir(a.film) else films.Film.open(a.film)
@@ -569,6 +590,11 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--film", help="a film id, or a film's folder")
     g.add_argument("--missing", action="store_true", help="every finished film with no share")
+    g.add_argument(
+        "--titles",
+        action="store_true",
+        help="films in another language: their share's title as their own (no model call)",
+    )
     ap.add_argument("--limit", type=int, help="with --missing: at most this many, newest first")
     ap.add_argument("--dry-run", action="store_true", help="list the films and the cost; no call")
     ap.add_argument("--auth", choices=("login", "api"), help="default: what the film was made on")
@@ -578,7 +604,11 @@ def main():
         help="with --film: the film's frame at this many seconds as its thumbnail, or off",
     )
     ap.add_argument("--model", default=MODEL)
-    asyncio.run(_main(ap.parse_args()))
+    a = ap.parse_args()
+    if a.titles:
+        titles(a.dry_run)
+        return
+    asyncio.run(_main(a))
 
 
 if __name__ == "__main__":

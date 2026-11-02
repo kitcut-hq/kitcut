@@ -605,9 +605,14 @@ EOF
   share)
     # a finished film's share (studio/share.py): the price first, always -- it spends nothing --
     # then the work in a unit of its own, like resume, so it goes on if this laptop sleeps
-    use="share <film-id>|--missing [--dry-run] [--limit N] | share <film-id> --frame <seconds>|off"
+    use="share <film-id>|--missing|--titles [--dry-run] [--limit N] | share <film-id> --frame <seconds>|off"
     what="${1:?$use}"; shift
     if [ "$what" = "--missing" ]; then args="--missing"
+    elif [ "$what" = "--titles" ]; then
+      # films in another language get their share's title as their own: no model call, no unit
+      dry=""; [ "${1:-}" = "--dry-run" ] && dry=" --dry-run"
+      change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/share.py --titles$dry"
+      exit $?
     else
       [[ "$what" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $what"
       args="--film $what"
