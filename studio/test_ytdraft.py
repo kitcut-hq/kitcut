@@ -494,6 +494,45 @@ async def main():
         ytdraft._call = real_call
         thumbs.sheet, thumbs.make = real_sheet, real_make
 
+    # a login whose plan is spent carries on on the key; any other failure does not
+    seen = []
+    real_once = ytdraft.ask_json_once
+
+    async def once(text, sheet, auth, film, model, effort, system, session):
+        seen.append(auth)
+        if auth == "login":
+            raise RuntimeError(
+                "Claude Code returned an error result: You've hit your session limit"
+                " - resets 5pm (America/Los_Angeles) (exit code: 1)"
+            )
+        return {"ok": 1}, 0.01
+
+    ytdraft.ask_json_once = once
+    try:
+        got = await ytdraft.ask_json("t", None, "login", None, "m", "low", "s", "x")
+        check(
+            got == ({"ok": 1}, 0.01) and seen == ["login", "api"],
+            "a spent login carries on on the key",
+            seen,
+        )
+        seen.clear()
+        await ytdraft.ask_json("t", None, "api", None, "m", "low", "s", "x")
+        check(seen == ["api"], "a call already on the key is asked once", seen)
+
+        async def broken(text, sheet, auth, film, model, effort, system, session):
+            seen.append(auth)
+            raise RuntimeError("no draft: not json")
+
+        ytdraft.ask_json_once = broken
+        seen.clear()
+        try:
+            await ytdraft.ask_json("t", None, "login", None, "m", "low", "s", "x")
+            check(False, "another failure is raised")
+        except RuntimeError:
+            check(seen == ["login"], "another failure is not retried on the key", seen)
+    finally:
+        ytdraft.ask_json_once = real_once
+
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")
     sys.exit(1 if bad else 0)
