@@ -62,7 +62,7 @@
     border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin: 8px 0; }
   .opts { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
   .opts label { font-size: 14px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
-  .pick { margin-top: 10px; border-left: 3px solid var(--line); padding: 4px 0 4px 10px; font-size: 14px; }
+  .pick { margin-top: 6px; font-size: 13px; }
   .pick .state { font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: .05em; }
   .state.published, .state.done { color: var(--ok); } .state.dropped, .state.failed { color: var(--bad); }
   .state.picked, .state.started, .state.researching, .state.making { color: var(--warn); }
@@ -158,11 +158,11 @@
       p.film && `<a href="${esc(p.film)}" target="_blank" rel="noopener">film</a>`,
       p.youtube && `<a href="${esc(p.youtube)}" target="_blank" rel="noopener">YouTube</a>`,
       p.session && `<a href="${esc(p.session)}" target="_blank" rel="noopener">run</a>`,
-    ].filter(Boolean).join(" · ");
-    return `<div class="pick"><span class="state ${esc(p.state)}">${esc(p.state || "picked")}</span>
-      · ${esc(p.title || p.angle_title)}${p.publish === false ? " · not publishing" : ""}
-      <div>${links}${p.note ? `<div>${esc(p.note)}</div>` : ""}</div>
-      <div class="links">picked ${esc(when(p.picked_at))}${p.updated_at && p.updated_at !== p.picked_at ? ` · updated ${esc(when(p.updated_at))}` : ""}</div></div>`;
+    ].filter(Boolean);
+    const bits = [`<span class="state ${esc(p.state)}">${esc(p.state || "picked")}</span>`, ...links,
+      p.publish === false ? `<span class="muted">not publishing</span>` : "",
+      `<span class="muted">${esc(when(p.updated_at || p.picked_at))}</span>`].filter(Boolean);
+    return `<div class="pick">${bits.join(" · ")}${p.note ? `<div class="muted">${esc(p.note)}</div>` : ""}</div>`;
   }
 
   function ideaRows(run, idea) {
@@ -171,7 +171,7 @@
                    ...(idea.sources || []).map((s) => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || "source")}</a>`)].join(" · ");
     const angles = idea.angles || [];
     if (idea.skipped) {
-      return `<tr class="skipped"><td colspan="4"><span class="q">${esc(idea.question || idea.topic)}</span>
+      return `<tr class="skipped"><td colspan="3"><span class="q">${esc(idea.question || idea.topic)}</span>
         <span class="muted"> · skipped</span>
         <button class="sm" data-skip="0" data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}">Bring back</button></td></tr>`;
     }
@@ -185,11 +185,13 @@
         <button class="sm" data-skip="1" data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}">Skip topic</button></td>
 `;
     const rows = angles.map((a, j) => `<tr data-idea-row="${esc(idea.id)}">${j === 0 ? head : ""}
-      <td><div class="at">${esc(a.title)} <span class="fmt">${esc(a.format || "explainer")}</span></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}</td>
-      <td>${make(a.id)}</td><td>${statusFor(a.id)}</td></tr>`);
+      <td><div class="at">${esc(a.title)} <span class="fmt">${esc(a.format || "explainer")}</span></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}
+      ${statusFor(a.id)}</td>
+      <td>${make(a.id)}</td></tr>`);
     rows.push(`<tr data-idea-row="${esc(idea.id)}" data-run="${esc(run.run_id)}" class="own-row">${angles.length ? "" : head}
-      <td><textarea rows="1" placeholder="Own angle: the question the film should answer"></textarea></td>
-      <td>${make("own", true)}</td><td>${statusFor("own")}</td></tr>`);
+      <td><textarea rows="1" placeholder="Own angle: the question the film should answer"></textarea>
+      ${statusFor("own")}</td>
+      <td>${make("own", true)}</td></tr>`);
     return rows.join("");
   }
 
@@ -217,8 +219,8 @@
       <h2>${esc(when(run.run_at || run.received_at))} · ${(run.ideas || []).length} ideas</h2>
       ${run.summary ? `<details class="summary"><summary>What the scout read and dropped</summary><p>${esc(run.summary)}</p></details>` : ""}
       <div class="scroll"><table>
-        <colgroup><col style="width:34%"><col style="width:46%"><col style="width:8%"><col style="width:12%"></colgroup>
-        <thead><tr><th>The question</th><th>Angle</th><th></th><th>Status</th></tr></thead>
+        <colgroup><col style="width:38%"><col style="width:53%"><col style="width:9%"></colgroup>
+        <thead><tr><th>The question</th><th>Angle</th><th></th></tr></thead>
         <tbody>${(run.ideas || []).map((i) => ideaRows(run, i)).join("")}</tbody>
       </table></div>
     </section>`).join("");
