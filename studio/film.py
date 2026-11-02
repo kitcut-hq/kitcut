@@ -947,6 +947,8 @@ class Film:
             return bool(CAST_FILE.match(asked)) and os.path.isdir(self.path("cast"))
         if parent == _norm(self.path("scenes")):  # a scene of a film made in scenes
             asked = os.path.basename(os.path.realpath(raw))
+            if self.record().get("localized"):  # a translation: its scenes' words (localize.py)
+                return bool(SCENE_FILE.match(asked)) and os.path.isfile(p)
             return self.mode == "scenes" and bool(SCENE_FILE.match(asked))
         if parent == _norm(self.path("engine")) and self.record().get("localized"):
             # a translation may put the words of any of its engine modules into its language (a

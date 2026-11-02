@@ -716,8 +716,8 @@ kitcut.ai's Translate. The site asks as the original's own client with a film's 
   `round` (a new version being made), `own_voice` (told in the person's own ElevenLabs voice and
   asked without a fresh pass to that same voice: the site mints one and sends it as `voice`),
   `same` (its own language), `exists` (that language done or being made, with `film`), and not yet
-  supported: `long` (scene by scene: its passes write scenes/ and never read the translation's
-  first message).
+  (none left: a film made scene by scene is carried with its scenes/ and translated in one
+  conversation, `mode: single`, its scene files held to the same only-words check).
 - **Asked twice with one key: the same film** (202 with its id), so the site can ask again when
   it got no answer.
 - **Its YouTube draft** is written in its language: the site sends `"language"` and `"fresh":

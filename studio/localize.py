@@ -70,7 +70,7 @@ SCAN = 400  # the newest films looked through for a key or a language already ma
 # record of its making, or something the translation makes again in its language.
 NOT_CARRIED = {
     "studio.json", "events.jsonl", "temp", "versions", "library", "youtube", "share", "outputs",
-    "notes", "drafts", "link", "stills", "shots", "audio", "localize", "scenes", "project.json",
+    "notes", "drafts", "link", "stills", "shots", "audio", "localize", "project.json",
     "journal.md",
 }  # fmt: skip
 # Inside what is carried, what is still the original's own record: what drawing its people cost
@@ -182,8 +182,6 @@ def check(spec, client, films=None, narrator=None):
                 "the voice asked with is not the one the film is told in",
                 voice=own.get("voice"),
             )
-    if rec.get("mode") == "scenes" or os.path.isdir(src.path("scenes")):
-        raise Refused(409, "long", "A film made scene by scene cannot be translated yet.")
     if language_of(src) == lang:
         raise Refused(409, "same", "the film is in that language already")
     there = made_in(src.id, lang, films)
@@ -313,6 +311,9 @@ def seed(film, src, lang, version, key):
     rec = src.record()
     film.update(
         localized={"from": src.id, "version": version, "language": lang, "key": key},
+        # one conversation, whatever its length: a translation changes words in the code there
+        # is, scenes/ included, and never writes a film a scene at a time (scenes.py)
+        mode="single",
         # the original's length, exactly (Film.create keeps only multiples of 5: a 23 s Short was 5)
         **({"length": rec["length"]} if rec.get("length") else {}),
         caps=rec.get("caps") or film.record().get("caps"),
@@ -362,6 +363,13 @@ def ask(film):
         "compares every file with the original's and sends back anything else that changed."
         % (lang, lang)
     )
+    scenes = scene_files(film)
+    if scenes:
+        same += (
+            " The picture is also written in scenes/ (%d files, one a scene, loaded after "
+            "film.js): the words they show are translated there too, under the same rule."
+            % len(scenes)
+        )
     mods = own_modules(film)
     if mods:
         same += (
@@ -502,6 +510,16 @@ def own_modules(film):
     )
 
 
+def scene_files(film):
+    """A film made a scene at a time keeps part of its picture in scenes/<id>.js."""
+    d = film.path("scenes")
+    return (
+        sorted("scenes/" + x for x in os.listdir(d) if x.endswith(".js"))
+        if os.path.isdir(d)
+        else []
+    )
+
+
 def leftovers(film):
     """Words the original showed that film.js or content.json still shows word for word: at most
     eight."""
@@ -511,7 +529,7 @@ def leftovers(film):
     if src is None:
         return []
     left = set()
-    for name in WORDS_IN + tuple(own_modules(src)):
+    for name in WORDS_IN + tuple(own_modules(src)) + tuple(scene_files(src)):
         was, now = _text(src.path(*name.split("/"))), _text(film.path(*name.split("/")))
         if was is not None and now is not None:
             left |= _strings(was) & _strings(now)
@@ -875,7 +893,7 @@ def check_film(film):
     # the code: film.js and the cast, token by token
     code = list(CODE_FILES) + [
         "%s/%s" % (d, x)
-        for d in ("cast", "engine")
+        for d in ("cast", "engine", "scenes")
         if os.path.isdir(src.path(d))
         for x in sorted(os.listdir(src.path(d)))
         if x.endswith(".js")
