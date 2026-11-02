@@ -136,11 +136,17 @@ a day. Read it as:
   descriptions of the top videos and write down what every one of them says (usually "what
   happened" and "who did it"). Then name the question none of them answers, that research can:
   what it means for the viewer, the number nobody put in context, how it compares with the last
-  time, where the money or data goes next. Example: the Binance $6.3B hack (2026-11-02) had CNN 1.4M,
-  BBC, DW and a 15-minute "how it happened" with 838k: all retell the heist. Open angles: "Where does
-  $6.3 billion of stolen crypto actually go, and how much ever comes back?" (laundering and
-  recovery data from the FBI, Chainalysis, past hacks) or "Is your money safe on an exchange?" (what
-  Binance covered, what its reserve reports say). A hype story with such an angle is a **strong**
+  time, where the money or data goes next. **Climb the question ladder** a curious viewer climbs after the headline: (1) what happened, (2) who
+did it, (3) how it happened, step by step, (4) **how was that even possible** (what design, rule or
+choice let it happen), (5) **why them** (why this company, this city, this product), (6) **why now**,
+(7) what it means for me. The coverage nearly always stops at 1 to 3, and an answer everybody
+already knows ("it was North Korea") is no angle at all. Our film answers one question from 4 to 7,
+one the evidence can settle. Example, the Binance $6.3B hack (measured 2026-11-02): rungs 1 to 3 are
+taken (CNN 1.4M, IGR 1.2M, Gloam 844k "How Binance Lost $6.3B in One Night", Coin Bureau 424k, DW,
+BBC "why is North Korea being blamed"); "how could one engineer's laptop be allowed to move $6.3
+billion?" (rung 4: hot wallets, signing limits, what exchanges are supposed to do) and "why Binance?"
+(rung 5: the biggest target, and why the "safest" exchange was the one that fell) had one 1.2k-view
+Short between them. Those are the films. A hype story with such an angle is a **strong**
   pick: demand is at its peak and the big videos feed searches for the name. Supply is then counted
   for that angle's own question.
 - **Bot channels do not count as supply, and they warn you.** Auto-made news Shorts (channels like
