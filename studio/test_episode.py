@@ -146,7 +146,8 @@ def main():
     )
     start = off.path(*episode.START)
     check(
-        sorted(os.listdir(start)) == ["about.json", "film.js", "score.json", "sfx.json", "vo.json"],
+        sorted(os.listdir(start))
+        == ["about.json", "film.js", "score.json", "sfx.json", "vo.json", "words.json"],
         "library/start/ holds the last episode as it was",
         sorted(os.listdir(start)),
     )

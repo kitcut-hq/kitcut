@@ -176,6 +176,11 @@ def build(folder, fid, m, files, rec):
     for name, p in files.items():
         shutil.copyfile(p, film.path("outputs", name))
     m = dict(m, slug="film", engine="engine")
+    if isinstance(m.get("vo"), dict) and not os.path.exists(film.path("vo.json")):
+        # a narration kept inline in the manifest (a Short built by hand) becomes the studio's
+        # own vo.json, as every studio film has it: versions, editing and translation read it there
+        films._write_json(film.path("vo.json"), m["vo"])
+        m["vo"] = "vo.json"
     m["title"] = rec["title"]
     films._write_json(film.manifest, m)
     films._write_json(film.path("studio.json"), rec)

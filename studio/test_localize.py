@@ -466,6 +466,60 @@ async def main():
     )
     check(i_new.record().get("length") == 23, "the original's length, exactly (23 s, not 5)")
 
+    # ---- a new film keeps its words on screen in words.json, apart from its code
+    fresh = Film.create("How bees make honey", 30, "drawn", client=ALICE)
+    with open(fresh.manifest, encoding="utf-8") as fh:
+        check(
+            (json.load(fh).get("data") or {}).get("words") == "words.json"
+            and os.path.exists(fresh.path("words.json"))
+            and "words.json" in fresh.editable(),
+            "a new film has words.json, read as SK.DATA.words, and may write it",
+        )
+    touch(
+        fresh.path("film.js"),
+        "const W = SK.DATA.words;\nSK.text(W.title, {font: 'Sofia Sans'});\n"
+        "SK.text('Spring open day', {size: 40});\nconst c = SK.w(0, 'Bees');\n",
+    )
+    check(
+        localize.words_in_code(fresh) == ["Spring open day"],
+        "words still written in film.js are named (never a cue word or a font)",
+        localize.words_in_code(fresh),
+    )
+    _write_json(fresh.path("vo.json"), {"language": "en", "voice": "kc-warm", "lines": LINES})
+    _write_json(fresh.path("words.json"), {"title": "How bees make honey", "tag": "Open Dec 21"})
+    fresh.update(state="done", ok=True)
+    w_new = Film.create("How bees make honey", 30, "drawn", client=ALICE)
+    localize.seed(w_new, fresh, "de", 1, "hold-w")
+    check(
+        "words.json" in localize.ask(w_new) and "never the names" in localize.ask(w_new),
+        "a translation of it is told its words are in words.json",
+    )
+    _write_json(
+        w_new.path("words.json"), {"title": "Wie Bienen Honig machen", "tag": "Offen 21. Dez."}
+    )
+    touch(
+        w_new.path("film.js"),
+        "const W = SK.DATA.words;\nSK.text(W.title, {font: 'Sofia Sans'});\n"
+        "SK.text('Tag der offenen Tür', {size: 40});\nconst c = SK.w(0, 'Bienen');\n",
+    )
+    _write_json(w_new.path("vo.json"), localize._read(w_new.path("vo.json")))
+    rep = localize.check_film(w_new)
+    check(
+        not any("words.json" in x for x in rep["problems"]),
+        "its words translated in words.json: no problem",
+        rep["problems"],
+    )
+    _write_json(w_new.path("words.json"), {"title": "Wie Bienen Honig machen", "subtitle": "x"})
+    check(
+        any("words.json" in x for x in localize.check_film(w_new)["problems"]),
+        "a name in words.json changed: caught",
+    )
+    old_style = original()
+    os.remove(old_style.path("words.json"))  # as a film made before words.json
+    o_new = Film.create("How bees make honey", 30, "drawn", client=ALICE)
+    localize.seed(o_new, old_style, "de", 1, "hold-o")
+    check(not os.path.exists(o_new.path("words.json")), "a film from before words.json gets none")
+
     # ---- the YouTube draft
     check(
         ytdraft.options({"language": "es", "fresh": True}) == {"language": "es", "fresh": True},

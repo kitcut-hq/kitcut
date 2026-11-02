@@ -77,7 +77,7 @@ NOT_CARRIED = {
 # (agent counts rigs/spend.jsonl into the film's cost) and any video a folder holds.
 NOT_CARRIED_FILES = {"spend.jsonl"}
 NOT_CARRIED_EXT = (".mp4", ".webm", ".mov")
-WORDS_IN = ("film.js", "content.json")  # where a film writes the words it shows
+WORDS_IN = ("film.js", "content.json", "words.json")  # where a film writes the words it shows
 SOURCE = "localize"  # in the new film: the original's narration, as it was, read-only
 
 
@@ -306,6 +306,10 @@ def seed(film, src, lang, version, key):
             _write_json(film.manifest, m)
     elif os.path.exists(film.path("vo.json")):
         os.remove(film.path("vo.json"))  # Film.create's empty one: nothing is recorded
+    if not os.path.exists(src.path("words.json")) and os.path.exists(film.path("words.json")):
+        os.remove(
+            film.path("words.json")
+        )  # Film.create's empty one: the original has its words in code
     rec = src.record()
     film.update(
         localized={"from": src.id, "version": version, "language": lang, "key": key},
@@ -342,6 +346,11 @@ def ask(film):
         if os.path.exists(film.path("content.json"))
         else ""
     )
+    if os.path.exists(film.path("words.json")):
+        data += (
+            " The words it shows are in words.json (SK.DATA.words), by name: translate the "
+            "values there, never the names; film.js should need no change but its cue words."
+        )
     same = (
         "The rule: ONLY WORDS CHANGE. Change only the text inside quotes that the film shows on "
         "screen (titles, labels, captions, lists, units, the words in content.json and the "
@@ -834,6 +843,26 @@ def overruns(film):
     return out
 
 
+def words_in_code(film, limit=10):
+    """Words a film writes in film.js itself instead of words.json: quoted strings that read as
+    words on screen (wordish, and a few words or a capital), never a cue word (SK.w(line, 'word'))."""
+    code = _text(film.path("film.js"))
+    if code is None:
+        return []
+    toks, reserved, out = _js_tokens(code), _reserved(film), []
+    for i, (kind, s, _ln) in enumerate(toks):
+        if kind != "str" or not wordish(s, reserved):
+            continue
+        if not (" " in s.strip() or s[:1].isupper()):
+            continue
+        cue = i >= 4 and toks[i - 1][1] == "," and toks[i - 3][1] == "(" and toks[i - 4][1] == "w"
+        if not cue and s not in out:
+            out.append(s)
+        if len(out) >= limit:
+            break
+    return out
+
+
 def check_film(film):
     """Everything in the translation that is not the original's words, translated: {"ok",
     "problems", "words", "files"}. Words said and shown may change; nothing else may."""
@@ -879,6 +908,11 @@ def check_film(film):
             _read(src.path("content.json")),
             _read(film.path("content.json")),
             reserved,
+        )
+    if os.path.exists(src.path("words.json")):
+        files += 1
+        probs += _json_diff(
+            "words.json", _read(src.path("words.json")), _read(film.path("words.json")), reserved
         )
     for name in SAME_FILES:
         if os.path.exists(src.path(name)):

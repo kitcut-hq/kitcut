@@ -63,8 +63,15 @@ from film import HOME, KIT, Film, _write_json, home_rel, modules  # noqa: E402
 
 SETTING = "STUDIO_EPISODE_CARRY"
 START = ("library", "start")  # in the new film: the last episode as it was, read-only
-CODE = ("film.js", "score.json")  # carried as they are
-SEEN = ("film.js", "vo.json", "score.json", "sfx.json", "paint.json")  # into library/start/
+CODE = ("film.js", "score.json", "words.json")  # carried as they are (words.json: since 2026-11-01)
+SEEN = (
+    "film.js",
+    "words.json",
+    "vo.json",
+    "score.json",
+    "sfx.json",
+    "paint.json",
+)  # library/start/
 VO_KEEP = ("voice", "style", "language", "cast")  # what of vo.json is the series', not the story
 PAINT_KEEP = ("style",)
 # a string in film.js that reads as words on screen: a few words, not a key or a colour
@@ -455,8 +462,12 @@ def leftovers(film):
     library gave this film to read) have them too -- a title, a catchphrase, a sign-off. [str]"""
     if not carried(film):
         return []
-    before = _strings(_read(os.path.join(film.path(*START), "film.js")))
-    now = _read(film.path("film.js")) or ""
+    start = film.path(*START)
+    before = _strings(
+        (_read(os.path.join(start, "film.js")) or "")
+        + (_read(os.path.join(start, "words.json")) or "")
+    )
+    now = (_read(film.path("film.js")) or "") + (_read(film.path("words.json")) or "")
     seen = {}
     for m in (film.record().get("library") or {}).get("films") or []:
         for s in _strings(_read(film.path(*m["dir"].split("/"), "film.js"))):
