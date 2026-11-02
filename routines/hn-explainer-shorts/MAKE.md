@@ -46,7 +46,7 @@ curl -sS -X POST "$STATUS_URL" -H "content-type: application/json" \
 | `researching` | at the start | `note`: the angle in a line |
 | `dropped` | the evidence does not hold (step 6b says NO, or a number the film rests on cannot be backed) | `note`: why, in one or two plain sentences |
 | `making` | `make_film` started | `film`: the film's link; `title` |
-| `published` | live on YouTube | `film`, `youtube`: the video's link |
+| `published` | live on YouTube | `film`, `youtube`: the Short's link as `https://youtube.com/shorts/<id>` (a `youtu.be` link opens the ordinary watch page, and the owner reads that as "not a Short") |
 | `done` | finished, and the pick said not to publish | `film` |
 | `failed` | the studio could not make it (after one remake for the studio's own reasons) | `note` |
 

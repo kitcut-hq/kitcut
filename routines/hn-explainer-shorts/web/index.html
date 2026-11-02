@@ -160,7 +160,7 @@
   function pickHtml(p) {
     const links = [
       p.film && `<a href="${esc(p.film)}" target="_blank" rel="noopener">film</a>`,
-      p.youtube && `<a href="${esc(p.youtube)}" target="_blank" rel="noopener">YouTube</a>`,
+      p.youtube && `<a href="${esc(String(p.youtube).replace(/^https:\/\/(youtu\.be\/|(www\.)?youtube\.com\/watch\?v=)/, "https://youtube.com/shorts/"))}" target="_blank" rel="noopener">YouTube</a>`,
       p.session && `<a href="${esc(p.session)}" target="_blank" rel="noopener">run</a>`,
     ].filter(Boolean);
     const bits = [`<span class="state ${esc(p.state)}">${esc(p.state || "picked")}</span>`, ...links,
