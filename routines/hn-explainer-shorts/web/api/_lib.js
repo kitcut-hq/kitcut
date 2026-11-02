@@ -110,13 +110,17 @@ export async function loadState() {
     p.history.push({ at: ev.at, type: ev.type, state: ev.state || null, note: ev.note || null });
     p.updated_at = ev.at;
   }
+  // A pick that never reached the maker because it was not connected yet is not a pick.
+  for (const [id, p] of Object.entries(picks)) {
+    if (p.state === "failed" && /not set yet|not connected/.test(p.note || "")) delete picks[id];
+  }
   for (const run of runs) {
     for (const idea of run.ideas || []) {
       idea.picks = Object.values(picks).filter((p) => p.run_id === run.run_id && p.idea_id === idea.id);
       idea.skipped = skips[`${run.run_id}|${idea.id}`] === true;
     }
   }
-  return { runs };
+  return { runs, maker_connected: Boolean(process.env.FIRE_URL && process.env.FIRE_TOKEN) };
 }
 
 export async function findIdea(runId, ideaId) {

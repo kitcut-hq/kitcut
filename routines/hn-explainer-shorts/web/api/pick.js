@@ -21,6 +21,9 @@ export default async function handler(req, res) {
     : (idea.angles || []).find((a) => a.id === body.angle_id);
   if (!angle) return send(res, 400, { error: "pick an angle or write one" });
 
+  if (!process.env.FIRE_URL || !process.env.FIRE_TOKEN) {
+    return send(res, 503, { error: "the maker is not connected yet (its fire token is missing)" });
+  }
   const pickId = randomUUID();
   const publish = body.publish !== false;
   const pick = {
