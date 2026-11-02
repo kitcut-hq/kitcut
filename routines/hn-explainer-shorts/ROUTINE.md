@@ -4,6 +4,18 @@ The owner's ask (2026-11-01): every 12 hours, read Hacker News, find the top and
 topics, score each for a video, pick **two**, and make each a **Short of 60 to 120 seconds** with KitCut that
 answers "why" or "what it actually means", then **publish it on the KitCut YouTube channel**.
 
+**Two routines share this file (owner, 2026-11-02: "routine creates a short list. without
+research. suggest a few angles under what can be done. sends me a links to a html page where i
+pick. i do my choise and it triggers video creation and publish"):**
+
+- **The scout** (scheduled, every 12 hours) does steps 0 to 6, then **6c**: it sends the shortlist,
+  two or three angles per topic, to the owner's ideas page and notifies the owner. **It does no
+  research and makes no film.**
+- **The maker** (`MAKE.md`, started by the owner's pick on that page) does 6b, 7, 8 and 9 for the
+  one idea and angle the owner picked.
+
+The ideas page is `routines/hn-explainer-shorts/web/` (Vercel project `hn-ideas`).
+
 What a topic must have, all three at once:
 
 1. **Demand pull.** People already search for its name.
@@ -186,7 +198,7 @@ the dataset, the dashboard, the court docket, the paper), and **the one sentence
 that the headline did not tell them**. Score it 1 to 5. A 1 or 2 (research would only repeat the
 headline, or there is no primary source) is dropped.
 
-## 6. Pick two
+## 6. Shortlist
 
 A table of every candidate, with columns: anchor, new thing, **stakes sentence**, **news date** (the event's own date,
 not the HN post's age: HN often surfaces week-old news), kind, anchor searches/month, pair or
@@ -202,12 +214,57 @@ Two hard gates before the balance:
 - **The angle adds something the top videos do not.** Write the angle as a question, and next to it
   what the top three videos on the story already say. If our film would say the same, drop it.
 
-Then **shortlist three to five** by the balance of all three. If none passes, make none and say why.
+Then **shortlist three to six** by the balance of all three. If none passes, send none and say why.
 
-**Print the whole table as a message before launching any research**, so the run's log shows how
-the topics were chosen, and repeat it in the report.
+**Print the whole table as a message**, so the run's log shows how the topics were chosen, and
+repeat it in the report.
 
-## 6b. Quick research check, before anything is made
+## 6c. Send the shortlist to the owner's page (the scout's last step)
+
+For each shortlisted topic write **two or three angles**, each a different film that could be
+made: its `format` (`explainer`, `recreation`, `claim check`, or another you can name), its `title`
+written as the film's question or recreation (never a news summary), and `why`: one line on what
+it shows that the top videos do not, with the number or document that would carry it if you know
+it. Do not research beyond what steps 2 to 5 already read: the owner picks first, and the maker
+researches only what was picked.
+
+Then POST the run, once, with the URL and token the routine prompt gives (never write them into
+this repository):
+
+```bash
+curl -sS -X POST "$IDEAS_URL/api/runs" -H "authorization: Bearer $IDEAS_WRITE_TOKEN"   -H "content-type: application/json" --data-binary @run.json
+```
+
+`run.json` (the `//` notes are for you; send plain JSON):
+
+```json
+{
+  "run_at": "2026-11-02T14:02:00Z",
+  "summary": "one or two sentences: what was hot, what was dropped and why",
+  "ideas": [
+    {
+      "id": "binance",                       // short, unique in the run
+      "topic": "Binance loses $6.3B in the largest crypto hack",
+      "kind": "breaking | hype | evergreen",
+      "news_date": "Oct 29",                 // the event's own date
+      "stakes": "[who] now [what changes for them]",
+      "searches": "\"binance\" 3.4M/mo",
+      "supply": "CNN 1.4M, Gloam 844k; nobody shows how the signer was made to sign",
+      "hn": [{"title": "...", "url": "https://news.ycombinator.com/item?id=...", "points": 20}],
+      "sources": [{"title": "TRM Labs", "url": "https://..."}],   // only pages you opened
+      "angles": [
+        {"id": "a1", "format": "recreation", "title": "Binance's $6.3B hack, recreated minute by minute",
+         "why": "TRM's on-chain record: 50 signed authorizations, emptied in 3 min 24 s, no key stolen"}
+      ]
+    }
+  ]
+}
+```
+
+Every link must be one you actually opened in this run; never write a URL from memory. Then
+notify the owner (PushNotification): the number of ideas and the page link from the prompt.
+
+## 6b. Quick research check, before anything is made (maker only)
 
 The owner (2026-11-02): "what if we do a shortlist using this algo and then a quick research check
 if we can contribute and make a strong video before actually making it?" A topic can pass every
@@ -234,7 +291,7 @@ better. **Make only STRONG topics**, at most **two**, at most one evergreen. A M
 NO is dropped. Print every brief in the log and in the report, the dropped ones too: they show what
 the gate caught.
 
-## 7. Research and write (the chosen topics in parallel)
+## 7. Research and write (maker only)
 
 One sub-agent per topic (Task tool), both launched together. Each follows the playbook's sections
 3 and 4 and returns the three documents:
@@ -276,7 +333,7 @@ Then you (not the sub-agent) run the checks for each:
 3. If the number the film rests on cannot be backed, drop that topic and say why. Do not
    substitute a weaker topic in the same run unless it already passed steps 3 to 5.
 
-## 8. Make the films
+## 8. Make the film (maker only)
 
 `make_film` for each, at once (the account makes two at a time; a third waits in its line):
 
@@ -292,7 +349,7 @@ Then follow both with `get_film` (`wait_seconds: 50`, again and again) until don
 takes about 15 to 30 minutes. **A film whose status is `cancelled` was stopped by a person: never make it again, and do not publish anything for that topic** (2026-11-02: the owner stopped two films and the run re-made both). A film that did not finish: read why; `remake_film` once only if the
 reason was the studio's, not the documents'.
 
-## 9. Publish
+## 9. Publish (maker only, when the pick says publish)
 
 For each finished film:
 
@@ -309,31 +366,28 @@ For each finished film:
    - `tags`: the anchor, the pair, the question forms.
 3. `get_youtube_post` until it is live, for the video's link.
 
-## 10. Report
+## 10. Report (the scout)
 
-End the run with this, and nothing after it:
+End the scout's run with this, and nothing after it:
 
 ```
-HN explainer Shorts, <date> <time> UTC
+HN ideas, <date> <time> UTC
 
-| candidate | kind | stakes | anchor/mo | pair or question | supply on the angle | value | verdict |
-|---|---|---|---|---|---|---|---|
+| candidate | kind | stakes | anchor/mo | pair or question | supply on the angle | verdict |
+|---|---|---|---|---|---|---|
 ...
 
-Quick checks (6b): one brief per shortlisted topic, STRONG / MAYBE / NO and why
-
-Made:
-1. <title> - why it won (the three numbers) - film <link> - YouTube <link>
-2. ...
-
-Dropped after research: <topic>: <why>   (or "none")
+Sent to the page: <n> ideas, <m> angles (the API's answer)
 Look at: <anything a person should check>   (or "nothing")
-Spent: <credits> credits, <search_videos queries> YouTube queries
+Spent: <search_videos queries> YouTube queries
 ```
+
+The maker's report is in `MAKE.md`.
 
 ## Never
 
-- More than two films a run; a film from a topic that failed a step; lowering the bar to reach two.
+- The scout making a film, or researching past the shortlist; the maker making anything but the pick.
+- A film from a topic that failed a step.
 - A number without a page you read and a quote you saw on it.
 - Publishing a film whose narration says what doc1 does not.
 - Anything but the KitCut channel; any channel but public there.
