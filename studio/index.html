@@ -157,7 +157,9 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .side .more { display: grid; gap: 4px; margin: 10px 10px 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
 .side .more a { color: var(--ink-3); }
 /* the sidebar's Make a film button, its group labels, "All N projects", and the invite card */
-.side .go { justify-content: flex-start; height: 38px; margin: 0 0 6px; }
+/* the column scrolls when the projects are many: nothing in it may shrink (the button was squashed to 22px) */
+.side > * { flex-shrink: 0; }
+.side .go { justify-content: flex-start; height: 40px; font-size: 14.5px; margin: 0 0 6px; }
 .side .go.on { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent-soft); }
 .side .label.grp { margin-top: 14px; }
 .side a.all { padding: 4px 10px 4px 40px; font-size: 12.5px; color: var(--ink-3); text-decoration: none; }
