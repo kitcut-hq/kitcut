@@ -42,6 +42,11 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--limit", type=int, default=40, help="rows to print (default 40)")
     ap.add_argument("--json", action="store_true", help="print JSON instead of a table")
+    ap.add_argument(
+        "--wide",
+        action="store_true",
+        help="also every story of the last 48 h with 5+ points (small ones carry good topics)",
+    )
     args = ap.parse_args()
 
     now = int(time.time())
@@ -53,8 +58,14 @@ def main() -> None:
         "rising": f"{ALGOLIA}/search_by_date?tags=story&hitsPerPage=60"
         f"&numericFilters=created_at_i>{now - 8 * 3600},points>15",
     }
+    if args.wide:
+        for page in range(4):
+            urls[f"wide{page}"] = (
+                f"{ALGOLIA}/search_by_date?tags=story&hitsPerPage=100&page={page}"
+                f"&numericFilters=created_at_i>{now - 48 * 3600},points>=5"
+            )
     try:
-        with ThreadPoolExecutor(4) as pool:
+        with ThreadPoolExecutor(8) as pool:
             got = dict(zip(urls, pool.map(get, urls.values()), strict=True))
     except OSError as e:
         sys.exit(
@@ -64,7 +75,7 @@ def main() -> None:
 
     rank = {str(i): n for n, i in enumerate(got["top"][:90], 1)}
     stories: dict[str, dict] = {}
-    for src in ("front", "day", "rising"):
+    for src in [k for k in urls if k != "top"]:
         for h in got[src].get("hits", []):
             sid = h["objectID"]
             age_h = max((now - h["created_at_i"]) / 3600, 0.5)
@@ -88,7 +99,8 @@ def main() -> None:
             )
             s["seen_in"].append(src)
 
-    rows = sorted(stories.values(), key=lambda s: -s["pts_per_h"])[: args.limit]
+    rows = sorted(stories.values(), key=lambda s: -s["pts_per_h"])
+    rows = rows if args.wide else rows[: args.limit]
     if args.json:
         print(json.dumps({"fetched_utc": now, "stories": rows}, indent=1))
         return

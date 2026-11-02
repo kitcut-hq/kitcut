@@ -55,8 +55,14 @@ At most **one** evergreen a run, so a breaking story always has room.
 ## 1. Read Hacker News
 
 ```bash
-python3 -I routines/hn-explainer-shorts/hn.py --limit 40
+python3 -I routines/hn-explainer-shorts/hn.py --wide
 ```
+
+`--wide` lists every story of the last 48 hours with 5 or more points (about 300), not just the
+front page. **Read all of it: points are not the signal.** On 2026-11-02 the front page's top
+stories were HN meta and essays, while the stories that passed every test sat far down: OpenAI
+ending unlimited ChatGPT prompts (40 points), Proton's CEO calling a security test "loser
+thinking" (59 and 9 points), and the year's biggest crypto hack, Binance's $6.3B (20 points).
 
 Stories ranked by points per hour, with points, comments, age and front-page rank. If it says HN
 is unreachable from here, `WebFetch` the URLs it prints instead (the same public APIs).
