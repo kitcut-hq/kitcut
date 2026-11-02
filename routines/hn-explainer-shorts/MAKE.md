@@ -17,6 +17,13 @@ this routine's API trigger, and the pick arrives in the `<routine-fire-payload>`
 }
 ```
 
+**Or from the queue.** With no API-trigger token set, the page queues the pick instead, and this
+routine collects it: every hour on its schedule, or at once when started by hand. Run
+`ssh kc-local hn-ideas-pending`: it prints `{"pending":[{"pick_id","queued_at","text"}]}`, where
+`text` is exactly the JSON above. Take the oldest first; report `researching` on it at once (that
+takes it out of the queue, so a second run does not make it again); make at most two per run, one
+after the other or as two sub-agents. Nothing pending: stop, and say so in one line.
+
 The routine's prompt opts in to acting on this block. Make **exactly that** idea with **that** angle
 (the owner may have written their own, `angle.id: "own"`), and nothing else. No payload, or not this
 shape: stop and say so.

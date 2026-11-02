@@ -65,7 +65,7 @@
   .pick { margin-top: 6px; font-size: 13px; }
   .pick .state { font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: .05em; }
   .state.published, .state.done { color: var(--ok); } .state.dropped, .state.failed { color: var(--bad); }
-  .state.picked, .state.started, .state.researching, .state.making { color: var(--warn); }
+  .state.picked, .state.queued, .state.started, .state.researching, .state.making { color: var(--warn); }
   .pick a { color: var(--ink); }
   .empty, .err { color: var(--muted); padding: 40px 0; text-align: center; }
   .err { color: var(--bad); }
@@ -112,7 +112,6 @@
   <div class="grow"><h1>Video ideas</h1><div class="sub" id="sub">From Hacker News, every 12 hours. Pick an angle to make it.</div></div>
   <button id="phone" title="This page's link, for your phone">Phone link</button>
 </div></header>
-<div class="banner" id="banner">The maker is not connected yet, so Make is off. It needs its fire token: claude.ai/code/routines → "HN ideas: make the owner's pick" → + → API → Generate token.</div>
 <main id="main"><div class="empty">Loading…</div></main>
 <div class="toast" id="toast"></div>
 <div class="sheet" id="sheet" hidden><div class="sheet-in">
@@ -218,7 +217,7 @@
 
   function renderInto(state) {
     const runs = state.runs || [];
-    document.body.classList.toggle("no-maker", state.maker_connected === false);
+    
     if (!runs.length) { main.innerHTML = `<div class="empty">No ideas yet. The routine adds them here every 12 hours.</div>`; return; }
     $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)}. Reload the page to see progress.`;
     main.innerHTML = runs.map((run) => `<section class="run">
@@ -263,7 +262,7 @@
       if (!body.custom_angle) { toast("Write the angle first."); return; }
     } else body.angle_id = b.dataset.angle;
     b.disabled = true; b.textContent = "Starting…";
-    try { await api("/api/pick", { method: "POST", body: JSON.stringify(body) }); toast("Started. The film shows here as it moves on."); }
+    try { await api("/api/pick", { method: "POST", body: JSON.stringify(body) }); toast("Queued. The maker picks it up within the hour; reload to see it move."); }
     catch (err) { if (err.message !== "key") toast(`Not started: ${err.message}`); }
     load();
   });

@@ -103,6 +103,7 @@ export async function loadState() {
     const p = (picks[ev.pick_id] ||= { pick_id: ev.pick_id, history: [] });
     if (ev.type === "picked") Object.assign(p, ev.pick, { state: "picked", picked_at: ev.at });
     if (ev.type === "fired") Object.assign(p, { state: "started", session: ev.session || null });
+    if (ev.type === "queued") Object.assign(p, { state: "queued", text: ev.text });
     if (ev.type === "fire_failed") Object.assign(p, { state: "failed", note: ev.note });
     if (ev.type === "status") {
       for (const k of ["state", "note", "film", "youtube", "title"]) if (ev[k]) p[k] = ev[k];
@@ -120,7 +121,21 @@ export async function loadState() {
       idea.skipped = skips[`${run.run_id}|${idea.id}`] === true;
     }
   }
-  return { runs, maker_connected: Boolean(process.env.FIRE_URL && process.env.FIRE_TOKEN) };
+  for (const p of Object.values(picks)) delete p.text; // the queue's payload is for the maker only
+  return { runs, maker_connected: true };
+}
+
+/** Picks waiting for the maker: their latest state is still "queued". */
+export async function pendingPicks() {
+  const eventBlobs = await listAll("events/");
+  const events = (await Promise.all(eventBlobs.map(fetchJson))).filter(Boolean);
+  events.sort((a, b) => (a.at < b.at ? -1 : 1));
+  const last = {};
+  for (const ev of events) {
+    if (ev.type === "skip") continue;
+    last[ev.pick_id] = ev.type === "status" ? { state: ev.state } : ev.type === "queued" ? { state: "queued", text: ev.text, at: ev.at } : { state: ev.type };
+  }
+  return Object.entries(last).filter(([, v]) => v.state === "queued").map(([pick_id, v]) => ({ pick_id, queued_at: v.at, text: v.text }));
 }
 
 export async function findIdea(runId, ideaId) {

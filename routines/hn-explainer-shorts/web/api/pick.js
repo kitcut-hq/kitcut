@@ -21,9 +21,6 @@ export default async function handler(req, res) {
     : (idea.angles || []).find((a) => a.id === body.angle_id);
   if (!angle) return send(res, 400, { error: "pick an angle or write one" });
 
-  if (!process.env.FIRE_URL || !process.env.FIRE_TOKEN) {
-    return send(res, 503, { error: "the maker is not connected yet (its fire token is missing)" });
-  }
   const pickId = randomUUID();
   const publish = body.publish !== false;
   const pick = {
@@ -53,9 +50,11 @@ export default async function handler(req, res) {
     1,
   );
 
+  // Without an API-trigger token the pick waits in the queue; the maker routine collects it
+  // (every hour, or at once when started by hand) through kc-local's hn-ideas-pending.
   if (!process.env.FIRE_URL || !process.env.FIRE_TOKEN) {
-    await saveEvent({ type: "fire_failed", pick_id: pickId, note: "FIRE_URL / FIRE_TOKEN not set yet" });
-    return send(res, 503, { error: "the maker routine is not connected yet", pick_id: pickId });
+    await saveEvent({ type: "queued", pick_id: pickId, text });
+    return send(res, 200, { ok: true, pick_id: pickId, queued: true });
   }
   try {
     const r = await fetch(process.env.FIRE_URL, {
