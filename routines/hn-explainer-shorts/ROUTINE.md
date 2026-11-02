@@ -140,7 +140,10 @@ a day. Read it as:
   with every story, and its shape is never fixed in advance. Shapes it has taken:
   - **checking a claim everyone repeats**: Yandex. The viral claim was "russian bots went quiet
     after the strike"; nobody had measured it; the film measured it (Cloudflare Radar, NetBlocks)
-    and said what the data does not show;
+    and said what the data does not show. ChatGPT's December limits (2026-11-02) are the same shape:
+    headlines said "the end of unlimited ChatGPT"; OpenAI's own help page says Instant chat "will
+    not draw from your usage", and only the stronger models share a budget with Codex, so the film
+    is "what it actually means" for a paying user;
   - **how something was even possible**: Binance's $6.3B hack (2026-11-02). Everyone told the
     night step by step (CNN 1.4M, IGR 1.2M, Gloam 844k, Coin Bureau 424k, DW, BBC); nobody asked
     how one engineer's laptop could be allowed to move $6.3 billion, or why it was Binance, the
