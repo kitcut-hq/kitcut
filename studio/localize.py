@@ -490,8 +490,24 @@ WORDS = re.compile(r"""(['"`])((?:(?!\1)[^\\\n]|\\.){12,200})\1""")
 CODEISH = re.compile(r"\d+px|\b(?:rgba?|hsla?)\(|#[0-9a-fA-F]{3,8}\b|\$\{|=>|\bfunction\b")
 
 
-def _strings(code):
-    return {s for _, s in WORDS.findall(code or "") if " " in s and not CODEISH.search(s)}
+# what a string of code has that words on screen never do (shader source, a CSS rule, a template)
+NOT_WORDS = re.compile(r"[;{}=<>]|gl_|vec[234]|uniform|void|return")
+LIBRARIES = {"three.js"}  # a vendored library in engine/: its strings are never the film's words
+
+
+def _strings(code, js=True):
+    """The strings in code that read as words: a few words, never code. In JavaScript only real
+    string literals count (never a comment); in JSON any quoted string."""
+    found = (
+        [s for kind, s, _ln in _js_tokens(code or "") if kind == "str"]
+        if js
+        else [s for _, s in WORDS.findall(code or "")]
+    )
+    return {
+        s
+        for s in found
+        if 12 <= len(s) <= 200 and " " in s and not CODEISH.search(s) and not NOT_WORDS.search(s)
+    }
 
 
 KIT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sketch")
@@ -506,7 +522,7 @@ def own_modules(film):
     return sorted(
         "engine/" + x
         for x in os.listdir(d)
-        if x.endswith(".js") and not os.path.exists(os.path.join(KIT, x))
+        if x.endswith(".js") and x not in LIBRARIES and not os.path.exists(os.path.join(KIT, x))
     )
 
 
@@ -532,7 +548,8 @@ def leftovers(film):
     for name in WORDS_IN + tuple(own_modules(src)) + tuple(scene_files(src)):
         was, now = _text(src.path(*name.split("/"))), _text(film.path(*name.split("/")))
         if was is not None and now is not None:
-            left |= _strings(was) & _strings(now)
+            js = name.endswith(".js")
+            left |= _strings(was, js) & _strings(now, js)
     return sorted(left)[:8]
 
 
