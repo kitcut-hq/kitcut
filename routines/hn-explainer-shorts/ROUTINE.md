@@ -1,7 +1,7 @@
 # Routine: two explainer Shorts from Hacker News, every 12 hours
 
 The owner's ask (2026-11-01): every 12 hours, read Hacker News, find the top and fast-growing
-topics, score each for a video, pick **two**, and make each a **60-second Short** with KitCut that
+topics, score each for a video, pick **two**, and make each a **Short of 60 to 120 seconds** with KitCut that
 answers "why" or "what it actually means", then **publish it on the KitCut YouTube channel**.
 
 What a topic must have, all three at once:
@@ -38,7 +38,7 @@ At most **one** evergreen a run.
 
 ## Settings
 
-- KitCut project: **HN explainer Shorts**, `p-mlgnibpqat` (9:16, 60 s, collage, KitCut channel,
+- KitCut project: **HN explainer Shorts**, `p-mlgnibpqat` (9:16, 60 to 120 s, collage, KitCut channel,
   its brief carries the whole format; `brief.md` beside this file is a copy).
 - YouTube channel: **KitCut**, `UC2PK9SXpePZSRkT3LqiOgeg`. Publish **public** (owner, 2026-11-01:
   "we need auto publish too on the kitcut yt channel").
@@ -54,7 +54,7 @@ At most **one** evergreen a run.
 3. `get_youtube_views` channel `UC2PK9SXpePZSRkT3LqiOgeg`, range 28: note the `search_terms`. A
    candidate near a term that already brings views has a proven audience here.
 4. `get_playbook` (KitCut) once: sections 3 to 5 are how you research and check. This file only adds
-   what is different for a 60-second Short.
+   what is different for a Short.
 
 ## 1. Read Hacker News
 
@@ -244,7 +244,9 @@ One sub-agent per topic (Task tool), both launched together. Each follows the pl
   misreported`, `## The film must not say`.
 - **doc2, the chart data**: at most one or two charts (a Short has no room for more). If there is no
   chart, still send doc2 with a one-line note "No chart in this film."
-- **doc3, the script, word for word**, for **about 60 seconds: 140 to 165 words** in 7 to 10 lines.
+- **doc3, the script, word for word**, **60 to 120 seconds, as long as the evidence needs and never
+  padded** (owner, 2026-11-02: "dont limit to 60 sec. if needed go up to 120s"): about 165 words a
+  minute, so 150 to 330 words.
   L01 is the news (who did what, 14 words or fewer); L02 is the question ("So what does that
   actually mean?"); then three or four steps of evidence; then one line of what is not known; the
   last line is the open question. Each line's direction names what is on screen (which page, with
@@ -286,7 +288,7 @@ Then you (not the sub-agent) run the checks for each:
   `LABEL: EXPLAINED`; `HEADLINE: <eight words or fewer>`; `DATA AS OF <date>`; the pages to
   photograph if not all are in doc3's directions; how to say any name the voice could get wrong.
 
-Then follow both with `get_film` (`wait_seconds: 50`, again and again) until done; a 60-second film
+Then follow both with `get_film` (`wait_seconds: 50`, again and again) until done; a film of a minute or two
 takes about 15 to 30 minutes. **A film whose status is `cancelled` was stopped by a person: never make it again, and do not publish anything for that topic** (2026-11-02: the owner stopped two films and the run re-made both). A film that did not finish: read why; `remake_film` once only if the
 reason was the studio's, not the documents'.
 
