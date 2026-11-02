@@ -186,13 +186,29 @@
     const rows = angles.map((a, j) => `<tr data-idea-row="${esc(idea.id)}">${j === 0 ? head : ""}
       <td><div class="at">${esc(a.title)} <span class="fmt">${esc(a.format || "explainer")}</span></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}</td>
       <td>${make(a.id)}</td><td>${statusFor(a.id)}</td></tr>`);
-    rows.push(`<tr data-idea-row="${esc(idea.id)}" class="own-row">${angles.length ? "" : head}
+    rows.push(`<tr data-idea-row="${esc(idea.id)}" data-run="${esc(run.run_id)}" class="own-row">${angles.length ? "" : head}
       <td><textarea rows="1" placeholder="Own angle: the question the film should answer"></textarea></td>
       <td>${make("own", true)}</td><td>${statusFor("own")}</td></tr>`);
     return rows.join("");
   }
 
   function render(state) {
+    // Keep whatever was typed into the own-angle boxes across redraws.
+    const drafts = {};
+    main.querySelectorAll("tr[data-idea-row] textarea").forEach((t) => {
+      if (t.value) drafts[t.closest("tr").dataset.ideaRow + "|" + (t.closest("tr").dataset.run || "")] = t.value;
+    });
+    const focused = document.activeElement && document.activeElement.tagName === "TEXTAREA"
+      ? document.activeElement.closest("tr").dataset.ideaRow : null;
+    renderInto(state);
+    main.querySelectorAll("tr[data-idea-row] textarea").forEach((t) => {
+      const k = t.closest("tr").dataset.ideaRow + "|" + (t.closest("tr").dataset.run || "");
+      if (drafts[k]) t.value = drafts[k];
+      if (focused && t.closest("tr").dataset.ideaRow === focused) t.focus();
+    });
+  }
+
+  function renderInto(state) {
     const runs = state.runs || [];
     if (!runs.length) { main.innerHTML = `<div class="empty">No ideas yet. The routine adds them here every 12 hours.</div>`; return; }
     $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)} · updates by itself · checked ${new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
@@ -256,7 +272,8 @@
   load();
   // Refresh every minute, but never while the owner is typing an angle or has a button armed.
   setInterval(() => {
-    const busy = main.querySelector("button.confirm, details[open]");
+    const typing = [...main.querySelectorAll("textarea")].some((t) => t.value.trim() || t === document.activeElement);
+    const busy = typing || main.querySelector("button.confirm, details[open]");
     if (document.visibilityState === "visible" && key && !busy) load();
   }, 30000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && key) load(); });
