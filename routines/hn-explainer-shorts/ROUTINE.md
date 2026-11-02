@@ -85,6 +85,11 @@ is unreachable from here, `WebFetch` the URLs it prints instead (the same public
 
 ## 2. Turn stories into candidates
 
+**Never send a story that is already on the page.** First run `ssh kc-local hn-ideas-recent`: it
+lists every topic sent in the last 7 days (with its HN links, and whether the owner skipped or
+picked it). A story already there is dropped, unless something big and new happened to it; then
+send it as a new topic that says what is new. (2026-11-02 the Sam Altman RAM story showed twice.)
+
 Group stories about the same thing. Then, for each one that could be a film, write one line:
 **anchor** (the established searched name: a company, product, place, law, technology), **the new
 thing**, **the question** the film answers ("why", "what it actually means"), **kind** (breaking or

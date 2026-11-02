@@ -211,7 +211,7 @@
   function renderInto(state) {
     const runs = state.runs || [];
     if (!runs.length) { main.innerHTML = `<div class="empty">No ideas yet. The routine adds them here every 12 hours.</div>`; return; }
-    $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)} · updates by itself · checked ${new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+    $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)}. Reload the page to see progress.`;
     main.innerHTML = runs.map((run) => `<section class="run">
       <h2>${esc(when(run.run_at || run.received_at))} · ${(run.ideas || []).length} ideas</h2>
       ${run.summary ? `<details class="summary"><summary>What the scout read and dropped</summary><p>${esc(run.summary)}</p></details>` : ""}
@@ -270,13 +270,6 @@
     catch { $("#link").select(); toast("Select the link and copy it."); }
   };
   load();
-  // Refresh every minute, but never while the owner is typing an angle or has a button armed.
-  setInterval(() => {
-    const typing = [...main.querySelectorAll("textarea")].some((t) => t.value.trim() || t === document.activeElement);
-    const busy = typing || main.querySelector("button.confirm, details[open]");
-    if (document.visibilityState === "visible" && key && !busy) load();
-  }, 30000);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && key) load(); });
 })();
 </script>
 </body>
