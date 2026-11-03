@@ -732,6 +732,8 @@
     return hit && (t < hit.end || hit.end >= D) ? hit : null;
   }
   SK.sceneAt = sceneAt;
+  /** The scenes' times, [[start, end]] in order ([] for a film not made in scenes). */
+  SK.sceneTimes = () => sceneTable().map((r) => [r.start, r.end]);
   function drawScenes(t, vis) {
     const s = sceneAt(t);
     if (!s) return;

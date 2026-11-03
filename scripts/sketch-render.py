@@ -340,7 +340,8 @@ def bundle(m, audio=True, preview=None):
         if m.get("_probe"):  # --probe: the kit's own sketch/probe.js, ahead of everything (it wraps
             # the cast before the film takes its functions), never a copy in the film's folder
             film = (
-                "window.__PROBE__ = %s;\n" % json.dumps({"step": float(m["_probe"])})
+                "window.__PROBE__ = %s;\n"
+                % json.dumps({"step": float(m["_probe"]), **(m.get("_probe_cfg") or {})})
                 + read_text(os.path.join(SKETCH, "probe.js"))
                 + "\n;\n"
                 + film
@@ -422,20 +423,41 @@ def write_sound(m, page, size):
         )
 
 
+# how often the probe reads the film for placing its captions (drawn), in seconds
+PLACE_STEP = 0.5
+
+
 def live_captions(m):
     """Whether the film's captions are drawn live over its video, not into it: the module that
-    draws them for the stills and leaves the video clean (sketch/captions-layer.js, 2026-10-31).
-    A film made before has its own engine/captions.js that burns them in, and no layer."""
+    draws them over the finished video (sketch/captions-layer.js, 2026-10-31). A film made
+    before has its own engine/captions.js that burns them in, and no layer."""
     return "captions-layer" in (m.get("modules") or [])
 
 
-def write_captions(m, page, size):
+def drawn(m, size):
+    """What the film's code draws where, a few times a second (sketch/probe.js, every piece of text
+    whatever its size): what _captionplace keeps the captions off. None when it cannot be read."""
+    try:
+        page = bundle(
+            {**m, "_probe": PLACE_STEP, "_probe_cfg": {"text_max": 1, "deadline_ms": 60000}},
+            audio=False,
+        )
+        s = Session(page, on_still=lambda t, body: None, size=size)
+        s.run("stills=0", fatal=False)
+        return (s.report or {}).get("probe")  # SK.REPORT() answers each page script's own
+    except Exception as e:  # placing goes on with the picture alone
+        print("  (no probe for placing the captions: %s)" % e)
+        return None
+
+
+def write_captions(m, page, size, video):
     """<outputs>/captions.json: the film's captions as data (SK.captionData -- the cards, their
-    word times, the look), with the faces its look names (and its brand's and style's, which a
-    person may pick for them later) copied beside it as captions_font<N>
-    and listed under "fonts" (file names next to it: the site, the burner and the studio read them
-    from there). Nothing for a film with no narration (and an old one is removed). Its path, or
-    None."""
+    word times, the look), each scene's cards placed at the foot of the frame or its top from
+    what the rendered video shows there (_captionplace), with the faces its look names (and its
+    brand's and style's, which a person may pick for them later) copied beside it as
+    captions_font<N> and listed under "fonts" (file names next to it: the site, the burner and
+    the studio read them from there). Nothing for a film with no narration (and an old one is
+    removed). Its path, or None."""
     dst = os.path.join(m["_outputs"], "captions.json")
     for n in os.listdir(m["_outputs"]):
         if n.startswith("captions_font"):
@@ -468,6 +490,7 @@ def write_captions(m, page, size):
             }
         )
     data["fonts"] = fonts
+    import_module("_captionplace").place(video, data, drawn(m, size))
     tmp = dst + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
@@ -1386,10 +1409,26 @@ def main():
 
         if "captions" in names:
             with st("captions"):
-                p = write_captions(m, light, size)
+                p = write_captions(m, light, size, out)
                 print(
                     "  %s" % (os.path.relpath(p, _env.ROOT) if p else "no captions (no narration)")
                 )
+                if p:
+                    with open(p, encoding="utf-8") as f:
+                        for r in json.load(f)["placed"]["scenes"]:
+                            print(
+                                "    %6.1f-%-6.1f %-6s detail %.2f/%.2f faces %.2f/%.2f "
+                                "drawn %.2f/%.2f (%d)"
+                                % (
+                                    r["s"],
+                                    r["e"],
+                                    r["at"],
+                                    *r["detail"],
+                                    *r["faces"],
+                                    *r["drawn"],
+                                    r["samples"],
+                                )
+                            )
 
     _project.record(
         m["_id"],

@@ -3,7 +3,7 @@
 
    One file, byte for byte in three places, so the card looks the same wherever it is drawn:
      kitcut   sketch/captions-layer.js  the engine module "captions-layer": sketch/captions.js
-                                         draws a film's stills with it, and writes the film's
+                                         cuts the film's cards with it, and writes its
                                          captions.json beside its video (SK.captionData)
      kitcut   scripts/captions-burn.py  draws it over a finished video's frames (a copy with
                                          captions: a download, YouTube, a chat's preview)
@@ -21,16 +21,21 @@
   const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
   const FONT = "'Inter', 'Sofia Sans', sans-serif";
 
-  /** Where the card sits and how much it holds, from the frame's shape. y: the card's centre;
-   *  size: the type; w: the widest a line may be; words, chars: a card's most. studio/film.py
-   *  caption_band works out the same band (studio/test_shorts.py holds the two equal). */
+  /** Where the card sits and how much it holds, from the frame's shape. y: the card's centre at
+   *  the foot of the frame; top: its centre for a card at the top (a scene whose picture sits
+   *  low: captions.json's card.at, scripts/_captionplace.py); size: the type; w: the widest a
+   *  line may be; words, chars: a card's most. studio/film.py caption_band works out the same
+   *  band at the foot (studio/test_shorts.py holds the two equal). */
   function geometry(W, H) {
-    return H > W
-      ? { y: H * .745, size: W * .061, w: W * .74, words: 4, chars: 22 }  // tall: above a phone's buttons
+    return H > W  // tall: above a phone's buttons, or below its top row (search, the camera)
+      ? { y: H * .745, top: H * .16, size: W * .061, w: W * .74, words: 4, chars: 22 }
       : H === W
-        ? { y: H * .86, size: W * .05, w: W * .8, words: 5, chars: 28 }
-        : { y: H * .885, size: H * .046, w: W * .7, words: 8, chars: 46 };
+        ? { y: H * .86, top: H * .14, size: W * .05, w: W * .8, words: 5, chars: 28 }
+        : { y: H * .885, top: H * .115, size: H * .046, w: W * .7, words: 8, chars: 46 };
   }
+  /** A card's centre: at the foot (o.y), or for card.at "top" at the top (o.top; a captions.json
+   *  with none mirrors the foot). */
+  const yOf = (o, at, H) => (at === 'top' ? (o.top !== undefined ? o.top : H - o.y) : o.y);
   const LOOK = {
     font: FONT, weight: 800, lh: 1.2, padX: .42, padY: .26, radius: .32,
     card: 'rgba(17,17,21,.86)', ink: '#ffffff', said: '#ffe14d', shadow: '',
@@ -149,11 +154,11 @@
     });
     return rows;
   }
-  /** The band the card stays inside, [x0, y0, x1, y1] in the frame's pixels: two lines of type
-   *  and their card. */
-  function box(W, H, o) {
-    const h = 2 * o.size * o.lh + 2 * o.size * o.padY, w = o.w + 2 * o.size * o.padX;
-    return [Math.round(W / 2 - w / 2), Math.round(o.y - h / 2), Math.round(W / 2 + w / 2), Math.round(o.y + h / 2)];
+  /** The band a card stays inside, [x0, y0, x1, y1] in the frame's pixels: two lines of type
+   *  and their card, at the foot of the frame or (at "top") its top. */
+  function box(W, H, o, at) {
+    const h = 2 * o.size * o.lh + 2 * o.size * o.padY, w = o.w + 2 * o.size * o.padX, y = yOf(o, at, H);
+    return [Math.round(W / 2 - w / 2), Math.round(y - h / 2), Math.round(W / 2 + w / 2), Math.round(y + h / 2)];
   }
   /** The index of the card up at t, or -1. */
   function at(rows, t) {
@@ -208,8 +213,8 @@
     const lh = size * o.lh, padX = size * o.padX, padY = size * o.padY;
     const bw = Math.max(...L.lines.map(([a, b]) => L.width(a, b))) + 2 * padX, bh = L.lines.length * lh + 2 * padY;
     const p = clamp((t - r.s) / .1), ease = 1 - (1 - p) * (1 - p);
-    const W = o.frame ? o.frame[0] : c.canvas.width / k;
-    c.translate(W / 2, o.y); c.scale(.94 + .06 * ease, .94 + .06 * ease);
+    const W = o.frame ? o.frame[0] : c.canvas.width / k, H = o.frame ? o.frame[1] : c.canvas.height / k;
+    c.translate(W / 2, yOf(o, r.at, H)); c.scale(.94 + .06 * ease, .94 + .06 * ease);
     c.globalAlpha = clamp((t - r.s) / .07);
     const card = rgba(o.card);
     if (!card || card[3] > 0) {
@@ -265,7 +270,7 @@
     video.insertAdjacentElement('afterend', cv);
     const rows = (data && data.cards) || [];
     const [FW, FH] = (data && data.frame) || [1920, 1080];
-    let on = opts.on !== false, o = style(data, opts.style), last = null, gone = false, k = 1;
+    let on = opts.on !== false, o = style(data, opts.style), last = null, gone = false, k = 1, high = false;
     const fonts = loadFonts(doc, data);
     function place() {
       const vw = video.videoWidth || FW, vh = video.videoHeight || FH;
@@ -286,6 +291,8 @@
       const now = on ? key(rows, t) : '';
       if (now === last) return;
       last = now;
+      const i = on ? at(rows, t) : -1, up = i >= 0 && rows[i].at === 'top';
+      if (up !== high) { high = up; lift(); }
       const c = cv.getContext('2d');
       c.setTransform(1, 0, 0, 1, 0, 0);
       c.clearRect(0, 0, cv.width, cv.height);
@@ -301,13 +308,13 @@
     };
     const play = () => { if (!video.requestVideoFrameCallback) { win.cancelAnimationFrame(raf); raf = win.requestAnimationFrame(tick); } };
     if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(tick);
-    // a player's own controls (paused, or under the pointer) cover the foot of the picture: the card
-    // steps up above them while they show, as a video site's captions do
+    // a player's own controls (paused, or under the pointer) cover the foot of the picture: a card
+    // there steps up above them while they show, as a video site's captions do
     let over = false;
-    const lift = () => {
-      const up = video.controls && (video.paused || over);
+    function lift() {
+      const up = video.controls && (video.paused || over) && !high;
       cv.style.transform = up ? `translateY(-${Math.min(48, (parseFloat(cv.style.height) || 0) * .12)}px)` : '';
-    };
+    }
     cv.style.transition = 'transform .2s';
     const evs = {
       play: () => { play(); lift(); }, pause: lift, seeked: redraw, timeupdate: () => paint(video.currentTime || 0),

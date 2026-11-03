@@ -55,7 +55,9 @@
   const stack = [], keys = [], keyIx = new Map();
   // figures: every open cast call (not a place) and SK.at group, each collecting the boxes of what is
   // drawn inside it; `split` and `texts` are what this frame found
-  const figs = [], PARTS = 400, FIG_DEPTH = 8, SMALL_TEXT = 0.055;
+  // SMALL_TEXT: words up to this share of the frame's height are reported (a caller may ask for
+  // all of them: __PROBE__.text_max, sketch-render's captions stage)
+  const figs = [], PARTS = 400, FIG_DEPTH = 8, SMALL_TEXT = CFG.text_max > 0 ? CFG.text_max : 0.055;
   let split = null, texts = null, inText = false, pics = null;
   const picIx = new Map(), picNames = []; // the film's large pictures (p), by their image
   const PIC = /^(upload\d+|web_[a-z0-9_]+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+)$/;

@@ -32,7 +32,6 @@ to their own root.
 import os
 import re
 import json
-import math
 import time
 import shutil
 import secrets
@@ -246,7 +245,9 @@ CAPS["routes"] = {}
 # sketch/captions-layer.js), on every film with narration since 2026-10-31. The video is rendered
 # without them; they go beside it as captions.json, are drawn live over it by the site's players
 # and burned into a copy that leaves KitCut (captions.py) -- the film's page switches them on and
-# off. Claude's stills show them, so its pictures keep faces out of their band (frame_note). Not
+# off. Claude never sees them: its first message, stills and sheets are what they were before
+# captions, and after the render the studio puts each scene's cards at the foot of the frame or,
+# where that scene's picture sits low, at its top (scripts/_captionplace.py). Not
 # part of any look's recipe and it brings no reference: every film gets it on top of its look's
 # (Film.create), and the system prompt stays byte for byte what it was. Their face is Inter, the
 # same file the site draws them with
@@ -469,9 +470,10 @@ TONAL_FX = ("sample", "chime")
 
 
 def caption_band(w, h):
-    """The band the burned captions stay inside, (x0, y0, x1, y1) in screen pixels: two lines of
-    type and their card. sketch/captions.js GEOMETRY and LOOK, worked out the same way
-    (SK.captionBox) -- change one and change the other; studio/test_shorts.py holds them equal."""
+    """The band captions at the foot of the frame stay inside, (x0, y0, x1, y1) in screen pixels:
+    two lines of type and their card -- what a film with burned captions is told to keep clear.
+    sketch/captions-layer.js geometry and LOOK, worked out the same way (SK.captionBox) -- change
+    one and change the other; studio/test_shorts.py holds them equal."""
     if h > w:
         y, size, width = h * 0.745, w * 0.061, w * 0.74
     elif h == w:
@@ -487,78 +489,10 @@ def _round(v):
     return int(v + 0.5)
 
 
-def heads_above(rec, w, h):
-    """For a painted film: the share of a painting's height, from its foot, that lies behind the
-    captions' band when the painting covers the frame at zoom 1 -- the part of the picture its
-    prompt keeps every head and neck out of. A tall film's paintings are tall (TALL_PAINTING,
-    drawn a little larger than the frame); a wide or square film's are 1920x1280, covering it.
-    None for a film that paints nothing."""
-    if "paintings" not in (rec.get("caps") or ()):
-        return None
-    if h > w:
-        r = STYLE_ROUTES.get((rec.get("paint_route") or {}).get("route")) or {}
-        (pw, ph), more = TALL_PAINTING["muse" if r.get("backend", "muse") == "muse" else "picture"]
-    else:
-        (pw, ph), more = (1920, 1280), 1.0
-    tall = ph * max(w / pw, h / ph) * more  # the painting's height on screen
-    top = caption_band(w, h)[1]  # the band's top, from the frame's top
-    below = (tall - h) / 2 + h - top  # the painting's height under the band's top
-    return max(0.0, min(1.0, below / tall))
-
-
-def captions_note(film, rec, w, h):
-    """The first message's paragraph on the film's captions: where their band is, what may pass
-    behind it, and their colours. Every film with narration has them, drawn over its video live
-    and switched on and off after it is made, so the picture must work with them and without."""
-    x0, y0, x1, y1 = caption_band(w, h)
-    text = (
-        "\n\nThe film has captions: the words being spoken appear a few at a time on a card "
-        "inside the band x %d to %d, y %d to %d (zoom 1, camera at the centre; the card stays "
-        "there whatever the camera does), from the narration's own word times. %s Your stills, "
-        "strips and motion sheets show them. The picture runs under the band: ground, a lawn, a "
-        "floor, a table, plants, people's legs and bodies may pass behind the captions -- never "
-        "a head, a face or a neck, "
-        "and never words, numbers or anything to be read. When you look at your stills, check "
-        "that no face is under a card. Draw no captions or subtitles of your own: on-screen type "
-        "is for names, numbers and labels, never the narration's sentence again."
-        % (
-            x0 - w // 2,
-            x1 - w // 2,
-            y0 - h // 2,
-            y1 - h // 2,
-            "The studio draws them over the video, and whoever made the film can switch them on "
-            "or off at any time, so the picture must work with them and without."
-            if rec.get("captions") == "live"
-            else "The studio writes them into the picture itself.",
-        )
-    )
-    share = heads_above(rec, w, h)
-    if share:
-        text += (
-            " Write each painting's prompt so that every head and neck sits above the lowest "
-            "%d%% of the painting: drawn to cover the frame, that part of it lies behind the "
-            "captions." % math.ceil(share * 100)
-        )
-    try:
-        with open(film.manifest, encoding="utf-8") as f:
-            head = (json.load(f).get("head") or {}).get("scripts") or []
-    except (OSError, ValueError):
-        head = []
-    if "brand/brand.js" in head or "style/style.js" in head:
-        text += (
-            " They wear the project's colours (its brand's, or its style's): a card in its "
-            "darkest colour, the word being said in its accent, in its body face when that has a "
-            "bold weight. Set SK.CAPTIONS = { card, ink, said } before SK.film() only when the "
-            "brief asks for other colours."
-        )
-    return text
-
-
 def frame_note(film):
-    """For a film that is not 16:9, or has captions (every film with narration): the frame it is
-    drawn in and what is taken in it. The system prompt and its example films are 16:9 (and stay
-    so, to keep every other film's prompt as it was), so the first message says what replaces
-    that."""
+    """For a film that is not 16:9, or carries burned captions: the frame it is drawn in and what
+    is taken in it. The system prompt and its example films are 16:9 (and stay so, to keep every
+    other film's prompt as it was), so the first message says what replaces that."""
     rec = film.record()
     if rec.get("template"):
         return ""
@@ -626,8 +560,22 @@ def frame_note(film):
             "(the studio drops %s). Short, quiet, unpitched sounds on the cuts are welcome."
             % " and ".join('"%s"' % n for n in TONAL_FX)
         )
-    if rec.get("captions") == "live" or "captions" in (rec.get("caps") or ()):
-        text += captions_note(film, rec, w, h)
+    if "captions" in (rec.get("caps") or ()) and rec.get("captions") != "live":
+        # a film made before 2026-10-31, whose engine/captions.js burns them into the picture.
+        # Live captions (every film since) say nothing here: the picture is composed as if there
+        # were none, and the studio places each scene's captions after the render
+        # (scripts/_captionplace.py)
+        x0, y0, x1, y1 = caption_band(w, h)
+        text += (
+            "\n\nThe studio writes the captions into the picture itself: the words being spoken "
+            "appear a few at a time on a dark card inside the band x %d to %d, y %d to %d (zoom 1, "
+            "camera at the centre; the card stays there whatever the camera does), from the "
+            "narration's own word times. Your stills, strips and motion sheets show them. Keep that "
+            "band free of anything that must be read or that matters -- the picture's ground may "
+            "run under it -- and draw no captions or subtitles of your own: on-screen type is for "
+            "names, numbers and labels, never the narration's sentence again."
+            % (x0 - w // 2, x1 - w // 2, y0 - h // 2, y1 - h // 2)
+        )
     return text
 
 

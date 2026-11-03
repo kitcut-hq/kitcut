@@ -10,8 +10,10 @@ engine folder and both in its record; a film asked for as ever is byte for byte 
 (no frame, no module, no note, half a second before its first word); a Short speaks at once, keeps
 its own opening as the video's first frame, and can be asked for with no music at all (the
 manifest's audio.music, the record, the first message, and the pitched cues the mix leaves out);
-the first message names the frame and the caption band; the band
-film.py tells the writer about is the one captions.js draws in, for every frame; and the cards it
+the first message names the frame and says nothing of captions (the picture is composed as if
+there were none); the band at the foot is clear of what a phone covers, and is the one
+captions.js draws in, for every frame, as is the one at the top that _captionplace measures; and
+the cards it
 cuts a narration into never hold more words than the frame allows, never leave a last word alone,
 and never overlap in time; and a film that is not 16:9 gets no share picture, since that is
 composed for 16:9 (thumbs.wide) -- its YouTube options are punches at its own frame, drawn by a
@@ -31,6 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(os.path.dirname(HERE), "scripts"))
 import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
+import _captionplace as place  # noqa: E402
 import _sketchaudio as A  # noqa: E402
 import agent  # noqa: E402
 import film as films  # noqa: E402
@@ -69,7 +72,8 @@ const SK = { W: %d, H: %d, clamp: (v) => Math.max(0, Math.min(1, v)), VO: %s, fi
   BRAND: %s };
 globalThis.window = globalThis; globalThis.SK = SK;
 require(%s); require(%s);
-console.log(JSON.stringify({ box: SK.captionBox(), cards: SK.captionCards(), data: SK.captionData() }));
+console.log(JSON.stringify({ box: SK.captionBox(), top: SK.captionBox('top'),
+  cards: SK.captionCards(), data: SK.captionData() }));
 """
 
 
@@ -128,12 +132,15 @@ def main():
     x0, y0, x1, y1 = films.caption_band(1080, 1920)
     expect("the first message names the frame", "1080x1920" in note and "vertical" in note)
     expect(
-        "and the band the captions take, in world units",
-        "x %d to %d, y %d to %d" % (x0 - 540, x1 - 540, y0 - 960, y1 - 960) in note,
-        note[-400:],
+        "and what the phone's own buttons cover, as before captions",
+        "The phone's own buttons lie over the film" in note,
+        note,
     )
+    expect("but says nothing of captions", "caption" not in note.lower(), note)
     expect(
-        "the band is clear of what a phone covers", y1 < 1920 * (1 - 0.2) and x1 < 1080, (y1, x1)
+        "the captions' band at the foot is clear of what a phone covers",
+        y1 < 1920 * (1 - films.TALL_COVERED["bottom"]) and x1 < 1080,
+        (y1, x1),
     )
     expect("and the whole of it is in the first message", note in agent.ask(short))
     with open(short.path("vo.json"), encoding="utf-8") as f:
@@ -188,22 +195,7 @@ def main():
         (m.get("modules"), wide.record().get("captions"), wide.record().get("captions_on")),
     )
     expect("no frame in its record", "frame" not in wide.record(), wide.record().get("frame"))
-    wnote = films.frame_note(wide)
-    x0, y0, x1, y1 = films.caption_band(1920, 1080)
-    expect(
-        "and its note is the captions' band alone",
-        wnote.startswith("\n\nThe film has captions")
-        and "x %d to %d, y %d to %d" % (x0 - 960, x1 - 960, y0 - 540, y1 - 540) in wnote
-        and "1920" not in wnote,
-        wnote[:300],
-    )
-    expect(
-        "which says what may pass behind them, and what may not",
-        all(w in wnote for w in ("people's legs and bodies", "never a head, a face or a neck"))
-        and "check that no face is under a card" in wnote
-        and "switch them on or off" in wnote,
-        wnote,
-    )
+    expect("and no note: its first message is the one it always was", films.frame_note(wide) == "")
     with open(wide.path("vo.json"), encoding="utf-8") as f:
         lead = json.load(f).get("lead")
     expect(
@@ -240,6 +232,13 @@ def main():
             "%s: the band film.py names is the one it draws in" % name,
             tuple(got["box"]) == films.caption_band(w, h),
             (got["box"], films.caption_band(w, h)),
+        )
+        expect(
+            "%s: and the ones placing measures, at the foot and the top" % name,
+            place.band(got["data"]) == tuple(got["box"])
+            and place.band(got["data"], "top") == tuple(got["top"])
+            and got["top"][3] < got["box"][1],
+            (place.band(got["data"], "top"), got["top"]),
         )
         cards = got["cards"]
         most = {"9:16": 4, "1:1": 5, "16:9": 8}[name]

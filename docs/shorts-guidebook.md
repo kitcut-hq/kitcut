@@ -103,7 +103,7 @@ For any Short made from a news story.
 | What | Where |
 |---|---|
 | 1080x1920 at 30 fps, composed for the tall frame | `film.FRAMES`, `film.frame_note` |
-| Captions burned into the picture, in a band clear of the phone's own buttons | `sketch/captions.js`, `film.caption_band` |
+| Captions drawn over the video (burned into a copy that leaves KitCut), each scene's at the foot clear of the phone's own buttons or at the top | `sketch/captions-layer.js`, `film.caption_band`, `scripts/_captionplace.py` |
 | The first word 0.1 s in (a wide film waits 0.5 s) | `film.vo_lead`, `film.TALL_LEAD` |
 | The film's own opening as the video's first frame (no cover frame) | the manifest's `"cover": false`, set by `Film.create` |
 | No music when asked: the score is not played, nor any pitched cue | the manifest's `audio.music: false`, `_sketchaudio.no_music` |

@@ -3935,7 +3935,16 @@ python scripts/captions-burn.py --video <outputs>/film.mp4 --captions <outputs>/
 A film whose manifest loads the `captions-layer` module (every Sketch Studio film with narration
 since 2026-10-31) is rendered **without** its captions: the full render's last stage, "captions",
 writes `outputs/captions.json` (the cards cut from the voice timeline, their word times, their look,
-and the faces it names copied beside it as `captions_font<N>`), and its stills still draw them.
+and the faces it names copied beside it as `captions_font<N>`), and nothing the film's writer
+sees shows them -- not its first message, not its stills. That stage also places each scene's
+cards at the foot of the frame or its top (`scripts/_captionplace.py`, card `"at": "top"`): it
+splits the film into scenes (`SK.scene`, and wherever the picture changes a lot), and for each
+measures what the two bands would cover while a card is up -- the video's detail and faces, and
+from `sketch/probe.js` (run once more with every piece of text reported) the film's own words and
+its cast's heads. Words, a head or a face under the foot's band and not under the top's send the
+cards up; anything of the kind at the top keeps them down; on detail alone they go up only when
+the top band is all but empty. captions.json's `placed` lists the scenes, the measures and the
+choice.
 `sketch/captions-layer.js` is the one drawing, used by the engine module (`sketch/captions.js`), by
 the site's players over the `<video>`, and by `captions-burn.py`, which draws each different picture
 of the captions once in the headless browser and lays them over the video with ffmpeg: the copy
@@ -3955,7 +3964,7 @@ control, not a resample; it is in the take's fingerprint, so a new rate records 
 |---|---|
 | `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')`; the ground, `SK.setGround(name)` (paper, white, kraft, sky, mint, butter, blush, night, chalkboard, blueprint: the paper, its grain and the text colours that read on it, `C.text` `C.textSoft` `C.accent` `C.accentText`), or `ground: (t) => name` in `SK.film`; backdrops that cover whatever the camera shows: `SK.sky`, `SK.band` (ground, hills, waves, grass; returns `edge(x)`), `SK.stars` |
 | `sketch/collage.js` | the collage pieces, a module a film opts into (`"modules": ["collage"]`, loaded after the props): cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
-| `sketch/captions.js` | the narration's words in the picture, a module a film opts into (`"modules": ["captions"]`): it wraps `SK.film`, cuts each line of the voice timeline into cards at its punctuation (4 words on a tall frame, 5 on a square, 8 on a wide one), and draws the card being said over everything -- white on a dark card, the word being spoken in yellow -- low in the frame but above what a phone's buttons cover on a 9:16 film. `SK.captionBox()` is the band it stays in, `SK.captionCards()` the cards and their times, `SK.CAPTIONS = {on: false}` turns it off. For a film that goes where a soft subtitle track is not shown (a YouTube Short) |
+| `sketch/captions.js` | the narration's words as the film's captions, a module every film with narration loads after `captions-layer` (`film.CAPS["captions"]`): it cuts each line of the voice timeline into cards at its punctuation (4 words on a tall frame, 5 on a square, 8 on a wide one) and writes them, their word times and their look as captions.json (`SK.captionData`, sketch-render `?captions=1`), drawing nothing into the film. `SK.captionBox(at)` is the band a card stays in, at the foot (above what a phone's buttons cover on a 9:16 film) or, `at` "top", at the top; `SK.captionCards()` the cards and their times; `SK.CAPTIONS = {on: false}` starts them off. A film made before 2026-10-31 keeps its own copy, which burns them in |
 | `sketch/space.js` | a little 3D, a module a film opts into (`"modules": ["space"]`): a perspective camera (`SK.view3`), faces drawn with the ordinary 2D engine and laid onto 3D quads (`SK.face3`), boxes (`SK.box3`), lit flat polygons (`SK.poly3`) and blurred or smeared layers (`SK.fx`) (see "Motion-design films") |
 | `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
 | `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
