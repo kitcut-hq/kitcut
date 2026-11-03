@@ -113,6 +113,7 @@ def painted(frame):
         transparent=False,
         style_ref=None,
         redo=None,
+        ref_px=None,
     ):
         asked["spoon" if "isolated subject" in prompt else "kitchen"] = aspect
         return png(), {"cost_usd": 0.01}
@@ -168,6 +169,23 @@ def pin_cases():
         and tg["style"] == gpt["line"]
         and tg["quality"] == films.DRAFT,
         tg,
+    )
+    small = films.paint_pins(30, P, gpt, None, 768)
+    expect(
+        "a film asked for with small references pins their size; one not asked pins none",
+        small["ref_px"] == 768 and "ref_px" not in tg,
+        small,
+    )
+    muse_small = films.paint_pins(30, P, None, None, 512)
+    expect(
+        "a Muse film (no style route) asked for with small references pins their size too",
+        muse_small["model"] == "meta/muse-image" and muse_small["ref_px"] == 512,
+        muse_small,
+    )
+    expect(
+        "a size out of range, or a film with nothing painted, pins none",
+        all("ref_px" not in films.paint_pins(30, P, gpt, None, bad) for bad in (64, 9999, "768"))
+        and "ref_px" not in films.paint_pins(30, (), None, None, 768),
     )
     expect(
         "paint_pins takes no frame: a tall film's painter is a wide film's",

@@ -45,7 +45,9 @@ VO_KEYS = set(VO_PINNED) | {
 VO_LINE_KEYS = {"text", "start", "who", "pause"}
 MAX_PAUSE_S = 15  # the quiet a line may ask for before it: a gag's beat, a sunset without words
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
-PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts", "style_ref", "quality", "redo"}
+PAINT_KEYS = set(PAINT_PINNED) | {
+    "style", "images", "cutouts", "style_ref", "quality", "redo", "ref_px"
+}
 # a cut-out (film.CAPS "cutouts") is painted on a canvas of its own shape
 ASPECTS = ("1:1", "2:3", "3:2", "3:4", "4:3", "16:9", "9:16")
 LANG = re.compile(r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")

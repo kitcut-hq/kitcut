@@ -485,6 +485,24 @@ def main():
         json.load(open(hi.path("paint.json"), encoding="utf-8"))["quality"] == "high",
         "and the guard keeps it there",
     )
+    # a film asked for with small references (POST /api/films "ref_px"): the record says the size,
+    # paint.json carries it through the style's seed and the guard, and Claude never adds it
+    sm = Film.create("Small refs", 10, "painted", client="u:alice", project=PROJECT, ref_px=768)
+    library.seed(sm)
+    guard.pin_paint(sm)
+    sp_ = json.load(open(sm.path("paint.json"), encoding="utf-8"))
+    check(
+        sm.record().get("paint_ref_px") == 768 and sp_.get("ref_px") == 768,
+        "an episode asked for with small references sends them at that size, past the guard",
+        (sm.record().get("paint_ref_px"), sp_.get("ref_px")),
+    )
+    hp2 = json.load(open(hi.path("paint.json"), encoding="utf-8"))
+    json.dump(hp2 | {"ref_px": 256}, open(hi.path("paint.json"), "w", encoding="utf-8"))
+    guard.pin_paint(hi)
+    check(
+        "ref_px" not in json.load(open(hi.path("paint.json"), encoding="utf-8")),
+        "a ref_px Claude writes into a film that was not asked for one is taken out",
+    )
     col = Film.create("Collage", 10, "collage", client="u:alice", quality="medium")
     cp = json.load(open(col.path("paint.json"), encoding="utf-8"))
     check(

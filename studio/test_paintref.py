@@ -9,7 +9,9 @@ to the painter as it is, never painted; the image made from it is painted before
 from that image, which get it as their reference; the picture's content is in the fingerprint (a new picture paints
 afresh, the same one is cached); an unknown picture, another shape of name, a path escape and a
 link out of inputs/ are refused, by the painter and by the check (validate.py); a film without
-pic refs plans exactly as before. A throwaway folder, no network, no model.
+pic refs plans exactly as before; "ref_px" sends every reference small -- its plain margin
+trimmed, never made larger, a sharper version's draft as it is -- and is in the fingerprint. A
+throwaway folder, no network, no model.
 """
 
 import io
@@ -53,7 +55,7 @@ LOCK = threading.Lock()
 
 def fake_paint(
     prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None,
-    redo=None,
+    redo=None, ref_px=None,
 ):
     """The painter: says what it was given (and what its reference looked like then), and
     paints each image a colour of its own, named first in its prompt."""
@@ -73,6 +75,7 @@ def fake_paint(
                 "style_ref": style_ref,
                 "redo": redo,
                 "quality": quality,
+                "ref_px": ref_px,
             }
         )
     return jpeg(COLOURS.get(name, (128, 128, 128))), {"cost_usd": 0.01}
@@ -314,6 +317,117 @@ def muse():
     )
 
 
+def small_refs():
+    """ "ref_px": every reference picture sent small -- its plain margin trimmed, fit inside
+    ref_px, never made larger -- while a sharper version's draft goes as it is; the painter is
+    told the size, a painting from small references has its own key, and a size out of range is
+    refused."""
+    import base64
+
+    # a painted character: a figure on a wide white canvas
+    canvas = os.path.join(HOME, "figure.png")
+    im = Image.new("RGB", (1920, 1080), (255, 255, 255))
+    im.paste((200, 40, 40), (810, 140, 1110, 940))  # 300 x 800
+    im.save(canvas)
+    kind, data = SP.ref_picture(canvas, 512)
+    small = Image.open(io.BytesIO(data))
+    check(
+        kind == "image/jpeg" and small.height == 512 and small.width < 0.45 * 512,
+        "a figure on a wide canvas: its margin trimmed, then fit to 512",
+        (kind, small.size),
+    )
+    check(
+        small.convert("RGB").getpixel((small.width // 2, small.height // 2))[0] > 150,
+        "and the figure is what is left",
+    )
+    cut = os.path.join(HOME, "cutout.png")  # transparent around it: trimmed to what is drawn
+    im = Image.new("RGBA", (1000, 1000), (0, 0, 0, 0))
+    im.paste((20, 120, 200, 255), (400, 300, 600, 700))
+    im.save(cut)
+    kind, data = SP.ref_picture(cut, 256)
+    small = Image.open(io.BytesIO(data))
+    check(
+        kind == "image/png" and small.mode == "RGBA" and small.height == 256 and small.width < 150,
+        "a transparent picture: trimmed to what is drawn, kept as a PNG",
+        (kind, small.mode, small.size),
+    )
+    tiny = os.path.join(HOME, "tiny.jpg")
+    Image.new("RGB", (64, 48), (10, 200, 10)).save(tiny)
+    check(
+        Image.open(io.BytesIO(SP.ref_picture(tiny, 512)[1])).size == (64, 48),
+        "a picture smaller than the size is never made larger",
+    )
+    import httpx
+
+    sent = []
+
+    class Reply:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"b64_json": "eA=="}], "usage": {"cost": 0.01}}
+
+    def sizes(body):
+        out = []
+        for r in body.get("input_references") or []:
+            raw = base64.b64decode(r["image_url"]["url"].split(",", 1)[1])
+            out.append(Image.open(io.BytesIO(raw)).size)
+        return out
+
+    model = "openai/gpt-image-test"
+    takes = {"supported_parameters": {"input_references": {"max": 16}}}
+    post, caps = httpx.post, SP.model_caps
+    httpx.post = lambda url, json=None, **k: sent.append(json) or Reply()
+    SP.model_caps = lambda m: takes
+    os.environ.setdefault("OPENROUTER_API_KEY", "test")
+    try:
+        PAINT_OPENROUTER("a park", model, ref=canvas, style_ref=canvas)
+        PAINT_OPENROUTER("a park", model, ref=canvas, style_ref=canvas, ref_px=512)
+        PAINT_OPENROUTER("a park", model, ref=canvas, style_ref=canvas, redo=canvas, ref_px=512)
+    finally:
+        httpx.post, SP.model_caps = post, caps
+    full, made_small, redone = (sizes(b) for b in sent)
+    check(full == [(1920, 1080)] * 2, "without ref_px every reference goes as its file is", full)
+    check(
+        len(made_small) == 2 and all(max(s) == 512 and s[0] < s[1] for s in made_small),
+        "with it, the style picture and the character both go small",
+        made_small,
+    )
+    check(redone == [(1920, 1080)], "a sharper version's draft always goes as it is", redone)
+    # Muse: its catalogue entry names no references (UNLISTED_REFS), and it is sent them small the
+    # same way. It does not bill them, so this saves nothing; the uploads are smaller
+    sent.clear()
+    httpx.post = lambda url, json=None, **k: sent.append(json) or Reply()
+    SP.model_caps = lambda m: {}
+    try:
+        PAINT_OPENROUTER("a park", "meta/muse-image", ref=canvas, style_ref=canvas, ref_px=512)
+    finally:
+        httpx.post, SP.model_caps = post, caps
+    muse_small = sizes(sent[0])
+    check(
+        len(muse_small) == 2 and all(max(s) == 512 and s[0] < s[1] for s in muse_small),
+        "Muse, given ref_px, is sent its style picture and character small too",
+        muse_small,
+    )
+
+    images = [{"name": "park", "prompt": "park: a garden", "ref": "cast_mom"}]
+    d = film("small-refs", images, [("cast_mom.png", (240, 20, 20))])
+    paint = json.load(open(os.path.join(d, "paint.json")))
+    run(d)
+    json.dump(paint | {"ref_px": 512}, open(os.path.join(d, "paint.json"), "w"))
+    out, err = run(d, "--plan")
+    check(err is None and out.count("PAINT  ") == 1, "a painting from small refs is its own", out)
+    _, err = run(d)
+    check(
+        err is None and CALLS and CALLS[0]["ref_px"] == 512, "the painter is told the size", CALLS
+    )
+    for bad in (64, 99999, "512", True):
+        json.dump(paint | {"ref_px": bad}, open(os.path.join(d, "paint.json"), "w"))
+        _, err = run(d, "--plan")
+        check(err and "ref_px" in err, "ref_px %r is refused" % (bad,), err)
+    check(validate._paint(paint | {"ref_px": 512}, 30, CAPS, d) == [], "the check takes ref_px")
+
+
 def roles():
     """An attached picture is a painting's ref only when its role (inputs/roles.json, the
     studio's) is "style"; "scene" is never one, nor a project picture marked "scene"."""
@@ -480,6 +594,7 @@ def main():
     roles()
     redo()
     muse()
+    small_refs()
     print("\n%s" % ("all passed" if not FAILS else "%d FAILED" % len(FAILS)))
     shutil.rmtree(HOME, ignore_errors=True)
     sys.exit(1 if FAILS else 0)

@@ -325,6 +325,7 @@ def seed(film, src, lang, version, key):
             else {}
         ),
         **({"paint_quality": rec["paint_quality"]} if rec.get("paint_quality") else {}),
+        **({"paint_ref_px": rec["paint_ref_px"]} if rec.get("paint_ref_px") else {}),
         **({"music": "none"} if rec.get("music") == "none" else {}),
         **({} if voiced else {"narration": False}),
     )
