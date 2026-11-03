@@ -2995,7 +2995,7 @@ $('form').addEventListener('submit', async (e) => {
   if (CREDITS && CREDITS.card_needed) { draft.save(); shelf.save(); location.href = `/pricing?start=1&next=${encodeURIComponent(location.pathname)}`; return; }  // the idea waits here
   if (shortOf(lengthAsked())) {
     sayForm(`This film needs ${mmss(costOf(lengthAsked()))} of credit and you have ${mmss(CREDITS.balance)}. ` +
-      `Credits renew on ${renews()}, or <a href="/pricing">get more film</a>.`);
+      (CREDITS.refills === false ? '' : `Credits renew on ${renews()}, or `) + `<a href="/pricing">Get more film</a>.`);
     return;
   }
   const was = currentId;  // the film on screen, if any: still being made when the plan makes two at once
