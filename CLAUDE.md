@@ -740,6 +740,11 @@ model, no deepfake. Start from
 
 Each cost an hour or more in one session (2026-09-29/30). Check here first.
 
+- **The studio ships from `main`** (since 2026-11-02; it was `studio-poc`, which had drifted 320
+  commits apart). A push to `main` is live on kitcut.ai's studio about 30 s later. A commit
+  pushed to `studio-poc` alone does not ship: autoship holds and names it until it is merged
+  into `main` (`studio/deploy/README.md`).
+
 - **A session whose cwd is `C:\instafill\kitcut` is the owner's Windows laptop**, not a
   cloud container, whatever the environment banner says: PowerShell 5.1 and Git Bash.
   Do not tell the user "this remote environment can't do X" without testing it.
