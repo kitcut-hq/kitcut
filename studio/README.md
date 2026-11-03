@@ -363,10 +363,18 @@ When each document is written:
   `interrupted` after a restart).
 
 What each document holds: `cost_usd` (Claude + voice + paintings), `claude_cost_usd`,
-`tts_cost_usd`, `image_cost_usd`, `tokens`, `turns`, `seconds`, `stages` (incl. `waited`, the
+`tts_cost_usd`, `image_cost_usd`, `paint_counts` (the pictures painted, added up by model, kind and
+quality with the reference pictures they read: kitcut.ai charges a film's GPT Image pictures by
+them, `agent.paint_counts`), `tokens`, `turns`, `seconds`, `stages` (incl. `waited`, the
 time spent queued for the machine), `calls` (one entry per Claude API response), `release`,
 `engine_changed` (lines Claude changed in its engine copy; the diff is in the film's
 `outputs\engine.diff`), `prompt` and `client`.
+
+A project's style read and its proof painted again (`stylekit.py`), when kitcut.ai holds credits
+for them, come with a `key` (`style-<hold id>`): the step writes its own document under it, `kind:
+"style"`, `step` read | proof, `state` running, then done or failed with what it cost, and the site
+settles its hold from it as from a film's. `ops.sh styles` prints what every project's style and
+brand reads have cost (their `state.json` and the last proof's `proof.json`), read only.
 
 The Claude cost is the SDK's own figure, cross-checked by pricing the token counts at Opus 5.5
 rates ($4 / $20 per million in / out; cache writes $5 (5 min) or $8 (1 h); cache reads $0.20).

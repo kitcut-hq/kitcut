@@ -917,8 +917,10 @@ def _count(st, key, limit, what):
     return done + [now]
 
 
-def start(d, auth="login", look="painted", brief="", team=False, log=print):
-    """Begin reading the style in the background: the state as it is now."""
+def start(d, auth="login", look="painted", brief="", team=False, log=print, run=None):
+    """Begin reading the style in the background: the state as it is now. `run`: where the read's
+    own record goes (the server's, keyed by kitcut.ai's hold: run_record), called with its fields
+    as it starts and once when it ends, done or failed, with what it cost."""
     with _lock(d):
         st = state_of(d)
         if _busy(st):
@@ -935,13 +937,25 @@ def start(d, auth="login", look="painted", brief="", team=False, log=print):
             started=_now(),
             server=brandkit._server(),  # noqa: SLF001
         )
-    _spawn(read(d, auth, look if look in LOOKS else "painted", brief, team, log))
+    _ran(run, {"state": "running"})
+    _spawn(read(d, auth, look if look in LOOKS else "painted", brief, team, log, run))
     return st
 
 
-async def read(d, auth="login", look="painted", brief="", team=False, log=print):
+def _ran(run, fields, final=False):
+    """A read's or a proof's own record (start, proof_again), never failing the step."""
+    if run is None:
+        return
+    try:
+        run(fields, final)
+    except Exception as e:  # noqa: BLE001 -- an unwritten record: the site's hold goes stale
+        print("style: run record not written: %s" % e)
+
+
+async def read(d, auth="login", look="painted", brief="", team=False, log=print, run=None):
     """The read (start() runs it): measure, ask, set the faces, paint the proof, the assets.
     Never raises: a failure is the state's, in words."""
+    cost = spent = 0.0
     try:
         pics = pictures(d)
         paths = [os.path.join(d, "pictures", p["id"] + ".jpg") for p in pics]
@@ -981,14 +995,18 @@ async def read(d, auth="login", look="painted", brief="", team=False, log=print)
             proofs=proofs + [time.time()],
             cost_usd=round((st.get("cost_usd") or 0) + cost + spent, 4),
         )
+        done = {"state": "done", "cost_usd": round(cost + spent, 4), "pictures": len(pics)}
+        _ran(run, done, True)
     except Exception as e:  # noqa: BLE001 -- the page shows why
         why = e.text if isinstance(e, StyleError) else (str(e) or type(e).__name__)
         log("style read failed: %s" % why)
         _set_state(d, state="failed", step=None, error=why[:300])
+        _ran(run, {"state": "failed", "error": why[:300], "cost_usd": round(cost + spent, 4)}, True)
 
 
-def proof_again(d, team=False, subject=None, log=print):
-    """Paint the proof again (a new subject, or the same), in the background."""
+def proof_again(d, team=False, subject=None, log=print, run=None):
+    """Paint the proof again (a new subject, or the same), in the background. `run`: its own
+    record, as start's."""
     with _lock(d):
         st = state_of(d)
         card = _read_json(os.path.join(d, "card.json"))
@@ -1008,9 +1026,12 @@ def proof_again(d, team=False, subject=None, log=print):
             spent = sum(g.get("cost_usd") or 0 for g in proof["routes"].values())
             cur = state_of(d)
             _set_state(d, step=None, cost_usd=round((cur.get("cost_usd") or 0) + spent, 4))
+            _ran(run, {"state": "done", "cost_usd": round(spent, 4)}, True)
         except Exception as e:  # noqa: BLE001
             _set_state(d, step=None, error=str(e)[:300])
+            _ran(run, {"state": "failed", "error": str(e)[:300]}, True)
 
+    _ran(run, {"state": "running"})
     _spawn(go())
     return st
 

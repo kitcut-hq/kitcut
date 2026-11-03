@@ -231,7 +231,8 @@ def _paint_of(film):
 
 def pictures(film, rec=None):
     """How carefully a finished film's pictures were painted, and what it may be repainted at:
-    {"quality": "low"|"medium"|"high"|None, "can": [the levels above it]}. Only a painter with
+    {"quality": "low"|"medium"|"high"|None, "can": [the levels above it], "count": {"paintings",
+    "cutouts"}}. Only a painter with
     the setting (film.QUALITY_MODELS) has a quality: the film's own paintings, else its collage
     cut-outs. A film painted before qualities (None) was painted at the model's own, about
     medium. Nothing for a drawn film, one made in scenes, or one with a round being made."""
@@ -247,7 +248,14 @@ def pictures(film, rec=None):
     q = q if q in films.QUALITIES else None
     busy = (rec.get("round") or {}).get("state") in ACTIVE or film.mode == "scenes"
     at = films.QUALITIES.index(q or "medium")
-    return {"quality": q, "can": [] if busy else list(films.QUALITIES[at + 1 :])}
+    # what a sharper version repaints (sharpen: every image paint.json names, each from its own
+    # draft), so kitcut.ai prices it before the button: {"paintings": n, "cutouts": n}
+    ims = [i for i in paint.get("images") or [] if isinstance(i, dict)]
+    count = {
+        "paintings": sum(1 for i in ims if not i.get("cutout")),
+        "cutouts": sum(1 for i in ims if i.get("cutout")),
+    }
+    return {"quality": q, "can": [] if busy else list(films.QUALITIES[at + 1 :]), "count": count}
 
 
 def sharpen(work, quality):
@@ -1394,11 +1402,8 @@ async def _run(job, film, sched):
             if work
             else 0
         )
-        img = (
-            sum(x.get("cost_usd") or 0 for x in agent._spend(work, "images", "spend.jsonl"))
-            if work
-            else 0
-        )
+        img_rows = agent._spend(work, "images", "spend.jsonl") if work else []
+        img = sum(x.get("cost_usd") or 0 for x in img_rows)
         claude = round(meter.usd(), 4)
         return {
             "cost_usd": round((claude if auth == "api" else 0) + tts + img, 4),
@@ -1406,6 +1411,8 @@ async def _run(job, film, sched):
             "claude_billed": auth == "api",
             "tts_cost_usd": round(tts, 6),
             "image_cost_usd": round(img, 6),
+            # what this round painted, as a film's record says it (agent.paint_counts)
+            "paint_counts": agent.paint_counts(img_rows),
             "tokens": meter.tokens(),
             "seconds": round(time.time() - t0, 1),
             "auth": auth,

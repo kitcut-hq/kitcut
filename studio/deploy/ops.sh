@@ -26,6 +26,10 @@
 #                                                     on the VM, for the running films to finish
 #   bash studio/deploy/ops.sh claude-log <film-id> [--all] [--grep T]   what Claude did, its API
 #                                                     errors and waits, Claude Code's debug log
+#   bash studio/deploy/ops.sh styles                 every project's Style and Brand reads: pictures,
+#                                                     reads today, what they cost in all (state.json
+#                                                     cost_usd), the last proof's cost on each route
+#                                                     (proof/proof.json). Reads only
 #   bash studio/deploy/ops.sh drafts [--days N] [--json]   the YouTube drafts written lately: seconds
 #                                                     to the words, to the thumbnail picks, to the
 #                                                     pictures, cost (studio/draft_times.py). Reads only
@@ -568,6 +572,29 @@ EOF
     [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
     args=""; for a in "$@"; do args="$args $(printf '%q' "$a")"; done  # quoted for the VM's shell
     on "cd $REMOTE && STUDIO_HOME=$HOME_DIR $REMOTE/.venv/bin/python -X utf8 studio/claude_log.py $id$args"
+    ;;
+
+  styles)
+    # what reading a project's style (and brand) has cost, from their own state files: the Phase 0
+    # numbers of kitcut.ai's picture prices (stylekit.py, brandkit.py). Reads only
+    on "cd $HOME_DIR/library && python3 -c '
+import glob, json, os
+def j(p):
+    try:
+        return json.load(open(p))
+    except Exception:
+        return {}
+for d in sorted(glob.glob(\"*/*/style\") + glob.glob(\"*/*/brand\")):
+    st = j(d + \"/state.json\")
+    if not st:
+        continue
+    pr = j(d + \"/proof/proof.json\").get(\"routes\") or {}
+    pics = len(glob.glob(d + \"/pictures/*.t.jpg\")) if d.endswith(\"style\") else len(glob.glob(d + \"/files/*.json\"))
+    print(json.dumps({\"what\": os.path.basename(d), \"project\": d.split(\"/\")[1], \"pictures\": pics,
+        \"state\": st.get(\"state\"), \"reads_today\": len(st.get(\"reads\") or []) if isinstance(st.get(\"reads\"), list) else st.get(\"reads\"),
+        \"proofs_today\": len(st.get(\"proofs\") or []), \"cost_usd\": st.get(\"cost_usd\"), \"read_at\": st.get(\"read_at\") or st.get(\"at\"),
+        \"proof_usd\": {r: g.get(\"cost_usd\") for r, g in pr.items() if isinstance(g, dict)}}))
+'"
     ;;
 
   drafts)

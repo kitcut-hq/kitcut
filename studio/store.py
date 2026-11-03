@@ -7,8 +7,10 @@ that project's data.
 
 One document per run, snake_case, real UTC datetimes (the kitcut-web conventions):
 
-    _id                 the film id (studio-20260925-131102-k3f9qa), or "smoke:<session>"
-    kind                "film" | "smoke"
+    _id                 the film id (studio-20260925-131102-k3f9qa), a round's <film id>.r<k>,
+                        a style read's or proof's key from kitcut.ai (style-<hold id>), or
+                        "smoke:<session>"
+    kind                "film" | "round" | "style" | "smoke"
     source              "web" | "cli" | "smoke" | "backfill"
     state               "queued" | "running" | "finishing" | "done" | "failed" | "cancelled" |
                         "interrupted" (the server stopped while Claude was working)
@@ -28,6 +30,11 @@ One document per run, snake_case, real UTC datetimes (the kitcut-web conventions
     tokens              {input, output, cache_read, cache_write_5m, cache_write_1h, web_search}
     calls               one entry per Claude API response: {message_id, at, model, tokens...,
                         cost_usd}
+    image_cost_usd, images   what its pictures cost, and how many were painted (repaints included)
+    paint_counts        those pictures added up for kitcut.ai to charge what was painted:
+                        [{model, kind: "painting"|"cutout", quality, pictures, references}]
+                        (agent.paint_counts); null when a picture's row did not say what it read
+    step, project       a style read's or proof's ("read" | "proof"; stylekit.py), whose project
     created_at, updated_at, finished_at
 
 A second collection, studio_hosts, holds one document ("studio"): the tunnel URL the studio can be
