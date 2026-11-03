@@ -609,6 +609,9 @@ async def ask_json(text, sheet, auth, film, model, effort, system, session):
     key does not, so a spent login costs only what the key bills for the rest of this call."""
     try:
         return await ask_json_once(text, sheet, auth, film, model, effort, system, session)
+    except agent.apikey.CreditOut as e:  # the credit key's month is spent: the paid key now
+        print("ask_json %s: CREDIT SPENT, on the paid key: %s" % (session, str(e)[:120]))
+        return await ask_json_once(text, sheet, "api", film, model, effort, system, session)
     except RuntimeError as e:
         if auth != "login" or not SPENT.search(str(e)):
             raise
@@ -662,6 +665,9 @@ async def ask_json_once(text, sheet, auth, film, model, effort, system, session)
         elif isinstance(m, ResultMessage):
             cost = m.total_cost_usd or 0.0
             err = m.result if m.is_error else None
+    agent.apikey.charge(opts.env, cost, session, film.id if film else None)
+    if err and agent.apikey.out(err, opts.env):  # the credit key's month: ask_json goes on
+        raise agent.apikey.CreditOut(err)
     j = re.search(r"\{.*\}", said, re.DOTALL)
     try:
         d = json.loads(j.group(0)) if j else None

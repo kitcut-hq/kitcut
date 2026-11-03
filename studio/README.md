@@ -1313,6 +1313,19 @@ There are two ways to pay:
   With a `CLAUDE_CODE_OAUTH_TOKEN` (the VM) a login film gets its own config folder too, as on
   the key: no other film's history, settings or memory.
 
+**Two keys: a month's credit first, then the paid one** (`apikey.py`). `ANTHROPIC_CREDIT_KEY` is
+a key whose organisation holds a monthly credit (the $100 a Max plan comes with; added
+2026-11-02). Every run on the key gets it while this month's credit lasts, and
+`ANTHROPIC_API_KEY` after that. The credit is over when our own count reaches
+`STUDIO_CREDIT_USD` (default 100) or when the API refuses the key ("credit balance is too low").
+A conversation refused half-way goes on in the same session on the paid key, as a film does
+when the login runs out. The month starts on day `STUDIO_CREDIT_RESET_DAY` (default 1, UTC).
+The API cannot report a balance: its usage and cost reports need an Admin key, and an
+individual organisation has none (measured: 401). So every run charges its cost to its key in
+`STUDIO_HOME/apikey/spend.jsonl`, and `bash studio/deploy/ops.sh credit` (or
+`python studio/apikey.py` on the machine) prints the month: spent on each key, what is left, the
+pace, and the day the credit runs out at that pace. `--plan` says which key the next run gets.
+
 **The site's films follow `STUDIO_SITE_AUTH`** (`server.site_auth()`): `login` by default since
 2026-09-29, when the user chose to try the site on the subscription; `STUDIO_SITE_AUTH=api` in the
 `.env` puts them back on the key. It is read per film, so the switch needs no restart. The

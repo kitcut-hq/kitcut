@@ -1541,6 +1541,10 @@ async def _run(job, film, sched):
                         auth = "api"
                         job["reserve"] = reserve(film, len(notes), auth)
                         emit({"type": "fallback", "from": "login", "to": "api", "why": str(e)})
+                    except agent.apikey.CreditOut as e:
+                        # the credit key's month ran out: the round starts over on the paid key
+                        if attempt == 2:
+                            raise RuntimeError("Claude could not be reached: %s" % e) from None
                     except agent.Stalled:
                         if attempt == 2 or not t.session:
                             raise RuntimeError("Claude stopped answering") from None

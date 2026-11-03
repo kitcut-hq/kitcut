@@ -60,6 +60,7 @@ TESTS = (
     "test_backup.py",  # what is mirrored off the machine, and that every folder of the home is named
     "test_restore.py",  # a rehearsal built from the mirror cannot act as the studio
     "test_sealenv.py",  # the machine's keys sealed: they open for the vault's key and nothing else
+    "test_apikey.py",  # the credit key first while its month lasts, then the paid key; the ledger
     "test_filmgit.py",  # films' code in their projects' git repositories; a deleted film forgotten
     "test_episode.py",  # a series' next episode starts from its last one's code (episode.py)
     "test_usage.py",  # who uses the machine: each step's bill, the sampler, the report

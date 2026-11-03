@@ -136,6 +136,9 @@
 #                                                     made there, private (github.com/kitcut-films),
 #                                                     each with a key of its own that may write
 #                                                     only it; every sync then pushes them
+#   bash studio/deploy/ops.sh credit [--month YYYY-MM|--plan|--json]   the month on Claude's keys:
+#                                                     the credit key's spend, what is left, the
+#                                                     day it runs out; the paid key's (apikey.py)
 #   bash studio/deploy/ops.sh secrets seal|check|names   the machine's .env and tunnel credential
 #                                                     sealed for the key vault alone to open
 #                                                     (studio/sealenv.py) | opened through the
@@ -1197,6 +1200,12 @@ PY
     change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=384M -p MemoryMax=512M -p Nice=10 $UNIT_ENV $py --sync$args"
     [ "$DRY" = 1 ] && exit 0
     follow "$unit"
+    ;;
+
+  credit)
+    # what Claude spent on each key this month and what is left of the credit key's (apikey.py);
+    # reads the ledger only
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_ENV_FILE=$REMOTE/.env .venv/bin/python -X utf8 studio/apikey.py $*"
     ;;
 
   secrets)

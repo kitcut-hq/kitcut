@@ -470,6 +470,7 @@ async def _claude(content, system, auth="login", effort="medium", session="style
         elif isinstance(m, ResultMessage):
             cost = m.total_cost_usd or 0.0
             err = m.result if m.is_error else None
+    agent.apikey.charge(opts.env, cost, "style")  # on the key's line, when on a key
     j = re.search(r"\{.*\}", said, re.S)
     try:
         d = json.loads(j.group(0)) if j else None

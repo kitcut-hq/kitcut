@@ -36,6 +36,8 @@ CONFIG = ("STUDIO_", "HTML2IMG_BROWSER", "VIDEDIT_ENCODER", "VIDEDIT_WEBCODECS",
 # a key with one of these names is a secret wherever it comes from (the .env or the shell)
 KNOWN_SECRETS = (
     "ANTHROPIC_API_KEY",
+    # a key whose month of credit is spent first (apikey.py)
+    "ANTHROPIC_CREDIT_KEY",
     "CLAUDE_CODE_OAUTH_TOKEN",
     "MONGODB_URI",
     "STUDIO_TOKEN",

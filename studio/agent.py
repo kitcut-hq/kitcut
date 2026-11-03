@@ -45,6 +45,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 sys.path.insert(0, HERE)
 import procs  # noqa: E402
+import apikey  # noqa: E402
 import film as films  # noqa: E402
 import library  # noqa: E402
 import media  # noqa: E402
@@ -170,12 +171,14 @@ def claude_env(film=None, auth="api"):
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
     }
     if auth == "api":
-        key = procs.secret("ANTHROPIC_API_KEY")
+        # the credit key while this month's credit lasts, then the paid one (apikey.py); the
+        # tag says which, so the run's cost goes on that key's line (apikey.charge)
+        which, key, _ = apikey.choose()
         if not key:
             sys.exit("ANTHROPIC_API_KEY is not set (put it in the studio's .env)")
         cfg = film.claude_dir if film else os.path.join(HOME, "claude", "_smoke")
         os.makedirs(cfg, exist_ok=True)
-        env.update(ANTHROPIC_API_KEY=key, CLAUDE_CONFIG_DIR=cfg)
+        env.update({"ANTHROPIC_API_KEY": key, "CLAUDE_CONFIG_DIR": cfg, apikey.TAG: which})
     elif procs.secret("CLAUDE_CODE_OAUTH_TOKEN"):
         # a machine nobody logs into (the Azure VM) carries its login as a long-lived token
         # (`claude setup-token`), not as an interactive /login in its config folder -- so a film
@@ -482,6 +485,7 @@ async def pick_length(film, emit, auth="api"):
             cli_path=claude_cli() if auth == "login" else None,
         )
         said, usd = await asyncio.wait_for(_pick_query(pick_ask(film), opts), PICK_TIMEOUT_S)
+        apikey.charge(opts.env, usd, "length", film.id)  # on the key's line, when on a key
         seconds = picked_from(said, top)
         why = None if seconds else "no length in %r" % said[:80]
     except Exception as e:  # noqa: BLE001 -- the film goes on at the fallback length
@@ -1335,7 +1339,8 @@ async def run_claude(
         # reads the two together
         extra_args={"debug-file": debug_log(film)},
     )
-    streamed, signin = {}, None
+    streamed, signin, credit_out = {}, None, None
+    m0 = meter.usd()  # what this run adds goes on its key's line (apikey.charge), however it ends
     try:
         async with ClaudeSDKClient(options=opts) as client:
             await client.query(prompt or ask(film, recent_films(film)))
@@ -1374,6 +1379,11 @@ async def run_claude(
                         said = [getattr(b, "text", "") for b in msg.content]
                         limited = " ".join(s for s in said if s).strip() or msg.error
                         continue
+                    if auth == "api" and msg.error == "billing_error":
+                        said = " ".join(getattr(b, "text", "") for b in msg.content).strip()
+                        if apikey.out(said or msg.error, opts.env):  # the credit key's month
+                            credit_out = said or msg.error
+                            continue
                     before = meter.usd()
                     meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
                     if meter.usd() != before:
@@ -1404,10 +1414,15 @@ async def run_claude(
                         signin = signin or msg.result or "401 from the API"
     except CLINotFoundError as e:  # the CLI the login needs is not there
         raise SignInError(str(e)) from None
+    finally:
+        if auth == "api":
+            apikey.charge(opts.env, meter.usd() - m0, "film", film.id)
     if signin:
         raise SignInError(signin)
     if limited:
         raise PlanLimit(limited)
+    if credit_out:
+        raise apikey.CreditOut(credit_out)
     return result
 
 
@@ -1716,6 +1731,7 @@ async def make_film(
             1.0, limits(length)["budget_usd"] - (carry.get("claude_cost_usd") or 0)
         )
         attempt = 0  # stalls so far (a plan limit is picked up once, and does not count)
+        credit_retried = False  # the credit key's month ran out (apikey.CreditOut): once
         while True:
             tools.pulse.beat()
             try:
@@ -1735,6 +1751,22 @@ async def make_film(
                     "resume": sid,
                     "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
                 } | {k: say[k] for k in ("system", "effort") if say.get(k)}  # a scenes pass's
+                continue
+            except apikey.CreditOut as e:
+                # the month's credit ran out under this conversation: the same session goes on
+                # on the paid key (claude_env chooses it now), once
+                if credit_retried:
+                    raise RuntimeError("Claude's key was refused: %s" % e) from None
+                credit_retried = True
+                sid = tools.session or film.record().get("claude_session")
+                print("film %s: CREDIT SPENT, on the paid key: %s" % (film.id, e), file=sys.stderr)
+                if sid:
+                    left = max(RESUME_MIN_S, within["claude_s"] - clock.active())
+                    say = {
+                        "prompt": OVER_LIMIT % round(left / 60),
+                        "resume": sid,
+                        "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
+                    } | {k: say[k] for k in ("system", "effort") if say.get(k)}
                 continue
             except Stalled as e:
                 silent = int(e.args[0]) if e.args else STALL_S
@@ -2547,6 +2579,7 @@ async def smoke(auth="api"):
                 meter.add(m.message_id or m.uuid, m.usage, m.model)
             elif isinstance(m, ResultMessage):
                 ok, why = not m.is_error, (m.result or m.subtype) if m.is_error else None
+                apikey.charge(opts.env, m.total_cost_usd, "smoke")
                 print("  reply:      %r%s" % (m.result, "  (ERROR)" if m.is_error else ""))
                 print("  cost:       $%.4f in %.1fs" % (m.total_cost_usd or 0, time.time() - t))
                 print("  metered:    $%.4f  %s" % (meter.usd(), meter.tokens()))
