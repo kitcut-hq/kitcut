@@ -3,7 +3,7 @@
 # comes while a look is running is taken by that look before it stops (autoship.py run()).
 # Installed by install.sh with the @...@ paths filled in; enabled by `ops.sh autoship on`.
 [Unit]
-Description=KitCut studio: look at GitHub's studio-poc when its push hook arrives
+Description=KitCut studio: look at GitHub's main when its push hook arrives
 
 [Path]
 PathModified=@HOME@/autoship.poke

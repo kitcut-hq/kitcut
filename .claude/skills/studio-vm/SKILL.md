@@ -22,11 +22,11 @@ bash studio/deploy/ops.sh status                    # start here: health, the se
                                                     # disks, login check, errors in the last day
 bash studio/deploy/ops.sh logs [studio|tunnel|login] [-n 200] [-f]   # studio: every server unit
 bash studio/deploy/ops.sh --dry-run ship [<commit>] # what a ship would do
-bash studio/deploy/ops.sh ship [<commit>]           # default: origin/studio-poc's head
+bash studio/deploy/ops.sh ship [<commit>]           # default: origin/main's head
 bash studio/deploy/ops.sh releases                  # built releases, the leader's marked *
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
 bash studio/deploy/ops.sh autoship [--plan|on|off|now [--retry]|hook [--check]]   # a push to
-                                                    # GitHub's studio-poc ships itself (its hook,
+                                                    # GitHub's main ships itself (its hook,
                                                     # and a poll every 15 min): its last decision,
                                                     # what it would do now, start, stop, one look,
                                                     # the webhook made or checked
@@ -92,7 +92,9 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   marks a commit whose tests fail **failed** and switched back (not retried): those three reach the owner by email
   through the machine's note. `ops.sh rollback` pauses it; `ops.sh autoship on` lifts the pause.
   `studio/deploy/README.md`, "A push to GitHub ships itself".
-- **Ship only what is on origin/studio-poc.** `ops.sh ship` refuses anything else. It tags
+- **Ship only what is on origin/main** (the studio followed `studio-poc` until 2026-11-02; a
+  commit pushed there now does not ship, and autoship holds and names it). `ops.sh ship` refuses
+  anything else. It tags
   `studio-stable`, pushes the code to the VM (`push.sh`: the VM holds no GitHub credentials),
   builds and tests the release there, starts the release's own server beside the running one and
   returns once it leads, then proves the studio (and studio.kitcut.ai) reports the new release.
@@ -257,7 +259,7 @@ it is left for films made in scenes.
    restart carries it on from that pass by itself, and `ops.sh resume` does the same by hand.
 3. A step that fails on the VM and not on the laptop is usually the environment: compare
    `uv pip list` there with the laptop's venv, and look for imports inside functions.
-4. Fix in the repo (worktree, commit, merge to studio-poc), then `ops.sh ship`. A missing package
+4. Fix in the repo (worktree, commit, merge to main), then `ops.sh ship`. A missing package
    can be installed into `/srv/kitcut/repo/.venv` at once (`~/.local/bin/uv pip install --python
    .venv/bin/python ...`) -- every release shares that venv, the films being made included -- but
    add it to the requirements too.

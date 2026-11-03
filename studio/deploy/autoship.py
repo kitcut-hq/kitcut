@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ship the studio by itself when studio-poc moves on GitHub: the machine pulls, nothing pushes in.
+"""Ship the studio by itself when main moves on GitHub: the machine pulls, nothing pushes in.
 
     python3 studio/deploy/autoship.py            look, and look again while there is a reason to
                                                  wait (kitcut-autoship.service: GitHub's hook, and
@@ -19,7 +19,7 @@ everything below is decided from GitHub and the studio as they are. A poll every
 (kitcut-autoship.timer) catches a push whose hook did not arrive (GitHub does not send one
 again by itself).
 
-A look ships only what `ops.sh ship` would, the same way: GitHub's studio-poc head, a fast-forward
+A look ships only what `ops.sh ship` would, the same way: GitHub's main head, a fast-forward
 of what the machine has, into the bare repo (/srv/kitcut/git) and the checkout as push.sh moves
 them, then `serve.sh release --no-test` -- built, a server of its own beside the running one,
 the old one finishing its films -- and it asks the studio (and studio.kitcut.ai) which release
@@ -49,10 +49,13 @@ It does not ship, and says so in the note the site emails the owner from (machin
     never again by itself. A new
     commit is tried as usual; `--forget` (ops.sh autoship now --retry) lets the same one be tried
     again;
+  - main leads, but GitHub's studio-poc (the branch the studio followed until 2026-11-02) has
+    commits main lacks: a "hold" naming them, until they are merged into main;
   - autoship is paused (STUDIO_HOME/autoship.paused): `ops.sh rollback` pauses it, or the next
     look would ship the head straight back; `ops.sh autoship on` lifts it.
 
-Commits that change only docs/, projects/, market/, .github/ or the root's *.md are not shipped
+Commits that change only docs/, projects/, market/, .github/, .claude/, routines/ or the root's
+*.md are not shipped
 (the release would be the same studio); the next commit that changes anything else takes them.
 
 Stdlib only, on the system python3: it moves the checkout it was started from, which a bash script
@@ -72,7 +75,10 @@ HOME = os.environ.get("STUDIO_HOME", "/srv/kitcut/studio")
 REPO = os.environ.get("STUDIO_REPO", "/srv/kitcut/repo")
 BARE = os.environ.get("STUDIO_GIT", os.path.join(os.path.dirname(REPO), "git"))
 URL = os.environ.get("AUTOSHIP_URL", "https://github.com/kitcut-hq/kitcut.git")
-BRANCH = "studio-poc"
+BRANCH = "main"
+# the branch the studio followed until 2026-11-02: a commit pushed there and never merged into
+# main would not ship, so a look that finds one says so (strays) and the owner is emailed
+OLD_BRANCH = "studio-poc"
 PORT = int(os.environ.get("STUDIO_PORT", "8765"))
 PUBLIC = "https://studio.kitcut.ai/api/health"
 STATE = os.path.join(HOME, "autoship.json")
@@ -91,7 +97,8 @@ PROBLEMS = ("failed", "hold", "refuse")
 # by people's Claude sessions, not by the studio: a skill-only push (topic-research, 2026-10-21)
 # cost a release and its six minutes of tests for nothing; they reach the machine with the next
 # real commit
-DOCS = ("docs/", "projects/", "market/", ".github/", ".claude/")
+# routines/ are the cloud routines' procedures and pages (Vercel), never read by the studio
+DOCS = ("docs/", "projects/", "market/", ".github/", ".claude/", "routines/")
 
 
 def docs_only(paths):
@@ -110,6 +117,12 @@ def decide(st, f, now):
     if f["paused"]:
         return "idle", "paused: %s" % f["paused"]
     if leader and head.startswith(leader):
+        strays = f.get("strays") or []
+        if strays:
+            return "hold", (
+                "%s leads, but GitHub's %s has %d commit(s) %s lacks (%s): the studio follows %s"
+                " since 2026-11-02, so they will not ship until they are merged into it"
+            ) % (leader, OLD_BRANCH, len(strays), BRANCH, "; ".join(strays[:5]), BRANCH)
         return "idle", "%s leads" % leader
     if not leader:
         return "wait", "the studio does not answer on 127.0.0.1:%d" % PORT
@@ -201,6 +214,7 @@ def facts():
         f["cpu_busy"] = (cpu.get("used") or 0) + (cpu.get("peers") or 0) > 0
     f["paused"] = paused()
     f["locked"] = lock_holder()
+    f["strays"] = strays(f["head"])
     if f["head"] and f["leader"] and not f["head"].startswith(f["leader"]):
         # GitHub's head, fetched beside the machine's branch (never over it), to compare
         sh(
@@ -239,6 +253,25 @@ def facts():
         else:
             f["changed"] = ["(the leader %s is not in %s)" % (f["leader"], BARE)]
     return f
+
+
+def strays(head):
+    """Commits on GitHub's OLD_BRANCH that its BRANCH lacks: pushed to the branch the studio no
+    longer follows. [] when there are none, or when GitHub cannot be read."""
+    try:
+        out = sh("git", "ls-remote", URL, "refs/heads/" + OLD_BRANCH)
+    except RuntimeError:
+        return []
+    old = out.split()[0] if out else ""
+    if not old or not head or old == head:
+        return []
+    refs = ["+refs/heads/%s:refs/github/%s" % (b, b) for b in (BRANCH, OLD_BRANCH)]
+    try:
+        sh("git", "-C", BARE, "fetch", "-q", URL, *refs)
+    except RuntimeError:
+        return []
+    span = "refs/github/%s..refs/github/%s" % (BRANCH, OLD_BRANCH)
+    return sh("git", "-C", BARE, "log", "--format=%h %s", span, check=False).splitlines()
 
 
 def paused():

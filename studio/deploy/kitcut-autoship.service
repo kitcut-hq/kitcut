@@ -1,4 +1,4 @@
-# One look at GitHub's studio-poc (studio/deploy/autoship.py): when it has moved on, and nothing
+# One look at GitHub's main (studio/deploy/autoship.py): when it has moved on, and nothing
 # says wait, the studio is shipped the way `ops.sh ship` ships it -- built, tested, a server of its
 # own beside the running one. Started by GitHub's push hook (kitcut-autoship.path) and every 15
 # minutes by kitcut-autoship.timer; a start while it runs starts nothing (a oneshot that is active
@@ -9,7 +9,7 @@
 # tests run inside this unit (the servers it starts are units of their own), so the cap is the
 # tests': the template check draws every live template in a browser.
 [Unit]
-Description=KitCut studio: ship studio-poc when it moves on GitHub (studio/deploy/autoship.py)
+Description=KitCut studio: ship main when it moves on GitHub (studio/deploy/autoship.py)
 After=network-online.target
 Wants=network-online.target
 RequiresMountsFor=@HOME@ @REPO@

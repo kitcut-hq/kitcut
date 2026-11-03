@@ -19,7 +19,7 @@ laptop, through the scripts in this folder.
 ```bash
 bash studio/deploy/ops.sh status          # health, the servers and their films, disks, errors
 bash studio/deploy/ops.sh logs studio -f  # every server unit; or tunnel | login
-bash studio/deploy/ops.sh ship            # origin/studio-poc -> tagged, built, its server leading
+bash studio/deploy/ops.sh ship            # origin/main -> tagged, built, its server leading
 bash studio/deploy/ops.sh film "<idea>"   # a film made on the VM itself, followed to the end
                                           # (--no-watch: print its id; `watch <id>...` follows several)
 bash studio/deploy/ops.sh forward         # the VM's studio on this laptop's 127.0.0.1:8765
@@ -39,13 +39,13 @@ takes the new films; the old one finishes the films it is making, then exits by 
 
 ```bash
 bash studio/deploy/ops.sh --dry-run ship      # what it would do
-bash studio/deploy/ops.sh ship [<commit>]     # default origin/studio-poc's head
+bash studio/deploy/ops.sh ship [<commit>]     # default origin/main's head
 bash studio/deploy/ops.sh rollback <sha12>    # any release still built (ops.sh releases)
 ```
 
 What a ship does:
 
-1. **On the laptop** (`ops.sh`): refuses a commit that is not on origin/studio-poc, tags it
+1. **On the laptop** (`ops.sh`): refuses a commit that is not on origin/main, tags it
    `studio-stable`, and `push.sh` pushes that commit into a bare repo on the VM
    (`/srv/kitcut/git`) and moves the checkout to it. Code reaches the VM only from the laptop:
    kitcut-hq/kitcut has deploy keys disabled, and a VM with no GitHub credentials cannot leak any.
@@ -124,7 +124,13 @@ bash studio/deploy/ops.sh autoship hook --check   # the webhook's last deliverie
 node --env-file=<CLOUDFLARE_API_TOKEN file> studio/deploy/hook-lock.mjs [--check]   # the Cloudflare lock
 ```
 
-When GitHub's `studio-poc` moves past the release that leads, the machine ships it
+**The studio follows `main` since 2026-11-02.** Until then it followed `studio-poc`, which had
+drifted 320 commits apart from `main`; the two were merged and both pointed at the same commit,
+and the old ship shipped the change that moved it. `studio-poc` stays on GitHub only so a session
+that still pushes there is caught: a look that finds commits on it that `main` lacks puts autoship
+on **hold** with their names (the owner is emailed), and they ship once merged into `main`.
+
+When GitHub's `main` moves past the release that leads, the machine ships it
 (`studio/deploy/autoship.py`), and a push needs nobody at a laptop. **GitHub's push hook starts a
 look at once**; a poll every 15 minutes (`kitcut-autoship.timer`) catches a push whose hook did
 not arrive, since GitHub does not send one again by itself. **The machine still pulls the code**:
@@ -149,7 +155,7 @@ twice:
    large is refused (401/413) and logged with the caller's address. No secret, no hook (404). It
    sits outside `/api/`, so the studio token does not guard it: GitHub cannot send that token.
 
-A signed request does one thing: for a `push` to `refs/heads/studio-poc` it writes
+A signed request does one thing: for a `push` to `refs/heads/main` (or `studio-poc`, below) it writes
 `STUDIO_HOME/autoship.poke`, and `kitcut-autoship.path` starts a look. A ping is answered; any
 other branch, tag or event is acknowledged and ignored. `studio/test_hook.py` holds each of these
 to the real handler. A replayed delivery can only ask for a look that finds nothing new.

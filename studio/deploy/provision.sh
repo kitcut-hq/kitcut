@@ -13,7 +13,7 @@
 #    a new empty one (the home then comes back from the mirror: ops.sh restore --all)
 # 2. the data disk formatted (only if it holds no filesystem) and mounted at /srv/kitcut
 # 3. timezone America/Los_Angeles: the studio's daily caps count days in local time, as on the laptop
-# 4. the checkout: pushed from this laptop (push.sh) -- KITCUT_BRANCH (default studio-poc) and the
+# 4. the checkout: pushed from this laptop (push.sh) -- KITCUT_BRANCH (default main) and the
 #    studio-stable tag; the VM holds no GitHub credentials
 # 5. the toolchain: scripts/setup-linux.sh --studio (ffmpeg, Edge, Python, Whisper models, rclone),
 #    and models/ from the mirror when there is one (the instrument samples), else this laptop's
@@ -63,7 +63,7 @@ done
 [ -z "$ENV_FILE" ] || [ -f "$ENV_FILE" ] || { echo "no such file: $ENV_FILE" >&2; exit 2; }
 [ -z "$SEALED" ] || [ -f "$SEALED" ] || { echo "no such file: $SEALED" >&2; exit 2; }
 [ "$ENV_VM" != "$VM" ] || { echo "--env-from-vm names this very machine" >&2; exit 2; }
-BRANCH="${KITCUT_BRANCH:-studio-poc}"
+BRANCH="${KITCUT_BRANCH:-main}"
 BUCKET="${KITCUT_BACKUP_BUCKET:-kitcut-backup}"
 # what a rehearsal's .env must not have (restore.not_a_drill checks the same): the live database,
 # the announcement, the tunnel, the site's token, the films' bucket and where they are published

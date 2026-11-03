@@ -6,7 +6,7 @@
 # working pictures (kitcut-prune, a service and its timer) and the mirror of the studio's home to
 # R2 (kitcut-backup every 15 minutes, kitcut-backup-full nightly) and Remote Control
 # (kitcut-claude-rc: `claude rc` in tmux, enabled only by `ops.sh rc install`) and the ship that
-# follows GitHub's studio-poc (kitcut-autoship: a service, the path unit its hook starts it by and
+# follows GitHub's main (kitcut-autoship: a service, the path unit its hook starts it by and
 # a timer, enabled only by `ops.sh autoship on`) -- plus the one
 # kernel setting two servers on one port need.
 #

@@ -126,7 +126,7 @@ def commit(work, name, text):
         f.write(text)
     git("add", "-A", cwd=work)
     git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", name, cwd=work)
-    git("push", "-q", "origin", "HEAD:studio-poc", cwd=work)
+    git("push", "-q", "origin", "HEAD:main", cwd=work)
     return git("rev-parse", "HEAD", cwd=work)
 
 
@@ -165,11 +165,32 @@ def end_to_end(autoship):
 
     code, st = look()
     check(st.get("state") == "idle", "the head leads already: idle", st)
+    # the branch the studio followed before main: at main's head it is nothing; a commit pushed
+    # there alone is a "hold" that names it, until it is merged
+    git("push", "-q", "origin", first + ":refs/heads/studio-poc", cwd=work)
+    code, st = look()
+    check(st.get("state") == "idle", "studio-poc at main's head: idle", st)
+    git("checkout", "-q", "-b", "old", cwd=work)
+    with open(os.path.join(work, "studio", "stray.py"), "w", encoding="utf-8") as f:
+        f.write("x")
+    git("add", "-A", cwd=work)
+    git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", "stray", cwd=work)
+    git("push", "-q", "origin", "HEAD:studio-poc", cwd=work)
+    stray = git("rev-parse", "--short=7", "HEAD", cwd=work)
+    code, st = look()
+    check(
+        st.get("state") == "hold" and stray in (st.get("why") or ""),
+        "a commit on studio-poc alone: hold, named",
+        st,
+    )
+    check(Stub.release == first[:12], "and nothing shipped", Stub.release)
+    git("checkout", "-q", "-", cwd=work)
+    git("push", "-q", "-f", "origin", first + ":refs/heads/studio-poc", cwd=work)
     second = commit(work, "studio/server.py", "2")
     code, st = look()
     check(code == 0 and st.get("state") == "shipped", "a pushed commit is shipped", st)
     check(Stub.release == second[:12], "and it leads", Stub.release)
-    bare = git("rev-parse", "refs/heads/studio-poc", cwd=os.environ["STUDIO_GIT"])
+    bare = git("rev-parse", "refs/heads/main", cwd=os.environ["STUDIO_GIT"])
     check(bare == second, "the bare repo's branch moved to it", bare)
     check(
         git("rev-parse", "HEAD", cwd=os.environ["STUDIO_REPO"]) == second,
@@ -199,11 +220,11 @@ def end_to_end(autoship):
     check(st.get("state") == "idle" and Stub.release != fourth[:12], "paused: nothing ships", st)
     os.remove(os.path.join(os.environ["STUDIO_HOME"], "autoship.paused"))
     git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qam", "unfail", cwd=work)
-    git("push", "-q", "origin", "HEAD:studio-poc", cwd=work)
+    git("push", "-q", "origin", "HEAD:main", cwd=work)
     code, st = look()
     check(st.get("state") == "shipped", "the pause lifted, a fixed commit ships", st)
     # GitHub's branch rewritten: never followed backwards
-    git("push", "-q", "-f", "origin", first + ":refs/heads/studio-poc", cwd=work)
+    git("push", "-q", "-f", "origin", first + ":refs/heads/main", cwd=work)
     code, st = look()
     check(st.get("state") == "refuse", "a rewritten branch is refused", st)
     srv.shutdown()

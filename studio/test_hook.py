@@ -5,7 +5,8 @@ seconds.
     python studio/test_hook.py
 
 Only a request signed with the machine's secret gets anything done, and what it gets done is a
-nudge: STUDIO_HOME/autoship.poke is written for a push to studio-poc and for nothing else. No
+nudge: STUDIO_HOME/autoship.poke is written for a push to main (or studio-poc, where autoship
+reports strays) and for nothing else. No
 secret in the .env, no hook (404). Unsigned, wrongly signed, signed with another secret, signed
 over another body, a signature that is only a prefix: 401 and no nudge. Too large: refused. A ping
 is answered; another branch, a tag, another event are acknowledged and ignored. The secret is
@@ -96,7 +97,10 @@ async def main():
         ping = b'{"zen": "Keep it logically awesome."}'
         r = await post(ping, sign(ping), event="ping")
         check(r.status == 200 and not poked(), "a ping is answered, nothing else", r.status)
-        for ref in ("refs/heads/main", "refs/tags/studio-stable", "refs/heads/studio-poc-x"):
+        main = json.dumps({"ref": "refs/heads/main", "after": "c" * 40}).encode()
+        r = await post(main, sign(main))
+        check(r.status == 202 and poked(), "a signed push to main: a nudge", r.status)
+        for ref in ("refs/tags/studio-stable", "refs/heads/studio-poc-x", "refs/heads/main-x"):
             b = json.dumps({"ref": ref}).encode()
             r = await post(b, sign(b))
             check(r.status == 202 and not poked(), "a push to %s: ignored" % ref, r.status)

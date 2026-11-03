@@ -3096,7 +3096,7 @@ async def files(req):
 
 
 # ------------------------------------------------------------------ the GitHub hook
-# A push to kitcut's studio-poc tells the machine to look now, instead of at the next poll
+# A push to kitcut's main tells the machine to look now, instead of at the next poll
 # (deploy/autoship.py; studio/deploy/README.md, "A push to GitHub ships itself"). Two locks, so
 # only GitHub gets through: Cloudflare blocks the path for every address outside GitHub's hook
 # ranges (deploy/hook-lock.mjs), and this checks GitHub's signature (an HMAC of the body with the
@@ -3105,7 +3105,8 @@ async def files(req):
 # autoship still reads GitHub itself and decides as it always does.
 HOOK_PATH = "/hooks/github"
 HOOK_MAX = 4 * 1024 * 1024  # a push of many commits is a few hundred KB; GitHub caps it at 25 MB
-HOOK_BRANCH = "refs/heads/studio-poc"
+# studio-poc too: the branch it followed until 2026-11-02, where a push is reported, not shipped
+HOOK_BRANCHES = ("refs/heads/main", "refs/heads/studio-poc")
 
 
 def hook_secret():
@@ -3148,7 +3149,7 @@ async def github_hook(req):
         ref = json.loads(body).get("ref") if event == "push" else None
     except (ValueError, AttributeError):  # not JSON, or not an object
         ref = None
-    if ref != HOOK_BRANCH:
+    if ref not in HOOK_BRANCHES:
         return web.json_response({"ok": True, "ignored": "%s %s" % (event, ref or "")}, status=202)
     poke = os.path.join(films.HOME, "autoship.poke")
     with open(poke + ".tmp", "w", encoding="utf-8") as f:

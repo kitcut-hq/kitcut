@@ -14,7 +14,7 @@
 #                                                     a switch like a ship, nothing is stopped;
 #                                                     it pauses autoship, or that ships back
 #   bash studio/deploy/ops.sh autoship [status|--plan|on|off|now [--retry]|hook]   the ship that
-#                                                     follows GitHub's studio-poc by itself (its
+#                                                     follows GitHub's main by itself (its
 #                                                     push hook, and a poll every 15 min:
 #                                                     deploy/autoship.py): its last decision and
 #                                                     ship log | what it would do now | start (and
@@ -182,13 +182,13 @@ change_on() { if [ "$DRY" = 1 ]; then echo "  would run on $VM: $*"; else on "$@
 TOKEN_SH="TOKEN=\$(grep -E '^STUDIO_TOKEN=' $REMOTE/.env | tail -1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[\"\x27]//' -e 's/[\"\x27]\$//')"
 az_() { MSYS_NO_PATHCONV=1 az "$@"; }
 
-# The commit to ship: only what the team can see (on origin/studio-poc). Sets sha.
+# The commit to ship: only what the team can see (on origin/main). Sets sha.
 resolve() {
-  local ref="${1:-origin/studio-poc}"
+  local ref="${1:-origin/main}"
   git -C "$REPO_LOCAL" fetch -q origin
   sha="$(git -C "$REPO_LOCAL" rev-parse --verify "$ref^{commit}")" || die "no commit $ref"
-  git -C "$REPO_LOCAL" merge-base --is-ancestor "$sha" origin/studio-poc ||
-    die "$ref (${sha:0:12}) is not on origin/studio-poc -- merge and push it first"
+  git -C "$REPO_LOCAL" merge-base --is-ancestor "$sha" origin/main ||
+    die "$ref (${sha:0:12}) is not on origin/main -- merge and push it first"
 }
 # What the VM runs now, in one call: whether the legacy one-server unit is still installed
 # ("loaded" until ops.sh migrate), and its /api/health. Sets legacy, health, leader.
@@ -215,12 +215,12 @@ for i in h.get("instances") or []:
 '
 }
 # Tag studio-stable and put the commit on the VM (push.sh: the VM holds no GitHub credentials).
-# The commit itself, not this clone's studio-poc (behind origin's in a worktree).
+# The commit itself, not this clone's main (behind origin's in a worktree).
 deliver() {
   echo "shipping ${sha:0:12}: $(git -C "$REPO_LOCAL" log --format=%s -1 "$sha")"
   change git -C "$REPO_LOCAL" tag -f studio-stable "$sha"
   change git -C "$REPO_LOCAL" push -q -f origin refs/tags/studio-stable
-  if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc $sha"; else bash "$HERE/push.sh" "$VM" studio-poc "$sha"; fi
+  if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM main $sha"; else bash "$HERE/push.sh" "$VM" main "$sha"; fi
 }
 # Follow a film's round of changes (its maker's notes, or files put by hand) to its end, then
 # say how it ended and what each note was answered.
@@ -514,7 +514,7 @@ EOF
     ;;
 
   autoship)
-    # the ship that follows GitHub's studio-poc (deploy/autoship.py): its push hook starts it
+    # the ship that follows GitHub's main (deploy/autoship.py): its push hook starts it
     # (kitcut-autoship.path), and a poll every 15 minutes (kitcut-autoship.timer)
     use="autoship [status | --plan | on | off | now [--retry] | hook [--check]]"
     envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE"
