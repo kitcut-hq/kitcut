@@ -1,5 +1,8 @@
 # The maker: make the idea the owner picked
 
+Since 2026-11-04 the scheduled run (`ROUTINE.md`) chooses, makes and publishes two or three Shorts
+by itself. This file is only for an extra film the owner picks by hand on the ideas page.
+
 Started by the owner's pick on the ideas page (`web/`, Vercel project `hn-ideas`): the page fires
 this routine's API trigger, and the pick arrives in the `<routine-fire-payload>` block as JSON:
 
