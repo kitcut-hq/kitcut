@@ -1,18 +1,25 @@
-# Routine: two explainer Shorts from Hacker News, every 12 hours
+# Routine: two or three explainer Shorts from Hacker News, every 12 hours, published by itself
 
 The owner's ask (2026-11-01): every 12 hours, read Hacker News, find the top and fast-growing
-topics, score each for a video, pick **two**, and make each a **Short of 60 to 120 seconds** with KitCut that
+topics, score each for a video, pick, and make each a **Short of 60 to 120 seconds** with KitCut that
 answers "why" or "what it actually means", then **publish it on the KitCut YouTube channel**.
 
-**Two routines share this file (owner, 2026-11-02: "routine creates a short list. without
-research. suggest a few angles under what can be done. sends me a links to a html page where i
-pick. i do my choise and it triggers video creation and publish"):**
+**The run decides and publishes by itself** (owner, 2026-11-04: "Update the routine to publish 2-3
+shorts each trigger without my approval. Make it decide for me"). One scheduled run does all of it:
 
-- **The scout** (scheduled, every 12 hours) does steps 0 to 6, then **6c**: it sends the shortlist,
-  two or three angles per topic, to the owner's ideas page and notifies the owner. **It does no
-  research and makes no film.**
-- **The maker** (`MAKE.md`, started by the owner's pick on that page) does 6b, 7, 8 and 9 for the
-  one idea and angle the owner picked.
+- **Scout**: steps 0 to 6, then **6c** (the shortlist goes to the ideas page as the record, which
+  also keeps the next run from repeating a story; nobody is asked to pick).
+- **Decide**: **6d** picks the topics and angles, **6b** checks the evidence behind them.
+- **Make and publish**: 7, 8 and 9 for **two or three** films, public on the KitCut channel.
+- **Tell the owner**: section 10, once, with the YouTube links.
+
+No question to the owner anywhere in the run: where this file leaves a choice, make it, and say in
+the report what you chose and why. The quality gates still stand: a film that fails a gate is not
+made, even if that leaves fewer than two (say why in the notification); a weak film is worse than
+none.
+
+`MAKE.md` still works for a pick the owner makes by hand on the ideas page: it makes exactly that
+pick, on top of what the run made.
 
 The ideas page is `routines/hn-explainer-shorts/web/` (Vercel project `hn-ideas`).
 
@@ -59,7 +66,7 @@ At most **one** evergreen a run.
 
 ## 0. Before you start
 
-1. `get_credits` (KitCut). Fewer than 300 credits: stop and say so.
+1. `get_credits` (KitCut). Fewer than 400 credits (three films of up to 120 s): stop and say so.
 2. `get_project p-mlgnibpqat`: its episodes are what earlier runs made. **Never make a topic
    again** that an episode of the last 14 days covers, unless something big and new happened to it
    (then say what).
@@ -224,7 +231,7 @@ Then **shortlist three to six** by the balance of all three. If none passes, sen
 **Print the whole table as a message**, so the run's log shows how the topics were chosen, and
 repeat it in the report.
 
-## 6c. Send the shortlist to the owner's page (the scout's last step)
+## 6c. Send the shortlist to the ideas page (the record)
 
 The page leads with the question, not the metadata (owner, 2026-11-02: "focus more on the most core
 and base question instead of un focusing on metadat"): for each topic write first its **one core
@@ -232,8 +239,7 @@ question**, the base question a curious viewer has, in plain words. Then, for ea
 made: its `format` (`explainer`, `recreation`, `claim check`, or another you can name), its `title`
 written as the film's question or recreation (never a news summary), and `why`: one line on what
 it shows that the top videos do not, with the number or document that would carry it if you know
-it. Do not research beyond what steps 2 to 5 already read: the owner picks first, and the maker
-researches only what was picked.
+it. Steps 2 to 5 are all the angles need; the research for the chosen ones comes in 6b and 7.
 
 Then send the run, once, through kc-local (it holds the page's write token; nothing secret is in
 this repository or the prompt):
@@ -269,15 +275,28 @@ ssh kc-local hn-ideas-post < run.json      # answers {"ok":true,"run_id":...,"id
 }
 ```
 
-Every link must be one you actually opened in this run; never write a URL from memory. Then tell
-the owner, **both** ways (2026-11-02: the push alone went unseen, "it didnt send me this page"):
+Every link must be one you actually opened in this run; never write a URL from memory. Do not
+email or notify the owner here, and do not wait for a pick: go straight on to 6d. (Posting matters:
+`hn-ideas-recent`, which the next run reads in step 2, only knows what was posted.)
 
-1. **Email** (Gmail connector, `send_message`) to alex@botmakers.net, subject `HN ideas: <n> new
-   to pick`, a short plain body: one line per topic with its core question, then the page link
-   https://hn-ideas-iota.vercel.app on its own line.
-2. **PushNotification** with the same count, the best question and the link.
+## 6d. Decide: which two or three to make
 
-## 6b. Quick research check, before anything is made (maker only)
+Take the shortlist in order of the balance of demand, supply on the angle and value, and choose
+**four** to check (fewer if fewer passed), each with the one angle the evidence can carry best
+(a recreation where a primary record exists; a claim check where a big claim needs checking).
+Rules for the choice:
+
+- **different subjects**: never two films on one company or one story;
+- **at most one evergreen**, and breaking or hype first: their searches fade, an evergreen keeps;
+- prefer a candidate near a search term that already brings the channel views (step 0.3);
+- prefer what can be shown: a primary page, a dataset, a filing; a story whose only source is a
+  forum post or a tweet is checked last.
+
+Then 6b on all four at once. **Make the STRONG ones, best first: three when three are STRONG, never
+more.** If fewer than two come back STRONG, make only those (a MAYBE is never made) and say why in the
+notification. Write each choice and the reason into the report.
+
+## 6b. Quick research check, before anything is made
 
 The owner (2026-11-02): "what if we do a shortlist using this algo and then a quick research check
 if we can contribute and make a strong video before actually making it?" A topic can pass every
@@ -300,14 +319,17 @@ VERDICT: STRONG / MAYBE / NO, and why
 ```
 
 The sub-agent may propose a better angle than the one it was given; take it if the evidence is
-better. **Make only STRONG topics**, at most **two**, at most one evergreen. A MAYBE is not made; a
+better. **Make only STRONG topics**: two or three, at most one evergreen (6d). A MAYBE is not made; a
 NO is dropped. Print every brief in the log and in the report, the dropped ones too: they show what
 the gate caught.
 
-## 7. Research and write (maker only)
+## 7. Research and write
 
-One sub-agent per topic (Task tool), both launched together. Each follows the playbook's sections
-3 and 4 and returns the three documents:
+One sub-agent per topic (Agent tool), all launched together, each carrying its own film through 7,
+8 and 9 to a public Short (measured 2026-11-04: two such agents, about 40 minutes each, both live).
+Brief each like a peer: the story, the angle, the sources already opened, what the top videos
+already say, and the rules of this file and `MAKE.md` step 2 (real screenshots). Each follows the
+playbook's sections 3 and 4 and writes the three documents:
 
 - **doc1, the fact sheet**, the playbook's exact table shape: every number with its label, source,
   URL and the exact quote from the page. Primary sources first. `## Unconfirmed`, `## Commonly
@@ -333,20 +355,24 @@ ssh kc-local 'xb reader open "https://fortune.com/..." >/dev/null; sleep 5; xb r
 ssh kc-local 'xb reader url'      # where it actually landed
 ```
 
-One page at a time; `reader` only (never `VideoMakers_io`, that is a signed-in X account). This is
+One page at a time; `reader` only (never `VideoMakers_io`, that is a signed-in X account).
+**The `reader` browser is one window shared by every agent of the run** (2026-11-04: two makers
+kept loading their pages over each other's). An agent checks `xb reader url` right before and
+right after each `text` or `shot`, and keeps the result only when both name its page; it looks at
+every screenshot before using it. This is
 for public pages: never get around a paywall or a login, and never solve a CAPTCHA. A page that
 still will not show its text is left out, or replaced by another page that says the same. Tell the
 sub-agents this too.
 
-Then you (not the sub-agent) run the checks for each:
+Then each film's checks (the sub-agent runs them, and reports what they said):
 
-1. `check_research` until clean. It gives the seconds; if it says more than 75, cut lines.
+1. `check_research` until clean. It gives the seconds; if it says more than 120, cut lines.
 2. `check_sources` on doc1, 20 rows a call. Fix `number` (quote to the page's words), resolve
    `missing` and `unreadable` (another page, or drop the number and its lines).
 3. If the number the film rests on cannot be backed, drop that topic and say why. Do not
    substitute a weaker topic in the same run unless it already passed steps 3 to 5.
 
-## 8. Make the film (maker only)
+## 8. Make the film
 
 `make_film` for each, at once (the account makes two at a time; a third waits in its line):
 
@@ -362,7 +388,7 @@ Then follow both with `get_film` (`wait_seconds: 50`, again and again) until don
 takes about 15 to 30 minutes. **A film whose status is `cancelled` was stopped by a person: never make it again, and do not publish anything for that topic** (2026-11-02: the owner stopped two films and the run re-made both). A film that did not finish: read why; `remake_film` once only if the
 reason was the studio's, not the documents'.
 
-## 9. Publish (maker only, when the pick says publish)
+## 9. Publish (always public: no approval is asked)
 
 For each finished film:
 
@@ -379,27 +405,41 @@ For each finished film:
    - `tags`: the anchor, the pair, the question forms.
 3. `get_youtube_post` until it is live, for the video's link.
 
-## 10. Report (the scout)
+## 10. Tell the owner, then report
 
-End the scout's run with this, and nothing after it:
+Once every film is live (or has failed a gate), tell the owner once, **both** ways (2026-11-02:
+the push alone went unseen):
+
+1. **Email** (Gmail connector, `send_message`) to alex@botmakers.net, subject `HN Shorts: <n>
+   published`, a short plain body: one line per film with its title and its link as
+   `https://youtube.com/shorts/<id>`; then one line per topic that was checked and not made, and
+   why; then anything a person should look at; then https://hn-ideas-iota.vercel.app for the rest
+   of the shortlist.
+2. **PushNotification** with the count and the links.
+
+A run that published nothing still notifies, saying why (no topic passed, credits, a tool down).
+
+End the run with this, and nothing after it:
 
 ```
-HN ideas, <date> <time> UTC
+HN Shorts, <date> <time> UTC
 
 | candidate | kind | stakes | anchor/mo | pair or question | supply on the angle | verdict |
 |---|---|---|---|---|---|---|
 ...
 
+Checked (6b): <topic: STRONG/MAYBE/NO, one line why>, ...
+Published: <title> https://youtube.com/shorts/<id> (<seconds> s, film <link>), ...
 Sent to the page: <n> ideas, <m> angles (the API's answer)
 Look at: <anything a person should check>   (or "nothing")
-Spent: <search_videos queries> YouTube queries
+Spent: <credits> credits, <search_videos queries> YouTube queries
 ```
-
-The maker's report is in `MAKE.md`.
 
 ## Never
 
-- The scout making a film, or researching past the shortlist; the maker making anything but the pick.
+- Asking the owner to approve or pick: the run decides (2026-11-04). More than three films a run;
+  two films on one subject; a MAYBE made to reach two.
+- `MAKE.md` making anything but the owner's pick.
 - A film from a topic that failed a step.
 - A number without a page you read and a quote you saw on it.
 - Publishing a film whose narration says what doc1 does not.
