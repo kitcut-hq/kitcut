@@ -1,3 +1,5 @@
+> **Not for the film (owner, 2026-11-04):** Miro is left out entirely: founded by Russians, started in Perm. Its rows below are kept only so the numbers are not re-researched; nothing about Miro goes into the script, pictures, description or chapters.
+
 # The Entire History of Bending Spoons: fact sheet
 
 Researched 2026-11-04 for the @sp_500_explained still-picture film. Every number has a label and a source.
