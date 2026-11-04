@@ -6146,6 +6146,25 @@ custom thumbnails.
 The cheap parts exist (cutting, captions, import, publishing); the new work is the picking call,
 the camera from the probe, and the page.
 
+## Still-picture history films: `still-film.py`
+
+An "entire history of X" explainer from still pictures and a narrator (CEOzoned's format, measured
+in `projects/anthropic-history-short/still-film.json`). The manifest lists scenes (a narrated line
+and a picture each); `--plan` prices the timing with no spend, `--prompts` prints every picture prompt,
+`--voice` records the lines (Gemini TTS via `sketch-vo.py`'s backend, or free `--tts edge`; a take is
+cached by its text and voice, so `voice.tempo` never re-records), `--render` lays each picture under
+exactly its line plus `gap_s`, gives it a linear push or pan (a Short may not stand still, rule 33;
+an eased move stood still 7% of the time), mixes a music bed synthesized from `music.score` at
+`db_under_voice` against the voice, and renders 1080x1920 at 30 fps in one NVENC pass. A scene with no
+picture renders as a card with its line. Check a render with `short-stillness.py --check`.
+
+The frame is the manifest's `frame`: 1080x1920 for a Short, 1920x1080 for a long film
+(`projects/mongodb-history`: 92 stills, 6:57, Grok 16:9 pictures at 1792x1008, captions in
+`config/presets/cartoon-wide-card.json`). `music.score` is any `_sketchaudio` score; the MongoDB
+film's 587-beat bed was generated from its scene times (tense open, a darker progression under the
+2017 ransom attacks, a major lift from the lessons). Picture rules the owner set (every picture
+checked, few people per picture) are in the `video-still-film` skill.
+
 ## A showreel out of finished films: `showreel.py`
 
 A reel that shows what was made: films one at a time, each with a one-line caption, then a 2x2,

@@ -1,0 +1,73 @@
+{
+  "_comment": "cartoon-short-card for 16:9 still-picture history films (scripts/still-film.py, projects/mongodb-history): the same dark rounded card and Balsamiq type, one line of up to 6 words, text bottom 52 px above the frame edge (95%) so it stays under the figures, which Grok's 16:9 pictures put in the middle third.",
+  "canvas": {
+    "play_res_x": 1920,
+    "play_res_y": 1080
+  },
+  "font": {
+    "family": "Balsamiq Sans",
+    "file": "fonts/BalsamiqSans-Bold.ttf",
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 40
+  },
+  "text": {
+    "uppercase": false,
+    "apostrophe": "\u2019",
+    "strip_trailing": ",",
+    "word_gap_ratio": 1.6,
+    "outline_px": 5,
+    "outline_colour": "#2a2521",
+    "shadow_px": 2,
+    "shadow_colour": "#2a2521"
+  },
+  "card": {
+    "colour": "#1d1a17",
+    "alpha": 40,
+    "corner_radius_px": 18,
+    "pad_x_px": 22,
+    "pad_y_px": 10,
+    "collision_gap_px": 16,
+    "enabled": true
+  },
+  "layout": {
+    "anchor_x": 960,
+    "bottom_margin_px": 52,
+    "max_line_width_px": 1300,
+    "max_lines": 1,
+    "line_height_px": 66
+  },
+  "states": {
+    "base": {
+      "colour": "#FFFFFF"
+    },
+    "active": {
+      "colour": "#FFD84D"
+    },
+    "spoken": {
+      "colour": "#FFFFFF"
+    }
+  },
+  "grouping": {
+    "max_words": 6,
+    "gap_break_s": 0.4,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 3.0
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 250,
+    "min_active_ms": 80,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 80
+  },
+  "pop": {
+    "enabled": true,
+    "scale": 110,
+    "rise_ms": 70,
+    "settle_ms": 110
+  }
+}
