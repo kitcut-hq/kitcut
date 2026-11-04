@@ -15,6 +15,17 @@ work; carry it through without asking about each step, and report at the end.
   ("the company says..."). Leave out anything it lists under "Could not confirm", and nothing in
   "Commonly misreported" may be repeated. If you need a fact it does not have, check it on its
   original page before using it, and add it to the fact sheet with a source line.
+- Things the fact sheet settles that are often told wrong: Filmic was bought in **2022** (its 22
+  staff cut in Nov 2023); the October 2026 bond grew from $1.5B to **about $1.8B**; Berkshire's
+  stake is "**about 4%**" (of ordinary shares); the IPO raised **$1.68B in all**, of which the
+  company itself got about $1.0B. Spot-checked against the source pages: IPO at $29 on Nasdaq as
+  BSP, first close $40.50, Berkshire's 10 million shares at $33 ($330M) on 14 Oct 2026.
+- **Miro:** say it only as a deal (what it is, the price, the date). Never its founders, where it
+  started, or quotes from its people (house rule: nothing tied to Russia in what we make).
+- **How the founders look is not in the fact sheet** (the research could not view photos). Before
+  the cast sheet, open their public photos in the browser (bendingspoons.com's team/about pages,
+  press photos of Luca Ferrari and his co-founders) and write one line per founder: hair, beard,
+  glasses, usual clothes. If a founder has no findable photo, draw him plainly and say so.
 - Read first: `.claude/skills/video-still-film/SKILL.md` (the format and procedure),
   `tools/grok-imagine/README.md` (how pictures are made), and the finished example
   `/srv/kitcut/worktrees/still-film/projects/mongodb-history/` (`still-film.json`, `score.json`,
