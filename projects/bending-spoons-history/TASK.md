@@ -20,11 +20,11 @@ work; carry it through without asking about each step, and report at the end.
   stake is "**about 4%**" (of ordinary shares); the IPO raised **$1.68B in all**, of which the
   company itself got about $1.0B. Spot-checked against the source pages: IPO at $29 on Nasdaq as
   BSP, first close $40.50, Berkshire's 10 million shares at $33 ($330M) on 14 Oct 2026.
-- **Miro is left out of the film completely**: not in the voice, not in any picture, not in the
-  description or chapters. It was founded by Russians and started in Perm, and the owner's rule
-  is that nothing tied to russia goes into what we make, not even as a neutral fact. The same goes
-  for any other company, person or source the research turns out to tie to russia: drop it, and
-  say in the report what was dropped. Count the acquisitions and the 2026 deals without it.
+- **Miro is in the film as Bending Spoons' deal**: what Miro is (the online whiteboard), the
+  price, the date, its users. Never its founders, where it started, its history before the deal,
+  or quotes from its people; no founder figures in its pictures (owner, 2026-11-04: "you can have
+  miro, just don't highlight and emphasize russian cofounders"). Anyone else the research ties to
+  russia (a person, a source) stays out of the film; say in the report what was dropped.
 - **How the founders look is not in the fact sheet** (the research could not view photos). Before
   the cast sheet, open their public photos in the browser (bendingspoons.com's team/about pages,
   press photos of Luca Ferrari and his co-founders) and write one line per founder: hair, beard,
@@ -53,7 +53,7 @@ work; carry it through without asking about each step, and report at the end.
   2. The history in order: the founders and their first startup, the failure, the restart, the
      move to Milan, the app years, Immuni, the funding, each big acquisition and what happened
      after (the layoffs and price rises are part of the story: say them plainly, with numbers),
-     the IPO, Berkshire Hathaway, Airtable, the debt, where it stands today (as of the fact sheet's
+     the IPO, Berkshire Hathaway, Airtable and Miro, the debt, where it stands today (as of the fact sheet's
      latest date).
   3. **Critical thinking out loud**: the strongest case for the playbook (products kept alive,
      profits) and against it (people cut, users charged more, debt), side by side, without taking

@@ -1,4 +1,4 @@
-> **Not for the film (owner, 2026-11-04):** Miro is left out entirely: founded by Russians, started in Perm. Its rows below are kept only so the numbers are not re-researched; nothing about Miro goes into the script, pictures, description or chapters.
+> **Miro (owner, 2026-11-04):** use it as Bending Spoons' deal (what Miro is, price, date, users). Never its founders, its origin, its pre-deal history or its people's quotes.
 
 # The Entire History of Bending Spoons: fact sheet
 
