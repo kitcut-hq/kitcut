@@ -1516,6 +1516,26 @@ def _spend(film, *parts):
         return [json.loads(x) for x in f if x.strip()]
 
 
+def paint_counts(rows):
+    """What a film's (or a round's) pictures were, for kitcut.ai to charge what was painted (its
+    lib/plans.js paintedCredits): images/spend.jsonl's rows (sketch-paint.py) added up by model,
+    kind ("painting" | "cutout") and quality, each with how many it painted and the reference
+    pictures they read in all -- [{model, kind, quality, pictures, references}]. None when a row
+    does not say what it read (painted before the rows did): then the site charges its quote."""
+    out = {}
+    for r in rows:
+        if not isinstance(r.get("refs"), int):
+            return None
+        key = (str(r.get("model") or ""), r.get("kind") or "painting", r.get("quality"))
+        row = out.setdefault(
+            key,
+            {"model": key[0], "kind": key[1], "quality": key[2], "pictures": 0, "references": 0},
+        )
+        row["pictures"] += 1
+        row["references"] += r["refs"]
+    return list(out.values())
+
+
 async def save(run_id, fields, final=False):
     """A record write off the event loop: MongoDB may take seconds to answer, and every film
     shares this loop."""
@@ -1653,6 +1673,7 @@ async def make_film(
             via="sdk" if billed else "login",
             image_cost_usd=img,
             images=len(img_rows),
+            paint_counts=paint_counts(img_rows),
             tts_cost_usd=tts,
             tts_tokens={
                 "input": sum(r["input"] for r in tts_rows),
@@ -2244,6 +2265,7 @@ async def make_film(
                     "via",
                     "image_cost_usd",
                     "images",
+                    "paint_counts",
                     "tts_cost_usd",
                     "tts_tokens",
                     "tts_model",

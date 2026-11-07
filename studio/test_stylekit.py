@@ -246,15 +246,24 @@ def main():
     brandkit.standin = fake_standin
     SP.paint_openrouter = fake_paint
 
-    async def run_read(team):
-        stylekit.start(d, "api", "painted", PROJECT["brief"], team, log=lambda s: None)
+    records = []  # the read's own record (kitcut.ai's hold is settled from it: server _style_run)
+
+    async def run_read(team, run=None):
+        stylekit.start(d, "api", "painted", PROJECT["brief"], team, log=lambda s: None, run=run)
         while stylekit.in_flight():
             await asyncio.sleep(0.05)
 
-    asyncio.run(run_read(False))
+    asyncio.run(run_read(False, run=lambda fields, final: records.append((fields, final))))
     pub = stylekit.public(d, team=False)
     card = pub["card"]
     check(pub["state"] == "ready", "a read ends ready", pub.get("error"))
+    check(
+        [(f["state"], final) for f, final in records] == [("running", False), ("done", True)]
+        and records[-1][0]["pictures"] == len(pics)
+        and isinstance(records[-1][0]["cost_usd"], float),
+        "a read asked with a key writes its record as it starts, and once, done, with its cost",
+        records,
+    )
     check(
         "bust" not in card["style"]
         and card["leaks"] == []
@@ -294,6 +303,24 @@ def main():
         "GPT Image gets every picture (the main one first), the style line, as a draft; "
         "Muse gets the same pictures and the line",
         (gpt["style_ref"], gpt["prompt"][:120], words["prompt"][:120]),
+    )
+
+    # Paint again with a key: its own record, as a read's
+    proofed = []
+
+    async def run_proof():
+        stylekit.proof_again(
+            d, False, None, log=lambda s: None, run=lambda f, fin: proofed.append((f, fin))
+        )
+        while stylekit.in_flight():
+            await asyncio.sleep(0.05)
+
+    asyncio.run(run_proof())
+    check(
+        [(f["state"], fin) for f, fin in proofed] == [("running", False), ("done", True)]
+        and "cost_usd" in proofed[-1][0],
+        "Paint again asked with a key writes its record as it starts and when it is done",
+        proofed,
     )
 
     # ---- the team: Gemini painted, priced, picked; nobody else may
@@ -426,13 +453,19 @@ def main():
 
     # ---- a sharper version (rounds.sharpen): which films may have one, and the copy made ready
     check(
-        rounds.pictures(ep) == {"quality": "low", "can": ["medium", "high"]},
+        {k: v for k, v in rounds.pictures(ep).items() if k != "count"}
+        == {"quality": "low", "can": ["medium", "high"]},
         "a draft episode may be painted again at Standard or High",
         rounds.pictures(ep),
     )
     os.makedirs(ep.path("images"), exist_ok=True)
     paint["images"] = [{"name": "bridge", "prompt": "a bridge"}, {"name": "park", "prompt": "x"}]
     json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
+    check(
+        rounds.pictures(ep)["count"] == {"paintings": 2, "cutouts": 0},
+        "and says what that would paint again, for kitcut.ai to price before the button",
+        rounds.pictures(ep),
+    )
     Image.new("RGB", (32, 18), (9, 9, 9)).save(ep.path("images", "bridge.jpg"))
     ep.update(state="done", ok=True)
     for bad, status in (("ultra", 400), ("low", 409)):

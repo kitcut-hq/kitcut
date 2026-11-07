@@ -66,8 +66,11 @@ the day's budget still holds.
                                  DELETE .../voice/{key}, with ?project=
     GET  /api/library/style      ?project=: the project's style (stylekit.py), as the Style tab
                                  shows it; PATCH (the card's fields and picks), DELETE, POST
-                                 .../style/read {"project", "look", "brief"}, .../style/proof
-                                 {"project", "subject"?}, files in parts as the brand's
+                                 .../style/read {"project", "look", "brief", "key"?},
+                                 .../style/proof {"project", "subject"?, "key"?} ("key": kitcut.ai's
+                                 hold of the step's credits, style-<24 hex>: the step writes its own
+                                 studio_runs record under it, kind "style", state done | failed,
+                                 and the answer says the key back), files in parts as the brand's
                                  (.../style/files...), GET .../style/{kind}/{name}. X-Team: 1 (the
                                  site's KITCUT_TEAM) is what lets the asker paint and pick Gemini
     GET  /api/films/{id}/lines   the asker's finished film's narration lines, each with its key
@@ -152,6 +155,7 @@ import argparse
 import contextlib
 import tempfile
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -2264,10 +2268,44 @@ async def style_file_delete(req):
     return web.json_response({"deleted": True})
 
 
+# kitcut.ai's hold of a style read's or proof's credits: the step's own record is written under it
+STYLE_KEY = re.compile(r"^style-[0-9a-f]{24}$")
+# those records' writes, one at a time and in the order asked (a step's start is never written
+# over its end), off the event loop: MongoDB may take seconds to answer
+STYLE_RUNS = ThreadPoolExecutor(max_workers=1)
+
+
+def _style_run(req, body, step):
+    """(key, run) for a style step the site holds credits for: its key, and where its record goes
+    (studio_runs, kind "style", under the key: the site settles the hold from it, as a round's).
+    (None, None) without a key; a key of another shape is a 400."""
+    key = body.get("key")
+    if key is None:
+        return None, None
+    if not isinstance(key, str) or not STYLE_KEY.match(key):
+        raise web.HTTPBadRequest(
+            text='{"error": "key is style-<24 hex>"}', content_type="application/json"
+        )
+    doc = {
+        "kind": "style",
+        "step": step,
+        "project": str(body.get("project") or ""),
+        "client": client_of(req),
+        "release": films.RELEASE,
+    }
+
+    def run(fields, final=False):
+        row = {**doc, **fields, **({"finished_at": store.now()} if final else {})}
+        STYLE_RUNS.submit(agent.STORE.save, key, row, final)
+
+    return key, run
+
+
 async def style_read(req):
-    """Read the pictures (again) in the background: {"project", "look", "brief"}."""
+    """Read the pictures (again) in the background: {"project", "look", "brief", "key"?}."""
     body = await _json(req)
     d = await _style_dir(req, body)
+    key, run = _style_run(req, body, "read")
     try:
         st = stylekit.start(
             d,
@@ -2275,22 +2313,26 @@ async def style_read(req):
             str(body.get("look") or "painted"),
             str(body.get("brief") or "")[:4000],
             _team(req),
+            run=run,
         )
     except stylekit.StyleError as e:
         return _style_error(e)
-    return web.json_response(st, status=202)
+    return web.json_response({**st, **({"key": key} if key else {})}, status=202)
 
 
 async def style_proof(req):
-    """Paint the proof again: {"project", "subject"?}."""
+    """Paint the proof again: {"project", "subject"?, "key"?}."""
     body = await _json(req)
     d = await _style_dir(req, body)
+    key, run = _style_run(req, body, "proof")
     subject = body.get("subject")
     try:
-        st = stylekit.proof_again(d, _team(req), str(subject) if subject is not None else None)
+        st = stylekit.proof_again(
+            d, _team(req), str(subject) if subject is not None else None, run=run
+        )
     except stylekit.StyleError as e:
         return _style_error(e)
-    return web.json_response(st, status=202)
+    return web.json_response({**st, **({"key": key} if key else {})}, status=202)
 
 
 async def style_edit(req):

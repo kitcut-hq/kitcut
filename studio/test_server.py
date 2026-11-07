@@ -268,6 +268,16 @@ async def projects(c, auth, mem, check):
         "/api/library/pictures", json={"project": P, "upload": up, "name": "logo"}, headers=me
     )
     check(r.status == 201 and (await r.json())["w"] == 640, "it joins the project")
+    # a style step held by kitcut.ai names the hold as its key (stylekit.py's own record)
+    for bad in ("style-1", "x" * 30, 7):
+        r = await c.post(
+            "/api/library/style/proof", json={"project": P, "key": bad}, headers=me
+        )
+        check(r.status == 400, "a style step's key of another shape is refused: %r" % (bad,))
+    r = await c.post(
+        "/api/library/style/proof", json={"project": P, "key": "style-" + "a" * 24}, headers=me
+    )
+    check(r.status == 409, "a good key on a style not read yet: the step's own refusal (%d)" % r.status)
     r = await c.get("/api/library/pictures/logo/thumb.png?project=" + P, headers=me)
     check(r.status == 200 and (await r.read())[:4] == b"\x89PNG", "with its thumbnail")
     r = await c.get("/api/library/pictures/logo/thumb.png?project=" + P, headers=other)

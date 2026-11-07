@@ -73,7 +73,9 @@ paint that exact picture again at its finish -- the same composition, people, ob
 
 Images are cached by a fingerprint of backend, model, style, prompt and reference (a project
 picture's own content, and the style pictures'), so a rerun paints only what changed. Each image
-painted appends its cost to images/spend.jsonl, and a run
+painted appends its cost to images/spend.jsonl -- with its model, its quality, how many reference
+pictures went with it ("refs"), whether it is a "cutout" or a "painting", and "redo" for a sharper
+version's repaint: what the studio counts into a film's paint_counts -- and a run
 refuses to paint past max_images for the film (the cap a caller such as Sketch Studio sets).
 
 Invoke as:
@@ -392,7 +394,14 @@ def paint_openrouter(
     d = j["data"][0]
     data = base64.b64decode(d["b64_json"]) if d.get("b64_json") else httpx.get(d["url"]).content
     u = j.get("usage") or {}
-    return data, {"cost_usd": u.get("cost"), "tokens": u.get("completion_tokens")}
+    # what it was asked at (the quality, where the model has it) and how many pictures it read: a
+    # painting's price on kitcut.ai is its level and its references (the record's paint_counts)
+    return data, {
+        "cost_usd": u.get("cost"),
+        "tokens": u.get("completion_tokens"),
+        "quality": body.get("quality"),
+        "refs": len(body.get("input_references") or []),
+    }
 
 
 def paint_gemini(prompt, model, ref=None, aspect="16:9"):
@@ -434,6 +443,8 @@ def paint_gemini(prompt, model, ref=None, aspect="16:9"):
     return part.inline_data.data, {
         "cost_usd": round(tok * price / 1e6, 6) if price else None,
         "tokens": tok,
+        "quality": None,
+        "refs": len(refs),
     }
 
 
@@ -743,6 +754,12 @@ def main():
                     meta = {**meta, "model": cs["model"], "alpha": "model" if alpha else "matted"}
                 else:
                     w, h = to_jpeg(data, path)
+                # a cut-out or a painting, and whether it repaints a draft (a sharper version)
+                meta = {
+                    **meta,
+                    "kind": "cutout" if cs else "painting",
+                    **({"redo": True} if redo else {}),
+                }
                 return im["name"], path, w, h, meta, time.time() - t
 
             # a project picture is never painted: an image made from pictures alone goes first,

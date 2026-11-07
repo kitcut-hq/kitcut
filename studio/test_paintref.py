@@ -314,6 +314,82 @@ def muse():
     )
 
 
+def counts():
+    """What each painting read is in what it reports (its row in images/spend.jsonl): its quality
+    and how many pictures went with it; the studio adds the rows up into the record's
+    paint_counts (agent.paint_counts), which kitcut.ai charges by. Muse's are counted too, though
+    it does not bill them."""
+    import httpx
+
+    sent = []
+
+    class Reply:
+        status_code = 200
+
+        def json(self):
+            return {"data": [{"b64_json": "eA=="}], "usage": {"cost": 0.05}}
+
+    pics = []
+    for i in range(3):
+        pics.append(os.path.join(HOME, "count%d.png" % i))
+        Image.new("RGB", (8, 8), (i, i, i)).save(pics[-1])
+    gpt = {
+        "supported_parameters": {
+            "input_references": {"max": 16},
+            "quality": {"values": ["low", "medium", "high"]},
+        }
+    }
+    post, caps = httpx.post, SP.model_caps
+    httpx.post = lambda url, json=None, **k: sent.append(json) or Reply()
+    SP.model_caps = lambda model: gpt if "gpt" in model else None
+    os.environ.setdefault("OPENROUTER_API_KEY", "test")
+    try:
+        _, g = PAINT_OPENROUTER(
+            "a park", "openai/gpt-image-test", pics[1:3], "high", style_ref=pics[0]
+        )
+        _, m = PAINT_OPENROUTER("a park", "meta/muse-image", ref=pics[1], style_ref=pics[0])
+        _, r = PAINT_OPENROUTER("a park", "openai/gpt-image-test", pics[1:3], "high", redo=pics[0])
+    finally:
+        httpx.post, SP.model_caps = post, caps
+    check(
+        (g["quality"], g["refs"]) == ("high", 3) and (m["quality"], m["refs"]) == (None, 2),
+        "a painting reports its quality and how many pictures it read: GPT Image's, and Muse's",
+        (g, m),
+    )
+    check(r["refs"] == 1, "a sharper version's repaint reads one: its own draft", r)
+    import agent  # noqa: PLC0415 -- the studio's own adding up
+
+    rows = [
+        {"model": "openai/gpt-image-test", "kind": "painting", **g},
+        {"model": "openai/gpt-image-test", "kind": "painting", **g},
+        {"model": "openai/gpt-image-test", "kind": "cutout", **dict(g, quality="low", refs=0)},
+        {"model": "meta/muse-image", "kind": "painting", **m},
+    ]
+    got = agent.paint_counts(rows)
+    gi = "openai/gpt-image-test"
+    check(
+        got
+        == [
+            {"model": gi, "kind": "painting", "quality": "high", "pictures": 2, "references": 6},
+            {"model": gi, "kind": "cutout", "quality": "low", "pictures": 1, "references": 0},
+            {
+                "model": "meta/muse-image",
+                "kind": "painting",
+                "quality": None,
+                "pictures": 1,
+                "references": 2,
+            },
+        ],
+        "the record's paint_counts: by painter, kind and quality, with the pictures they read",
+        got,
+    )
+    check(
+        agent.paint_counts([*rows, {"model": "meta/muse-image", "cost_usd": 0.01}]) is None
+        and agent.paint_counts([]) == [],
+        "a row that does not say what it read (an older painter) leaves no counts; none, []",
+    )
+
+
 def roles():
     """An attached picture is a painting's ref only when its role (inputs/roles.json, the
     studio's) is "style"; "scene" is never one, nor a project picture marked "scene"."""
@@ -480,6 +556,7 @@ def main():
     roles()
     redo()
     muse()
+    counts()
     print("\n%s" % ("all passed" if not FAILS else "%d FAILED" % len(FAILS)))
     shutil.rmtree(HOME, ignore_errors=True)
     sys.exit(1 if FAILS else 0)
