@@ -681,6 +681,7 @@ def _pins(work, rec):
             probe.caps,
             rec.get("paint_route"),
             rec.get("paint_quality"),
+            rec.get("paint_ref_px"),
         )
         pins["paint"] = {
             k: paint.get(k, v)

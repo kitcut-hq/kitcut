@@ -44,6 +44,11 @@ the day's budget still holds.
                                  the site's project, with the project's library (library.py);
                                  its "keep", a list from cast, look, voice, music, is what its
                                  films share: without one it is a series and keeps them all
+                                 "ref_px": 256-2048 (a test, from the site's film.mjs --ref-px):
+                                 every reference picture its painter gets is sent that small,
+                                 its plain margin trimmed (sketch-paint.py ref_picture); a
+                                 sharper version's draft still goes whole. GPT Image bills a
+                                 reference by its size; Muse reads them free
     GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
                                  its pictures and voice lines. Also GET /api/library/{name}/
                                  thumb.png, DELETE /api/library/{name} (a cast member), each
@@ -1377,6 +1382,17 @@ async def create(req):
                 },
                 status=400,
             )
+    # its reference pictures sent small (film.paint_pins, sketch-paint.py ref_picture): a size in
+    # pixels, for testing what smaller references cost and keep; none, and they go as they are
+    ref_px = body.get("ref_px")
+    if ref_px is not None and (not films.ref_px_ok(ref_px) or tpl):
+        return web.json_response(
+            {
+                "error": "ref_px is a whole number of pixels from %d to %d, and not for a "
+                "template's film" % films.REF_PX
+            },
+            status=400,
+        )
     # the narrator the person picked (the site's voice setting, kitcut.ai lib/narrator.js):
     # {"source": "kitcut", "voice": <a Gemini voice>} pins that voice (film.vo_pins); none, or
     # no voice in it, and Claude picks as ever
@@ -1502,6 +1518,7 @@ async def create(req):
             music=music,
             auto_length=auto_length,
             quality=quality,
+            ref_px=ref_px,
         )
         if preview:
             f.update(preview=True)

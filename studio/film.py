@@ -633,19 +633,23 @@ def paint_words(caps):
     return "painting the pictures", "pictures"
 
 
-def paint_pins(length, caps, route=None, quality=None):
+def paint_pins(length, caps, route=None, quality=None, ref_px=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
     added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
     the painter it names, the style line, its style pictures (a path, or a list of them) on a
     picture route, and the route's quality -- the studio's too. `quality`: the one the film was
-    asked for (its record's paint_quality), where the painter has the setting; else a draft. A
-    tall film has the same painter as a wide one; sketch-paint.py paints in the film's frame."""
+    asked for (its record's paint_quality), where the painter has the setting; else a draft.
+    `ref_px`: its record's paint_ref_px, the size every reference picture is sent at
+    (sketch-paint.py ref_picture); none, and they go as their files are. A tall film has the
+    same painter as a wide one; sketch-paint.py paints in the film's frame."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
         pins |= kind["pins"]
     pins |= {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
+    if kinds and ref_px_ok(ref_px):
+        pins["ref_px"] = int(ref_px)
     quality = quality if quality in QUALITIES else None
     if quality and "cutouts" in pins and pins["cutouts"].get("model") in QUALITY_MODELS:
         pins["cutouts"] = dict(pins["cutouts"], quality=quality)
@@ -664,6 +668,16 @@ def paint_pins(length, caps, route=None, quality=None):
     if "cutouts" in pins and paints_cutouts(r):  # the cut-outs from the same painter
         pins["cutouts"] = dict(pins["cutouts"], model=r["model"])
     return pins
+
+
+# the sizes a film may ask its reference pictures to be sent at (POST /api/films "ref_px";
+# sketch-paint.py REF_PX takes as much): a test of what smaller references cost and keep
+REF_PX = (256, 2048)
+
+
+def ref_px_ok(px):
+    """Whether `px` is a size a film's reference pictures may be sent at (REF_PX)."""
+    return isinstance(px, int) and not isinstance(px, bool) and REF_PX[0] <= px <= REF_PX[1]
 
 
 def paints_cutouts(r):
@@ -1131,6 +1145,7 @@ class Film:
         member=None,
         narrator=None,
         quality=None,
+        ref_px=None,
         template=None,
         frame=None,
         captions=False,
@@ -1302,7 +1317,7 @@ class Film:
             m["modules"] = list(modules(caps))
         if paint_kinds(caps):
             m["paint"] = "paint.json"
-            pins = paint_pins(seconds, caps, quality=quality)
+            pins = paint_pins(seconds, caps, quality=quality, ref_px=ref_px)
             _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
@@ -1375,6 +1390,8 @@ class Film:
                 # its pictures asked for above a draft (paint_pins; the caller checked the
                 # painter has the setting: chooses_quality)
                 **({"paint_quality": quality} if quality in QUALITIES else {}),
+                # its reference pictures sent small (paint_pins; sketch-paint.py ref_picture)
+                **({"paint_ref_px": int(ref_px)} if ref_px_ok(ref_px) else {}),
                 "release": RELEASE,
                 # the engine it started from, when it is not this release's sketch/ (engine_base)
                 **(

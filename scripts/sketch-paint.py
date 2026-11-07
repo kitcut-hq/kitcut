@@ -71,6 +71,12 @@ paint that exact picture again at its finish -- the same composition, people, ob
 -- so a film's camera moves still fit it. It is cached under the key it would have without
 "redo", so once the studio takes "redo" away the sharper painting is the image's own.
 
+"ref_px" (a whole number of pixels, set by the studio, never Claude) sends every reference picture
+-- the style pictures and an image's own "ref" -- smaller: its plain margin trimmed (a painted
+character is a figure on a wide white canvas), then fit inside ref_px x ref_px. The painter bills
+a reference by its size, so a draft can be painted from small references. A sharper version's
+draft ("redo") always goes as it is. Without it every reference goes as its file is.
+
 Images are cached by a fingerprint of backend, model, style, prompt and reference (a project
 picture's own content, and the style pictures'), so a rerun paints only what changed. Each image
 painted appends its cost to images/spend.jsonl, and a run
@@ -219,6 +225,8 @@ def fingerprint(spec, im, ref_fp=None, style_fp=None, aspect="16:9"):
         parts.append(spec["quality"])
     if style_fp:  # likewise: a style picture's own content, so a new one paints afresh
         parts.append(["style_ref", style_fp])
+    if spec.get("ref_px"):  # likewise: a painting from small references is its own
+        parts.append(["ref_px", spec["ref_px"]])
     cs = cut_spec(spec, im)
     if cs:  # only for cut-outs, so every scene painted before them keeps its key
         parts.append([cs, im.get("aspect")])
@@ -317,7 +325,48 @@ def mime(path):
     return "image/" + kind
 
 
-def data_url(path):
+# "ref_px": the sizes a reference may be sent at, and how far from the corner's colour a pixel may
+# be and still count as the plain margin trimmed around it
+REF_PX = (128, 4096)
+TRIM_TOLERANCE = 24
+
+
+def ref_picture(path, px):
+    """A reference picture made small ("ref_px"): its plain margin -- transparent, or the colour of
+    its top-left corner -- trimmed with a little room left, then fit inside px x px (never made
+    larger). (mime, bytes): a PNG where it has transparency, else a JPEG."""
+    from PIL import Image, ImageChops
+
+    with Image.open(path) as src:
+        src.load()
+        alpha = src.mode in ("RGBA", "LA") or "transparency" in src.info
+        im = src.convert("RGBA" if alpha else "RGB")
+    if alpha:
+        box = im.getchannel("A").point(lambda v: 255 if v > 8 else 0).getbbox()
+    else:
+        ground = Image.new("RGB", im.size, im.getpixel((0, 0)))
+        diff = ImageChops.difference(im, ground).convert("L")
+        box = diff.point(lambda v: 255 if v > TRIM_TOLERANCE else 0).getbbox()
+    if box:
+        w, h = im.size
+        pad = round(0.03 * max(box[2] - box[0], box[3] - box[1]))
+        im = im.crop(
+            (max(0, box[0] - pad), max(0, box[1] - pad), min(w, box[2] + pad), min(h, box[3] + pad))
+        )
+    im.thumbnail((px, px), Image.LANCZOS)
+    out = io.BytesIO()
+    if alpha:
+        im.save(out, "PNG", optimize=True)
+        return "image/png", out.getvalue()
+    im.save(out, "JPEG", quality=90, optimize=True)
+    return "image/jpeg", out.getvalue()
+
+
+def data_url(path, px=None):
+    """A picture as a data: URL: the file as it is, or made small to `px` (ref_picture)."""
+    if px:
+        kind, data = ref_picture(path, px)
+        return "data:%s;base64," % kind + base64.b64encode(data).decode()
     with open(path, "rb") as f:
         return "data:%s;base64," % mime(path) + base64.b64encode(f.read()).decode()
 
@@ -357,13 +406,14 @@ def paint_openrouter(
     transparent=False,
     style_ref=None,
     redo=None,
+    ref_px=None,
 ):
     """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path, or a list of
     them) goes in as reference pictures when the model takes them (refs_max), and is dropped when
     not; `style_ref`, a style picture or a list of them, goes in before it
     (ref_lead), as many as the model takes. `redo`: the picture's own draft, sent alone in their
     place (REDO). `transparent` asks for a transparent background (sent only where the model has
-    it)."""
+    it). `ref_px`: the references made small (ref_picture); never the draft of a redo."""
     import httpx
 
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -374,7 +424,8 @@ def paint_openrouter(
     pics, lead = ([redo], REDO) if redo else ref_lead(ref, style_ref, refs_max(caps, model))
     if pics and takes_refs(caps, model):
         body["input_references"] = [
-            {"type": "image_url", "image_url": {"url": data_url(p)}} for p in pics
+            {"type": "image_url", "image_url": {"url": data_url(p, None if redo else ref_px)}}
+            for p in pics
         ]
         body["prompt"] = lead + prompt
     r = httpx.post(
@@ -589,6 +640,13 @@ def main():
                 sys.exit("paint.style_ref %r is not a picture beside the manifest" % asked)
         if len(style_ref) == 1:  # one picture: sent and keyed as it always was
             style_ref = style_ref[0]
+    ref_px = spec.get("ref_px")  # the references made small (ref_picture): the studio's, or none
+    if ref_px is not None and (
+        isinstance(ref_px, bool)
+        or not isinstance(ref_px, int)
+        or not REF_PX[0] <= ref_px <= REF_PX[1]
+    ):
+        sys.exit("paint.ref_px is a whole number of pixels from %d to %d" % REF_PX)
     drafts = {}  # a sharper version's drafts ("redo"): {image name: its draft}
     if spec.get("redo"):
         base = os.path.realpath(m["_dir"])
@@ -716,6 +774,7 @@ def main():
                                 alpha,
                                 style_ref,
                                 redo=redo,
+                                ref_px=ref_px,
                             )
                         elif backend == "gemini":
                             data, meta = paint_gemini(prompt, model, redo or ref, aspect)
@@ -728,6 +787,7 @@ def main():
                                 aspect,
                                 style_ref=style_ref,
                                 redo=redo,
+                                ref_px=ref_px,
                             )
                         break
                     except Exception as e:  # noqa: BLE001 -- image services drop requests; retry

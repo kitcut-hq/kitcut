@@ -410,6 +410,14 @@ async def projects(c, auth, mem, check):
             and json.load(vf)["voice"] == "Puck",
             "the narrator the project set is the film's voice",
         )
+    # small references (film.paint_pins "ref_px"): a whole number of pixels in film.REF_PX. Asked
+    # here, after the episode's vo.json is read: earlier, the time they take lets the episode
+    # start before that read
+    for bad in (64, 5000, "768", True):
+        r = await c.post(
+            "/api/films", json={"prompt": "x", "look": "painted", "ref_px": bad}, headers=me
+        )
+        check(r.status == 400, "ref_px %r is refused (%d)" % (bad, r.status))
     r = await c.get("/api/films/%s" % ep, headers=me)
     check(r.status == 200, "and the person's old name still owns it")
     lim = await (await c.get("/api/limits", headers=auth)).json()

@@ -1163,7 +1163,13 @@ def seed(film, lib):
     film.update(paint_route=pr)
     if paint_kinds(film.caps) and os.path.exists(film.path("paint.json")):
         p = _read_json(film.path("paint.json"), {}) or {}
-        want = paint_pins(film.length, film.caps, pr, film.record().get("paint_quality"))
+        want = paint_pins(
+            film.length,
+            film.caps,
+            pr,
+            film.record().get("paint_quality"),
+            film.record().get("paint_ref_px"),
+        )
         _write_json(film.path("paint.json"), p | want)
     return {
         "route": pr["route"],
