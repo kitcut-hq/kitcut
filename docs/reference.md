@@ -7210,3 +7210,28 @@ rather than shipping. A rebuild into a copy that
 already has its `.venv`/`.git` is allowed, so iterating does not cost a
 reinstall.
 <!-- /dev-only -->
+
+## Importing a film made outside the studio: what changed (2026-11-07)
+
+Learned putting comic-studio's *A Silent Voice* (a 5:43 vertical film, not a sketch film) on kitcut.ai with
+`studio/import_film.py`:
+
+- **Any finished MP4 can come in** as a sketch-film folder made beside it: `sketch.json` (`slug`, `title`,
+  `description`, `duration`, `fps`, `frame` `[1080, 1920]` for 9:16; the record's `frame` comes from it, the
+  pixels may be smaller), `outputs/<slug>.mp4`, `outputs/<slug>_poster.png`.
+- **Encode the master at 5 Mbps or less on the render machine first.** `media.make_web` copies a master at or
+  under `WEB_MBPS` (5.5) as the web copy and re-encodes anything heavier where the import runs, i.e. the laptop.
+- **`--vm` is out of date.** The studio no longer runs on an Azure VM (`kitcut-studio-1` is gone; `vm.sh` finds no
+  address): its home is `/srv/kitcut/studio` on the home server. After the import, copy
+  `temp/import-home/projects/<id>/` into `/srv/kitcut/studio/projects/<id>/` (tar over ssh as the studio's user)
+  and check `studio.json` reads `state: done`. `import_film.py --vm` should learn that host.
+- **Share text.** The film page's description is the record's `share.description`, used only when `share.title`
+  is set too (the site's `publicShare` drops a share without a title); otherwise it is the made-film line
+  ("Claude Opus 5.5 wrote, animated, narrated and scored it from one prompt"), which is false for an import. Set
+  both on an imported film's `studio_runs` record. The `/v/<short>/<slug>` page shows the change at once; `/film/<id>`
+  after its cache.
+- **Public is the gallery and KitCut TV, not search:** every film made since `NOINDEX_FROM` (2026-10-27,
+  `lib/filmmeta.js` in the site) is noindex, listed or not.
+- **A project can be made without the site** (the KitCut connector was down): a `projects` document with the
+  fields the others have (`_id` `p-` + 10 letters/digits, `user_id`, `org_id`, `name`, `brief`, `look`, `seconds`,
+  `from_account_cast`, `keep`, `watermark`, `created_at`, `updated_at`, `archived_at: null`).
