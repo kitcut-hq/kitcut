@@ -33,3 +33,16 @@ Decisions:
 For the next session: to make the oil film for another place, copy `geo-oil.json`, change the
 CalGEM county (or another state's well registry), re-pick the close-ups with the density-hotspot
 step (wells in tracts over 4,000 people/km2), and rewrite the script from the new numbers.
+
+## 2026-11-07, late: published and scheduled
+
+- Population film remade as studio-20261107-231433-ycrgw7: the first take (vgyrbf) stood still 16%
+  of the time with the state small in black; the remake opens tight on the LA basin and zooms out,
+  0% still. The quake film is 8% still (accepted); oil 1%.
+- YouTube @kitcut-hq: oil TQhi03HegKQ public 2026-11-07 23:05 PT; quakes 1hmquRM6pYE scheduled
+  2026-11-08 19:00 PT; population jMYs6epH0uk scheduled 2026-11-09 12:00 PT. Own thumbnails set.
+- Facebook Page KitCut (Business Suite reels composer, Instagram unticked): oil posted 23:10 PT;
+  quakes and population scheduled at the same times as YouTube. Uploaded as 720p copies under
+  10 MB (the Chrome upload cap); the composer has no cover picker, the first frame is the cover.
+  The page's file input only exists after a click: hook HTMLInputElement.prototype.click to keep
+  it in the DOM, then file_upload to it.
