@@ -4847,6 +4847,43 @@ OpenStreetMap". Water and roads are queried for the whole picture, not only the 
 busy Overpass retries several times on a city this size (about a minute the first time,
 cached after).
 
+### Official data on real imagery, as layers a film stacks: `geo-layers.py`
+
+A data Short ("every oil well in Los Angeles", "every earthquake since 1990", "half of
+California lives in the red") needs the real place under the real records, and the film must
+be able to reveal the data a layer at a time. `geo-layers.py` renders, per view of a manifest,
+one base picture and one transparent PNG per layer, all the same size and aligned pixel for
+pixel (Web Mercator), plus `sheet.md`: each view's bbox, each layer's record count, and named
+places as `u, v`. The studio is told to stack them, never redraw them.
+
+```powershell
+python scripts/geo-layers.py --manifest projects/<id>/geo-<film>.json --list    # zoom, tiles, sizes, records per layer; fetches nothing
+python scripts/geo-layers.py --manifest projects/<id>/geo-<film>.json [--only <view>] [--preview]
+```
+
+Bases, each with the credit the film must show:
+
+| base | what | when |
+|---|---|---|
+| `s2` | Sentinel-2 cloudless **2016** (EOX, CC BY 4.0; later years are NC-SA, so not those) | a state, a county, a coast: it has the sea |
+| `naip` | USDA NAIP aerial photos, 0.6 m, one export (max 4000 px a side), public domain | streets and roofs: a neighbourhood, a school, an island |
+| `imagery` / `relief` / `topo` | USGS The National Map tiles, public domain | `imagery` stops at z16 and paints open sea black; `relief` serves no tile at z9 (measured), so pin `zoom` to 10 |
+
+Layers: `points` (a JSON list or GeoJSON; `lon`/`lat` field names, `where` equality filters,
+`min` thresholds, `in_file` id lists, `radius_by` a magnitude), `polygons` (fill and/or
+stroke, `glow`). A view may `focus` on a polygon (everything outside dimmed) and set `sea` to
+repaint near-black sea pixels in one colour. The source data stays in the project's gitignored
+`sources/`; prepare derived files (a census band, a decade split) with a small script beside
+the manifest.
+
+First use, 2026-11-07, `projects/ca-data-shorts/`: CalGEM WellSTAR (24,333 well records in LA
+County; the `WellSTAR/Wells/MapServer/0` layer answers 5,000 records a page), USGS ComCat
+(M2.5+ since 1990, three-year windows stay under its 20,000-row cap), 2020 Census tracts from
+TIGERweb (`Tracts_Blocks/MapServer/10` carries `POP100` and `AREALAND` with the geometry, so no
+join). Point-in-building against LA County's 2023 outlines (`GISNET_Public/MapServer/434`,
+multipoint queries of 250 wells) is slow and a quarter of the calls failed: treat any count
+from it as a floor.
+
 ### More pictures than a film may carry: `picture-sheets.py`
 
 A kitcut.ai film takes six pictures (`studio/uploads.py MAX_IMAGES`); a research episode wants

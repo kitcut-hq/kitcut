@@ -1,0 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@600;700&family=Inter:wght@600;800&display=swap');
+html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#070b12}
+.bg{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat}
+.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,11,18,.92) 0%,rgba(7,11,18,.55) 30%,rgba(7,11,18,0) 48%,rgba(7,11,18,0) 70%,rgba(7,11,18,.85) 100%)}
+h1{position:absolute;left:60px;right:60px;top:110px;margin:0;font:700 150px/0.98 Oswald,Impact,sans-serif;color:#fff;text-transform:uppercase;letter-spacing:-1px;text-shadow:0 6px 30px rgba(0,0,0,.6)}
+h1 em{font-style:normal}
+.tag{position:absolute;left:64px;bottom:250px;font:800 54px/1.1 Inter,Arial,sans-serif;color:#fff;letter-spacing:2px;text-transform:uppercase}
+.tag b{display:block;font:700 150px/1 Oswald,Impact,sans-serif;letter-spacing:0}
+.src{position:absolute;left:64px;bottom:190px;font:600 28px Inter,Arial,sans-serif;color:rgba(255,255,255,.7);letter-spacing:1px}

@@ -1,0 +1,197 @@
+{
+ "title": "Half of California lives in the red",
+ "project": "ca-data-shorts",
+ "out": "projects/ca-data-shorts/temp/maps/population",
+ "views": [
+  {
+   "name": "california",
+   "bbox": [
+    -124.6,
+    32.45,
+    -113.9,
+    42.1
+   ],
+   "width_px": 2160,
+   "base": "s2",
+   "tone": {
+    "saturation": 0.45,
+    "brightness": 0.55,
+    "contrast": 1.1,
+    "tint": "#0a1424",
+    "tint_mix": 0.25,
+    "vignette": 0.4
+   },
+   "layers": [
+    {
+     "name": "outline",
+     "type": "polygons",
+     "src": "projects/ca-data-shorts/sources/ca_state.geojson",
+     "stroke": "#e8eef7",
+     "stroke_px": 3,
+     "stroke_alpha": 0.85,
+     "what": "California's border (Census 2020)"
+    },
+    {
+     "name": "half",
+     "type": "polygons",
+     "src": "projects/ca-data-shorts/sources/tracts_half.geojson",
+     "fill": "#ff2a3d",
+     "fill_alpha": 1.0,
+     "glow": 3,
+     "what": "the densest census tracts holding 50% of Californians (19.8M people, 4,633 km2, 1.15% of the land)"
+    },
+    {
+     "name": "quarter",
+     "type": "polygons",
+     "src": "projects/ca-data-shorts/sources/tracts_half.geojson",
+     "where": {
+      "band": "q25"
+     },
+     "fill": "#ffd23f",
+     "fill_alpha": 1.0,
+     "what": "the densest tracts holding 25% (9.9M people, 1,562 km2, 0.39% of the land)"
+    },
+    {
+     "name": "la_county",
+     "type": "polygons",
+     "src": "projects/ca-data-shorts/sources/la_county_land.geojson",
+     "stroke": "#4fc3ff",
+     "stroke_px": 4,
+     "glow": 4,
+     "what": "Los Angeles County outline"
+    }
+   ],
+   "places": [
+    {
+     "name": "Los Angeles",
+     "lon": -118.24,
+     "lat": 34.05
+    },
+    {
+     "name": "San Francisco",
+     "lon": -122.42,
+     "lat": 37.77
+    },
+    {
+     "name": "San Diego",
+     "lon": -117.16,
+     "lat": 32.72
+    },
+    {
+     "name": "Sacramento",
+     "lon": -121.49,
+     "lat": 38.58
+    },
+    {
+     "name": "Fresno",
+     "lon": -119.79,
+     "lat": 36.74
+    },
+    {
+     "name": "Death Valley",
+     "lon": -116.9,
+     "lat": 36.5
+    }
+   ],
+   "focus": {
+    "src": "projects/ca-data-shorts/sources/ca_state.geojson",
+    "outside": 0.3
+   }
+  },
+  {
+   "name": "la-basin",
+   "bbox": [
+    -118.72,
+    33.68,
+    -117.62,
+    34.36
+   ],
+   "width_px": 3000,
+   "base": "s2",
+   "tone": {
+    "saturation": 0.45,
+    "brightness": 0.55,
+    "contrast": 1.1,
+    "tint": "#0a1424",
+    "tint_mix": 0.25
+   },
+   "layers": [
+    {
+     "name": "half",
+     "type": "polygons",
+     "src": "projects/ca-data-shorts/sources/tracts_half.geojson",
+     "fill": "#ff2a3d",
+     "fill_alpha": 0.62,
+     "what": "densest tracts holding half of California"
+    }
+   ],
+   "places": [
+    {
+     "name": "Downtown LA",
+     "lon": -118.25,
+     "lat": 34.05
+    },
+    {
+     "name": "Santa Monica",
+     "lon": -118.49,
+     "lat": 34.02
+    },
+    {
+     "name": "Long Beach",
+     "lon": -118.19,
+     "lat": 33.77
+    },
+    {
+     "name": "Anaheim",
+     "lon": -117.91,
+     "lat": 33.84
+    }
+   ]
+  },
+  {
+   "name": "bay-area",
+   "bbox": [
+    -122.62,
+    37.2,
+    -121.7,
+    38.08
+   ],
+   "width_px": 2160,
+   "base": "s2",
+   "tone": {
+    "saturation": 0.45,
+    "brightness": 0.55,
+    "contrast": 1.1,
+    "tint": "#0a1424",
+    "tint_mix": 0.25
+   },
+   "layers": [
+    {
+     "name": "half",
+     "type": "polygons",
+     "src": "projects/ca-data-shorts/sources/tracts_half.geojson",
+     "fill": "#ff2a3d",
+     "fill_alpha": 0.62,
+     "what": "densest tracts holding half of California"
+    }
+   ],
+   "places": [
+    {
+     "name": "San Francisco",
+     "lon": -122.42,
+     "lat": 37.77
+    },
+    {
+     "name": "Oakland",
+     "lon": -122.27,
+     "lat": 37.8
+    },
+    {
+     "name": "San Jose",
+     "lon": -121.89,
+     "lat": 37.34
+    }
+   ]
+  }
+ ]
+}
