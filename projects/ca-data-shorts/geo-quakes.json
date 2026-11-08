@@ -1,0 +1,30 @@
+{
+ "title": "Every earthquake in California since 1990",
+ "project": "ca-data-shorts",
+ "out": "projects/ca-data-shorts/temp/maps/quakes",
+ "views": [
+  {"name": "california", "bbox": [-124.6, 32.45, -113.9, 42.1], "width_px": 2160, "base": "s2",
+   "tone": {"saturation": 0.35, "brightness": 0.45, "contrast": 1.1, "tint": "#0a1424", "tint_mix": 0.3, "vignette": 0.4},
+   "focus": {"src": "projects/ca-data-shorts/sources/ca_state.geojson", "outside": 0.35},
+   "layers": [
+    {"name": "outline", "type": "polygons", "src": "projects/ca-data-shorts/sources/ca_state.geojson", "stroke": "#dfe7f2", "stroke_px": 2.5, "stroke_alpha": 0.7, "what": "California's border"},
+    {"name": "q1990s", "type": "points", "src": "projects/ca-data-shorts/sources/q1990s.json", "color": "#ffb347", "radius": 1.6, "alpha": 0.8, "glow": 3, "radius_by": {"field": "mag", "base": 1.6, "at": 2.5, "mult": 1.7, "max": 40}, "what": "M2.5+ quakes 1990-1999, size by magnitude"},
+    {"name": "q2000s", "type": "points", "src": "projects/ca-data-shorts/sources/q2000s.json", "color": "#ffb347", "radius": 1.6, "alpha": 0.8, "glow": 3, "radius_by": {"field": "mag", "base": 1.6, "at": 2.5, "mult": 1.7, "max": 40}, "what": "M2.5+ quakes 2000-2009"},
+    {"name": "q2010s", "type": "points", "src": "projects/ca-data-shorts/sources/q2010s.json", "color": "#ffb347", "radius": 1.6, "alpha": 0.8, "glow": 3, "radius_by": {"field": "mag", "base": 1.6, "at": 2.5, "mult": 1.7, "max": 40}, "what": "M2.5+ quakes 2010-2019"},
+    {"name": "q2020s", "type": "points", "src": "projects/ca-data-shorts/sources/q2020s.json", "color": "#ffb347", "radius": 1.6, "alpha": 0.8, "glow": 3, "radius_by": {"field": "mag", "base": 1.6, "at": 2.5, "mult": 1.7, "max": 40}, "what": "M2.5+ quakes 2020 to 6 Nov 2026"},
+    {"name": "big", "type": "points", "src": "projects/ca-data-shorts/sources/quakes_ca_clean.json", "min": {"mag": 6}, "color": "#ff2a3d", "glow": 8, "alpha": 1.0, "radius_by": {"field": "mag", "base": 9, "at": 6, "mult": 1.8, "max": 60}, "what": "the 17 quakes of M6+"}
+   ],
+   "places": [
+    {"name": "Landers 1992 M7.3", "lon": -116.437, "lat": 34.2}, {"name": "Northridge 1994 M6.7", "lon": -118.537, "lat": 34.213},
+    {"name": "Ridgecrest 2019 M7.1", "lon": -117.599, "lat": 35.77}, {"name": "Hector Mine 1999 M7.1", "lon": -116.27, "lat": 34.6},
+    {"name": "Petrolia 1992 M7.2", "lon": -124.23, "lat": 40.33}, {"name": "Los Angeles", "lon": -118.24, "lat": 34.05},
+    {"name": "San Francisco", "lon": -122.42, "lat": 37.77}, {"name": "San Diego", "lon": -117.16, "lat": 32.72}
+   ]},
+  {"name": "la", "bbox": [-119.0, 33.6, -117.5, 34.6], "width_px": 2600, "base": "s2",
+   "tone": {"saturation": 0.4, "brightness": 0.5, "contrast": 1.1, "tint": "#0a1424", "tint_mix": 0.25},
+   "layers": [
+    {"name": "quakes", "type": "points", "src": "projects/ca-data-shorts/sources/quakes_ca_clean.json", "color": "#ffb347", "alpha": 0.85, "glow": 4, "radius_by": {"field": "mag", "base": 3, "at": 2.5, "mult": 1.7, "max": 80}, "what": "every M2.5+ quake in this frame since 1990"}
+   ],
+   "places": [{"name": "Northridge epicenter 1994", "lon": -118.537, "lat": 34.213}, {"name": "Downtown LA", "lon": -118.25, "lat": 34.05}, {"name": "Santa Monica", "lon": -118.49, "lat": 34.02}, {"name": "Long Beach", "lon": -118.19, "lat": 33.77}]}
+ ]
+}
