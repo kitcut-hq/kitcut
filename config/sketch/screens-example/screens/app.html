@@ -1,0 +1,43 @@
+<!doctype html>
+<!--
+  A made-up app screen for config/sketch/screens-example: the two "screenshots" the example film
+  moves over. Shot with `make-thumbnail.py --html ... --size 1600x900`; body.filled is the second
+  state (two files attached, a prompt typed). A real film uses real screenshots of a real product,
+  all the same window size, shot sharp (browser zoom or a device pixel ratio of 2).
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Inter"; src: url("../../../../fonts/Inter.woff2"); font-weight: 100 900; }
+  html, body { margin: 0; }
+  body { width: 1600px; height: 900px; overflow: hidden; background: #f6f8fb; font-family: "Inter", sans-serif; color: #1a2233; position: relative; }
+  .nav { height: 64px; background: #fff; border-bottom: 1px solid #e3e8ef; display: flex; align-items: center; gap: 28px; padding: 0 28px; font-size: 17px; }
+  .brand { font-weight: 800; font-size: 22px; margin-right: 18px; }
+  .tab { color: #55607a; } .tab.on { background: #111827; color: #fff; border-radius: 20px; padding: 8px 18px; font-weight: 600; }
+  .side { position: absolute; left: 0; top: 65px; width: 300px; bottom: 0; background: #eceff3; }
+  .new { margin: 16px; height: 40px; border-radius: 6px; background: #2563eb; color: #fff; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  h2 { position: absolute; left: 300px; right: 0; top: 190px; text-align: center; font-size: 24px; margin: 0; }
+  .box { position: absolute; left: 480px; top: 300px; width: 940px; height: 150px; background: #fff; border: 1.5px solid #9dbcf5; border-radius: 8px; box-sizing: border-box; padding: 18px 20px; }
+  body.filled .box { height: 196px; }
+  .chips { display: none; margin-bottom: 14px; } body.filled .chips { display: block; }
+  .chip { display: inline-block; border: 1px solid #dde3ea; border-radius: 16px; padding: 5px 14px; margin-right: 8px; font-size: 15px; }
+  .ph { color: #7b8496; font-size: 18px; } body.filled .ph { display: none; }
+  .txt { display: none; font-size: 18px; } body.filled .txt { display: block; }
+  .plus { position: absolute; left: 20px; bottom: 16px; width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid #2563eb; color: #2563eb; font-size: 24px; line-height: 32px; text-align: center; box-sizing: border-box; }
+  .send { position: absolute; right: 18px; bottom: 14px; width: 40px; height: 40px; border-radius: 6px; background: #9dbcf5; color: #fff; font-size: 22px; line-height: 40px; text-align: center; }
+  body.filled .send { background: #2563eb; }
+</style>
+</head>
+<body>
+  <div class="nav"><span class="brand">Paperdesk</span><span class="tab">Forms</span><span class="tab">Profiles</span><span class="tab on">Assistant</span></div>
+  <div class="side"><div class="new">+ New job</div></div>
+  <h2>Drop files and add notes below</h2>
+  <div class="box">
+    <div class="chips"><span class="chip">application.pdf</span><span class="chip">records.xlsx</span></div>
+    <div class="ph">Notes or instructions…</div>
+    <div class="txt">Fill one copy of this form for every row</div>
+    <div class="plus">+</div><div class="send">↑</div>
+  </div>
+</body>
+</html>

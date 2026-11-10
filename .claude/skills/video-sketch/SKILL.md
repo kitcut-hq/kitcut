@@ -52,6 +52,9 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    words the voice added, or its direction read aloud; `HARD-CUT` means no silence was found before
    the tail word — pick another take with `"pick"` on the line. Put brand names in `hotwords`.
    A long script: `--jobs 8` records eight takes at once (70 Gemini lines: 341 s -> 52 s).
+   Pauses that belong to the picture (a click, a screen change) go on the line as `"pause"`
+   (quiet before it), with no `start`: re-recording a line then moves the rest. Do not write a
+   per-project layout.py.
 5. **Picture.** Write `film.js` scene by scene, every cue on a word -- all of them at the top with
    `const T = SK.cues({snap: [2, 'snap'], end: [5, null, 'e']})` (a miss warns instead of hiding
    behind a fallback second). Reach for the kit before drawing text furniture, a chart, a screen,
@@ -112,6 +115,23 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    the waist up; lay a page down with `SK.sheet` and the poster stands on it), and its logo a
    name with `logo` in it -- the thumbnail finds them all.
 10. **Report the timings** (`--timings`) with the deliverables.
+
+## A product walkthrough from screenshots (no screen recording)
+
+When the user can give you sharp screenshots of the product instead of recording the screen, build
+the walkthrough from them: start from `config/sketch/screens-example/` (`docs/reference.md`, "A film
+from screenshots"). Ask for every state the voice will name (empty, filled in, working, done, the
+result opened), all at one window size, and at a device pixel ratio of 2 if you will zoom past 1.4.
+
+1. Write positions in screenshot pixels (`px()`/`py()`); read them off a gridded copy of the picture.
+2. Show the later screenshot with its new parts under `cover()` patches and drop each on its cue;
+   wipe a cover along a line to type a prompt; `ring()` what the voice names; click with `SK.cursor`.
+3. Put the brand's logo on a plate only after cropping the PNG to its ink (they are rarely centred).
+4. KitCut or other clips go in afterwards with `edl-cut.py` over a window the film leaves bare;
+   never open the film on an insert -- a title card on the insert's own background first.
+5. For the Short, ask for PHONE screenshots and let them fill the frame, unzoomed; captions burn in
+   with `config/presets/instafill-short.json` (or a preset measured for that brand) over the lower
+   part of the screen.
 
 ## A collage film (mixed media, paper cut-out, "newspaper" motion design)
 
