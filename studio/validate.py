@@ -831,12 +831,13 @@ def scene_pictures(film, scene):
     held = held_roles(film)
     text = "%s %s" % (scene.get("shows", ""), scene.get("notes", ""))
     lines = [
-        "- %s%s"
+        "- %s%s%s"
         % (
             n,
             library.role_line(
                 r, bool(paint_kinds(film.caps)), required=bool(_sketch.UPLOAD_NAME.match(n))
             ),
+            library.place_line(film, n),
         )
         for n, r in sorted(held.items())
         if re.search(r"\b%s\b" % re.escape(n), text)

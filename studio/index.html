@@ -185,6 +185,8 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .app.solo .side { display: none; }
 .legal { max-width: 1180px; margin: 40px auto 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
 .legal a { color: var(--ink-3); }
+.legal .friends { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.legal .friends b { color: var(--ink-2); font-weight: 600; margin-right: 2px; }
 
 /* ---- headings */
 .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
@@ -377,6 +379,19 @@ dialog .dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14p
 .att.pic select { width: 100%; height: 24px; padding: 0 2px 0 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink-2);
   font: 500 11.5px/1 Inter, system-ui, sans-serif; cursor: pointer; }
 .att.pic.busy::after { top: 37px; }
+/* its name for the idea (@picture1...): written there where it goes. Amber: shown as it is, and the
+   idea does not say where yet */
+.att.pic .tag { position: absolute; left: 4px; bottom: 4px; height: 20px; padding: 0 7px; border: 0; border-radius: 999px; cursor: pointer;
+  background: rgba(20, 16, 12, .72); color: #fff; font: 600 11px/20px Inter, system-ui, sans-serif; }
+.att.pic .tag.unsaid { background: #b54708; }
+/* @picture1...: the attached pictures, offered as the idea is typed (PIC_AT) */
+.composer { position: relative; }
+.mention { position: absolute; left: 14px; right: 14px; z-index: 20; max-width: 460px; max-height: 300px; overflow: auto; padding: 6px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.mention button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink); text-align: left; cursor: pointer; }
+.mention button[aria-selected="true"], .mention button:hover { background: var(--sunk); }
+.mention img { width: 36px; height: 36px; flex: none; border-radius: 8px; object-fit: cover; background: var(--sunk); }
+.mention .who { min-width: 0; display: grid; }
+.mention .who span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2); font-size: 12.5px; }
 .att.pic.bad .ph { border-color: var(--bad); }
 .att.busy::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px;
   border: 3px solid rgba(255, 255, 255, .9); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
@@ -492,6 +507,8 @@ div.stage { background: var(--panel); border: 1px solid var(--line); border-radi
 .about .cards div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
 .about h3 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
 .about .cards p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.about.friends h3 a { color: var(--accent-2); text-underline-offset: 3px; }
+.about.friends .cards { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .faq details { border-bottom: 1px solid var(--line); padding: 12px 0; }
 .faq summary { cursor: pointer; font-weight: 600; font-size: 15px; }
 .faq details p { margin: 8px 0 2px; color: var(--ink-2); font-size: 14.5px; max-width: 80ch; }
@@ -808,7 +825,8 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
   <form id="form">
     <div class="again"><h2 id="againHead">Make it again</h2><button class="btn sm quiet" type="button" id="againClose">Close</button></div>
     <div class="composer" id="composer">
-      <textarea id="prompt" rows="5" aria-label="What should the film show?" aria-describedby="promptCount" placeholder="Type your idea, or say it with the microphone. Add pictures or text files with +.">How a volcano erupts, told like a nature documentary</textarea>
+      <textarea id="prompt" rows="5" aria-label="What should the film show?" aria-describedby="promptCount" aria-autocomplete="list" aria-controls="picAt" placeholder="Type your idea, or say it with the microphone. Add pictures or text files with +.">How a volcano erupts, told like a nature documentary</textarea>
+      <div class="mention" id="picAt" role="listbox" aria-label="Attached pictures" hidden></div>
       <div class="tray" id="tray" hidden></div>
       <div class="tools" id="tools">
         <button type="button" class="icon" id="attach" aria-label="Add pictures or text files" title="Add pictures (a logo, a photo, a sketch, a screenshot of your brief) or text files (.txt, .md: a script, notes, facts about your product)">+</button>
@@ -1010,8 +1028,19 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
     </div>
   </section>
 
+  <section class="about friends" id="friends">
+    <h2>From our friends</h2>
+    <p>A few sites we like, some ours and some run by friends. Worth a look if you make videos or run a channel.</p>
+    <div class="cards">
+      <div><h3><a href="https://misterblocks.com" target="_blank" rel="noopener">Mister Blocks</a></h3><p>Photograph your loose LEGO and get models built only from those bricks, with 3D step-by-step instructions. Free.</p></div>
+      <div><h3><a href="https://videomakers.io" target="_blank" rel="noopener">VideoMakers</a></h3><p>Rather hire a person? AI video creators found on X and Threads, in one directory.</p></div>
+      <div><h3><a href="https://buildershq.net" target="_blank" rel="noopener">BuildersHQ</a></h3><p>Your channel's YouTube numbers, keyword volumes and Search Console in one MCP server for Claude.</p></div>
+      <div><h3><a href="https://whoisgrowing.com" target="_blank" rel="noopener">Who Is Growing</a></h3><p>A newsletter on which AI companies are actually growing, and by how much.</p></div>
+    </div>
+  </section>
+
   </div>
-  <footer class="legal"><span>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</span><span id="footNav" hidden><a href="/studio">Studio</a> · <a href="/pricing">Pricing</a> · <a href="/compare">Compare</a> · <a href="/connect">Use it in Claude or ChatGPT</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a> · <a href="/blog">Blog</a> · <a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></span></footer>
+  <footer class="legal"><span>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</span><span id="footNav" hidden><a href="/studio">Studio</a> · <a href="/pricing">Pricing</a> · <a href="/compare">Compare</a> · <a href="/connect">Use it in Claude or ChatGPT</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a> · <a href="/blog">Blog</a> · <a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></span><nav class="friends" aria-label="Friends"><b>Friends</b><a href="https://misterblocks.com" target="_blank" rel="noopener">Mister Blocks: LEGO AI build ideas</a><a href="https://videomakers.io" target="_blank" rel="noopener">VideoMakers: hire an AI video creator</a><a href="https://buildershq.net" target="_blank" rel="noopener">BuildersHQ: YouTube and search numbers</a><a href="https://instashare.to" target="_blank" rel="noopener">InstaShare: share a Claude Code session</a><a href="https://claudecoupons.com" target="_blank" rel="noopener">Claude Coupons</a><a href="https://whoisgrowing.com" target="_blank" rel="noopener">Who Is Growing: AI growth newsletter</a></nav></footer>
   </main>
 </div>
 
@@ -2650,12 +2679,110 @@ const PPL = PeopleRow.create({
 PPL.mount($('peopleRow'), { look: lookOf() });
 onLook = () => PPL.setLook(lookOf());
 
+// ---- @picture1, @picture2...: the attached pictures, named in the idea where each one goes. The
+// studio counts the pictures in the order they were attached (upload1...) and puts each one where
+// its sentence says; one to show as it is that the idea never names is sent back before any credit
+// is held (lib/attachments.js picturesProblem, the same function as here). A tile's name writes
+// it into the idea; "@" at the start of a word opens the list of pictures, arrows and Enter or Tab
+// pick, Esc closes. A picture taken out renumbers the ones after it in the idea.
+function picturesProblem(text, roles) {
+  const said = new Set([...String(text || '').matchAll(/(?<![\w@./])@picture(\d+)\b/gi)].map((m) => Number(m[1])));
+  const at = (i) => `@picture${i}`;
+  const and = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`);
+  const stray = [...said].filter((i) => i < 1 || i > roles.length).sort((a, b) => a - b);
+  if (stray.length) {
+    const named = `The idea names ${and(stray.map(at))}, but`;
+    if (!roles.length) return `${named} no picture is attached. Add ${stray.length === 1 ? 'it' : 'them'}, or take ${and(stray.map(at))} out of the idea.`;
+    const here = roles.length === 1 ? 'only one picture is attached (@picture1)'
+      : `only ${roles.length} pictures are attached (${and(roles.map((_, i) => at(i + 1)))})`;
+    return `${named} ${here}. Fix the idea, or add the picture.`;
+  }
+  const unsaid = roles.map((r, i) => (r === 'show' && !said.has(i + 1) ? i + 1 : 0)).filter(Boolean);
+  if (!unsaid.length) return '';
+  const one = unsaid.length === 1;
+  return `Say in the idea where ${and(unsaid.map(at))} ${one ? 'goes' : 'go'}, for example: “${at(unsaid[0])} on the last frame”. `
+    + `${one ? 'It is' : 'They are'} set to “Show it as it is”. If ${one ? 'it is' : 'they are'} only for Claude to look at, choose “What the place has” or “How we draw this” instead.`;
+}
+const PIC_AT = (() => {
+  const box = $('prompt'), list = $('picAt'), WORD = /(?<![\w@./])@picture(\d+)\b/gi;
+  let at = -1, sel = 0, shown = [];
+  const images = () => ATT.filter((a) => a.kind === 'image');
+  const roleWords = (r) => (PIC_ROLES.find(([v]) => v === (r || 'show')) || PIC_ROLES[0])[1];
+  const said = () => new Set([...box.value.matchAll(WORD)].map((m) => Number(m[1])));
+  function marks() {
+    const named = said(), all = images();
+    for (const t of document.querySelectorAll('#tray .tag')) {
+      const n = Number(t.dataset.n), open = (all[n - 1]?.role || 'show') === 'show' && !named.has(n);
+      t.classList.toggle('unsaid', open);
+      t.title = open ? `Shown as it is: write @picture${n} in the idea where it goes (click to write it)` : `Write @picture${n} in the idea (click)`;
+    }
+  }
+  function close() { list.hidden = true; at = -1; shown = []; box.removeAttribute('aria-activedescendant'); }
+  function open() {
+    const m = /(?:^|[^\w@./])@([A-Za-z0-9_]{0,31})$/.exec(box.value.slice(0, box.selectionStart));
+    if (!m || box.selectionStart !== box.selectionEnd) return close();
+    const q = m[1].toLowerCase();
+    shown = images().map((a, i) => ({ a, n: i + 1 })).filter(({ n }) => `picture${n}`.startsWith(q));
+    if (!shown.length) return close();  // another @word (a handle, a cast member): the idea's own
+    at = box.selectionStart - m[1].length - 1;
+    sel = Math.min(sel, shown.length - 1);
+    list.style.top = `${box.offsetTop + box.offsetHeight + 4}px`;
+    list.innerHTML = shown.map(({ a, n }, i) => `<button type="button" role="option" id="picAt-${i}" aria-selected="${i === sel}" data-i="${i}"><img src="${a.url}" alt=""><span class="who"><b>@picture${n}</b><span>${esc(roleWords(a.role))}</span></span></button>`).join('');
+    list.hidden = false;
+    box.setAttribute('aria-activedescendant', `picAt-${sel}`);
+    for (const b of list.querySelectorAll('[data-i]')) b.onmousedown = (e) => { e.preventDefault(); pick(+b.dataset.i); };
+  }
+  function write(from, to, n) {  // "@pictureN " in place of box.value[from, to)
+    const after = box.value.slice(to);
+    box.value = `${box.value.slice(0, from)}@picture${n}${/^\s/.test(after) ? '' : ' '}${after}`;
+    const caret = from + `@picture${n}`.length + 1;
+    box.setSelectionRange(caret, caret);
+    box.dispatchEvent(new Event('input')); box.focus();
+  }
+  function pick(i) {
+    const c = shown[i];
+    if (!c || at < 0) return;
+    const end = box.selectionStart + (box.value.slice(box.selectionStart).match(/^[A-Za-z0-9_]*/)[0].length);
+    const from = at;
+    close(); sel = 0;
+    write(from, end, c.n);
+  }
+  // a tile's name: written where the caret is, with a space before it when it follows a word
+  function insert(n) {
+    dropExample();
+    const from = box.selectionStart ?? box.value.length, to = box.selectionEnd ?? from;
+    const lead = from > 0 && /\S/.test(box.value[from - 1]) ? ' ' : '';
+    box.value = box.value.slice(0, from) + lead + box.value.slice(to);
+    write(from + lead.length, from + lead.length, n);
+  }
+  // picture `gone` is taken out: the idea's later ones move down one, and its own become words
+  function renumber(gone) {
+    const before = box.value;
+    box.value = before.replace(WORD, (w, d) => (Number(d) === gone ? 'the removed picture' : Number(d) > gone ? `@picture${Number(d) - 1}` : w));
+    if (box.value !== before) {
+      note(`The idea named @picture${gone}: it now says “the removed picture” there. Pictures after it moved down one.`);
+      box.dispatchEvent(new Event('input'));
+    }
+  }
+  box.addEventListener('input', () => { open(); marks(); });
+  box.addEventListener('click', open);
+  box.addEventListener('blur', () => setTimeout(close, 120));
+  box.addEventListener('keydown', (e) => {
+    if (list.hidden || e.metaKey || e.ctrlKey || !shown.length) return;
+    if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : shown.length - 1)) % shown.length; open(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pick(sel); }
+  });
+  return { insert, marks, renumber };
+})();
+
 function renderTray() {
   const tray = $('tray');
   tray.hidden = !ATT.length;
   $('attach').disabled = pics() >= MAX_PICS && docs() >= MAX_DOCS;
   let n = { image: 0, audio: 0, text: 0 };
   tray.replaceChildren(...ATT.map((a) => attEl(a, ++n[a.kind])));
+  PIC_AT.marks();
 }
 function attEl(a, n) {
   const busy = a.state === 'uploading';
@@ -2673,13 +2800,15 @@ function attEl(a, n) {
     f.className = `att pic${busy ? ' busy' : ''}${a.state === 'error' ? ' bad' : ''}`;
     f.title = a.error || '';
     const help = (r) => (PIC_ROLES.find(([v]) => v === r) || PIC_ROLES[0])[2];
-    f.innerHTML = `<div class="ph"><img alt="Picture ${n}" src="${a.url}"><button type="button" class="x" aria-label="Remove picture ${n}">&times;</button></div>` +
+    f.innerHTML = `<div class="ph"><img alt="Picture ${n}" src="${a.url}"><button type="button" class="x" aria-label="Remove picture ${n}">&times;</button>` +
+      `<button type="button" class="tag" data-n="${n}">@picture${n}</button></div>` +
       `<select aria-label="What picture ${n} is for">${PIC_ROLES.map(([v, w, h]) => `<option value="${v}" title="${esc(h)}"${(a.role || 'show') === v ? ' selected' : ''}>${w}</option>`).join('')}</select>`;
     f.querySelector('img').onclick = () => { $('peek').querySelector('img').src = a.url; $('peek').showModal(); };
     f.querySelector('.x').onclick = () => removeAtt(a);
+    f.querySelector('.tag').onclick = () => PIC_AT.insert(n);
     const pick = f.querySelector('select');
     pick.title = help(a.role);
-    pick.onchange = () => { a.role = pick.value; pick.title = help(a.role); shelf.save(); };
+    pick.onchange = () => { a.role = pick.value; pick.title = help(a.role); shelf.save(); PIC_AT.marks(); };
     return f;
   }
   const d = document.createElement('figure');
@@ -2705,6 +2834,7 @@ function attEl(a, n) {
 function removeAtt(a) {
   const i = ATT.indexOf(a);
   if (i < 0) return;
+  if (a.kind === 'image') PIC_AT.renumber(ATT.filter((x) => x.kind === 'image').indexOf(a) + 1);
   ATT.splice(i, 1);
   if (a.audio) a.audio.pause();
   URL.revokeObjectURL(a.url);
@@ -2989,6 +3119,10 @@ $('form').addEventListener('submit', async (e) => {
     sayForm('Your idea talks about pictures you attached, but none are attached. Add them with the + button, or press Make the film again to go on without.');
     return;
   }
+  // an @picture that is not attached, or a picture to show as it is with no place in the idea: the
+  // site refuses these too (lib/films.js), said here before anything is held
+  const unplaced = picturesProblem(prompt, ATT.filter((a) => a.kind === 'image').map((a) => a.role || 'show'));
+  if (unplaced) { sayForm(esc(unplaced)); $('prompt').focus(); return; }
   const cant = PPL.check();  // the permission tick, or a photo that failed
   if (cant) { sayForm(esc(cant)); return; }
   if (AUTH && !USER) { draft.save(); shelf.save(); return askSignIn(); }
