@@ -3613,6 +3613,14 @@ or after the previous line plus `gap`; word times come from the ElevenLabs chara
 alignment, minus `[audio tags]` and the tail. Writes `audio/vo/timeline.json` and
 `outputs/<slug>.srt/.vtt`.
 
+A line's `"gap_after"` overrides `gap` for the pause after that line only. A screenshot film's
+pauses are where the picture acts -- the click on send, a screen coming in -- so they differ line by
+line; five projects (agent-batch-filling, flat-to-fillable, team-roles, agent-weekly-forms,
+agent-merge-pdf) each kept a `layout.py` that rewrote every `start` from a hand table of pauses.
+Leave `start` off and put the pause on the line instead: a re-recorded line then moves everything
+after it, with no second pass. `--plan` estimates the same layout from word counts, and the last
+line's end against `duration` is printed (and warned when it runs past).
+
 `"hotwords"` go to Whisper as its initial prompt, so a brand name is heard as one word
 instead of costing its take a lower rank.
 

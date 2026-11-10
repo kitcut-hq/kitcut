@@ -512,6 +512,7 @@ def main():
         all(acc(a, b) < 0.9 for a, b in said_wrong),
         str([round(acc(a, b), 2) for a, b in said_wrong]),
     )
+
     def plain(a, b):
         return difflib.SequenceMatcher(None, vo_mod.words_of(a), vo_mod.words_of(b)).ratio()
 
@@ -1029,7 +1030,7 @@ def main():
         # the preview Sketch Studio shows while a film is made: the narration as its only sound,
         # laid on the film clock, and the words under the picture
         vdir = os.path.join(tmp, "example", "audio", "vo")
-        os.makedirs(vdir)
+        os.makedirs(vdir, exist_ok=True)  # a run in place leaves audio/vo
         line = os.path.join(vdir, "L00.wav")
         _sketch.write_wav(
             line, 0.2 * np.sin(np.arange(int(1.5 * _sketch.SR)) / _sketch.SR * 2 * np.pi * 220)

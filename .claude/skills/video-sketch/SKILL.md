@@ -52,6 +52,8 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    words the voice added, or its direction read aloud; `HARD-CUT` means no silence was found before
    the tail word — pick another take with `"pick"` on the line. Put brand names in `hotwords`.
    A long script: `--jobs 8` records eight takes at once (70 Gemini lines: 341 s -> 52 s).
+   Pauses that belong to the picture (a click, a screen change) go on the line as `"gap_after"`,
+   with no `start`: re-recording a line then moves the rest. Do not write a per-project layout.py.
 5. **Picture.** Write `film.js` scene by scene, every cue on a word -- all of them at the top with
    `const T = SK.cues({snap: [2, 'snap'], end: [5, null, 'e']})` (a miss warns instead of hiding
    behind a fallback second). Reach for the kit before drawing text furniture, a chart, a screen,

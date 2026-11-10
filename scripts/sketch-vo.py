@@ -12,8 +12,11 @@ Reads the `vo` block of `projects/<id>/sketch.json`:
 Per line it: renders N takes (cached by text fingerprint, so an edit re-renders only that line),
 cuts each take at the silence before a throwaway TAIL word, scores every take with Whisper
 against the script, picks the best (or the manifest's "pick"), and places the line on the
-film clock (its "start", else lead + gaps). It writes audio/vo/timeline.json (lines, files,
-word times from the ElevenLabs character alignment) and the captions next to it.
+film clock (its "start", else lead + gaps; a line's "gap_after" is the pause after THAT
+line, for a film whose pauses are where the picture acts -- a click, a screen change -- so a
+re-recorded line moves everything after it with no hand-kept table of starts). It writes
+audio/vo/timeline.json (lines, files, word times from the ElevenLabs character alignment) and
+the captions next to it.
 
 A film in another language sets "language" (ISO 639-1, e.g. "uk") and a TAIL in that language
 ("Добре."): an English tail on a Ukrainian line switches the voice's accent for the last words.
@@ -1064,7 +1067,7 @@ def main():
             else ""
         )
         print("  %2d  %5.2fs +%4.1fs  %s%s" % (i, st, est, who, spoken(ln["text"])[:90]))
-        t = st + est + vo.get("gap", 0.35)
+        t = st + est + ln.get("gap_after", vo.get("gap", 0.35))
     print("  estimated end %.1fs of %.1fs" % (t - vo.get("gap", 0.35), m["duration"]))
     if tts == "elevenlabs":
         print("  %d characters x %d takes = ~%d credits" % (chars, takes, chars * takes * cost))
@@ -1338,7 +1341,7 @@ def main():
                     for w in words
                 ]
                 placed.append(L)
-                t = L["end"] + vo.get("gap", 0.35)
+                t = L["end"] + ln.get("gap_after", vo.get("gap", 0.35))
             if t - vo.get("gap", 0.35) > m["duration"]:
                 print(
                     "  WARNING: voice ends at %.2fs, after the film's %.1fs"
