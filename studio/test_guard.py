@@ -95,6 +95,90 @@ def caps_cases(expect, A, B, C):
     expect("check: engine/collage.js is checked", "engine/collage.js" in said, True)
 
 
+def role_cases(expect):
+    """What a person said a picture is for is held (validate._shown): a "show" picture must be
+    drawn by film.js, a "scene" picture never is; nothing is asked before the picture is
+    written, and a film made in scenes is held once its last scene is."""
+    D = films.Film.create("a film with marked pictures", 10, "painted")
+    os.makedirs(D.path("inputs"), exist_ok=True)
+    with open(D.path("inputs", "roles.json"), "w", encoding="utf-8") as f:
+        json.dump({"upload1": "show", "upload2": "scene", "upload3": "style"}, f)
+
+    def js(code):
+        with open(D.path("film.js"), "w", encoding="utf-8") as f:
+            f.write(code)
+
+    expect("roles: nothing asked before film.js", validate.problems(D, "film.js"), [])
+    js("SK.setGround('white');\n")
+    got = validate.problems(D, "film.js")
+    expect(
+        "roles: a show picture film.js never draws stops the film",
+        (
+            len(got),
+            "upload1" in got[0],
+            "SK.image('upload1'" in got[0],
+            "Show it as it is" in got[0],
+        ),
+        (1, True, True, True),
+    )
+    expect("roles: the gate says it too", validate.gate(D) == got, True)
+    js("SK.setGround('white');\nSK.image('upload1', 0, -200, 600);\n")
+    expect("roles: drawn, the film may finish", validate.problems(D, "film.js"), [])
+    js('SK.setGround("white");\nSK.image( "upload1", 0, -200, 600);\n')
+    expect("roles: double quotes and a space are a draw too", validate.problems(D, "film.js"), [])
+    js("SK.image('upload1', 0, 0, 600);\nSK.image('upload2', 0, 400, 600);\n")
+    got = validate.problems(D, "film.js")
+    expect(
+        "roles: a scene picture on screen is refused",
+        (len(got), "upload2" in got[0], "never on screen" in got[0]),
+        (1, True, True),
+    )
+    js("SK.image('upload1', 0, 0, 600);\n// upload2: three windows, a palm tree\n")
+    expect(
+        "roles: a scene picture named in a comment is not on screen",
+        validate.problems(D, "film.js"),
+        [],
+    )
+    js("SK.image('upload3', 0, 0, 600);\nSK.image('upload1', 0, 0, 600);\n")
+    expect("roles: a style picture on screen is Claude's call", validate.problems(D, "film.js"), [])
+    # a film made in scenes: film.js comes first and draws nothing of the kind; the scenes do
+    os.makedirs(D.path("scenes"), exist_ok=True)
+    D.update(mode="scenes")
+    js("SK.setGround('white');\n")
+    with open(D.path("scenes.json"), "w", encoding="utf-8") as f:
+        json.dump({"scenes": [{"id": "s1"}, {"id": "s2"}]}, f)
+    expect(
+        "roles: in scenes, nothing asked while a scene is unwritten",
+        validate.problems(D, "film.js"),
+        [],
+    )
+    with open(D.path("scenes", "s1.js"), "w", encoding="utf-8") as f:
+        f.write("// the opening\n")
+    with open(D.path("scenes", "s2.js"), "w", encoding="utf-8") as f:
+        f.write("// the close\n")
+    got = validate.problems(D, "film.js")
+    expect(
+        "roles: in scenes, every scene written and none draws it",
+        (len(got), "upload1" in got[0]),
+        (1, True),
+    )
+    with open(D.path("scenes", "s2.js"), "w", encoding="utf-8") as f:
+        f.write("SK.image('upload2', 0, 0, 600);\nSK.image('upload1', 0, 0, 600);\n")
+    got = validate.problems(D, "film.js")
+    expect(
+        "roles: a scene draws the show picture, and the scene picture is refused there",
+        (len(got), "upload2" in got[0]),
+        (1, True),
+    )
+    with open(D.path("scenes", "s2.js"), "w", encoding="utf-8") as f:
+        f.write("SK.image('upload1', 0, 0, 600);\n")
+    expect("roles: in scenes, drawn", validate.problems(D, "film.js"), [])
+    # what the final render drops is read the same way
+    expect(
+        "roles: drawn_pictures is what the render keeps", validate.drawn_pictures(D), {"upload1"}
+    )
+
+
 def main():
     bad = []
 
@@ -231,6 +315,7 @@ def main():
         )
 
         caps_cases(expect, A, B, C)
+        role_cases(expect)
 
         # a link inside a film that leads to another film does not get through (real paths)
         link = A.path("link")

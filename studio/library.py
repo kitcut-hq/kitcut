@@ -110,7 +110,10 @@ PICTURE_EXT = ("png", "jpg", "webp")
 # film's attachments and in the MCP): no role is the old way, Claude reads it and decides
 PICTURE_ROLES = _sketch.ROLES
 ROLE_NOTE = {
-    "show": "show it as it is (SK.image); never repaint it, never a painting's ref",
+    "show": (
+        "show it as it is (SK.image); never repaint it, never a painting's ref. The film is not "
+        "finished until film.js draws it: the check and every tool say so until then"
+    ),
     "scene": (
         "what a place has: Read it, and write two or three of the things in it (a chair, three "
         "windows, palm trees) plainly into the prompt of the paintings of that place, no fine "
@@ -150,6 +153,8 @@ def write_roles(film, roles):
     got = _sketch.picture_roles(film.dir) | roles
     os.makedirs(os.path.dirname(p), exist_ok=True)
     _write_json(p, got)
+
+
 VOICE_LINES = 12  # a project's approved voice lines: every episode carries them all
 VOICE_KEY = re.compile(r"^[0-9a-f]{12}$")
 CLASHED = "clashed"  # a project library's members that did not merge: <name>/<film id>.js

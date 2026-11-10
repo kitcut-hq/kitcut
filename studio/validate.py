@@ -39,7 +39,15 @@ MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a w
 # writes must be here, or the guard puts it back and this refuses it on every check
 # "dry": a voice mixed with no room (_sketchaudio.vo_stereo)
 VO_KEYS = set(VO_PINNED) | {
-    "model", "voice", "style", "language", "lines", "cast", "jobs", "say", "dry",
+    "model",
+    "voice",
+    "style",
+    "language",
+    "lines",
+    "cast",
+    "jobs",
+    "say",
+    "dry",
 }
 # "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
 VO_LINE_KEYS = {"text", "start", "who", "pause"}
@@ -450,7 +458,7 @@ def problems(film, name):
         p = film.path("film.js")
         if os.path.exists(p) and os.path.getsize(p) > MAX_JS:
             return ["film.js is over %d KB; keep it short" % (MAX_JS // 1024)]
-        return []
+        return _shown(film)
     if name.startswith("scenes/"):  # a scene of a film made in scenes (studio/scenes.py)
         p = film.path(*name.split("/"))
         if os.path.exists(p) and os.path.getsize(p) > MAX_SCENE_JS:
@@ -653,6 +661,95 @@ def _scenes(d, film):
                 )
             elif dur > SCENE_MAX_S:
                 out.append("%s runs %.1f s: at most %d s -- split it" % (s["id"], dur, SCENE_MAX_S))
+    return out
+
+
+# the visitor's pictures, their project's, its brand's (brandkit.py: brand_pic_<name>; never its
+# logos, which the end card draws through SK.BRAND), and what Claude took from the web (web-grab.py)
+PICTURE = r"upload\d+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+|web_[a-z0-9_]+"
+# a picture put on screen: SK.image('upload3', ...) or SK.image("upload3", ...)
+ON_SCREEN = r"""\bSK\.image\(\s*(['"])(%s)\1"""
+
+
+def drawn_pictures(film):
+    """The pictures (PICTURE) the film's code names: film.js, the scenes of a film made in
+    scenes, a template's data files (content.json: a template names its pictures in its data,
+    not its code) and the cast. What drop_unused_uploads (agent.py) keeps in the manifest."""
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        m = {}
+    code = [film.path("film.js")]
+    code += [film.path(*str(rel).split("/")) for rel in (m.get("data") or {}).values()]
+    for d in ("scenes", "cast"):
+        if os.path.isdir(film.path(d)):
+            code += [film.path(d, n) for n in os.listdir(film.path(d)) if n.endswith(".js")]
+    used = set()
+    for p in code:
+        try:
+            with open(p, encoding="utf-8") as f:
+                used |= set(re.findall(r"\b(?:%s)\b" % PICTURE, f.read()))
+        except OSError:
+            pass
+    return used
+
+
+def _whole(film):
+    """Whether the film's picture is written: film.js, and for a film made in scenes every
+    scene scenes.json lists (the director writes film.js first, the scenes draw later)."""
+    if not os.path.exists(film.path("film.js")):
+        return False
+    if film.mode != "scenes":
+        return True
+    d, _ = _load(film, "scenes.json")
+    sc = d.get("scenes") if isinstance(d, dict) else None
+    if not isinstance(sc, list) or not sc:
+        return False
+    return all(
+        isinstance(s, dict)
+        and isinstance(s.get("id"), str)
+        and os.path.exists(film.path("scenes", s["id"] + ".js"))
+        for s in sc
+    )
+
+
+def _shown(film):
+    """What the person said a picture is for (inputs/roles.json, the site's Pictures tab), held
+    to: one marked "Show it as it is" is in the film, drawn by SK.image, or the film is not
+    finished; one marked "What the place has" is never on screen. A fashion film (2026-11-09)
+    marked its portrait "show", the prompt said "no other elements", and Claude kept the
+    photo off screen and painted a stranger: the role is the person's word, not a hint.
+    Checked once the picture is written (_whole): before that nothing draws anything yet."""
+    roles = _sketch.picture_roles(film.dir)
+    if not roles or not _whole(film):
+        return []
+    used = drawn_pictures(film)
+    code = ""
+    files = [film.path("film.js")]
+    if os.path.isdir(film.path("scenes")):
+        files += [
+            film.path("scenes", n)
+            for n in sorted(os.listdir(film.path("scenes")))
+            if n.endswith(".js")
+        ]
+    for p in files:
+        with contextlib.suppress(OSError), open(p, encoding="utf-8") as f:
+            code += f.read() + "\n"
+    out = []
+    for name, role in sorted(roles.items()):
+        if role == "show" and name not in used:
+            out.append(
+                "%s is marked \"Show it as it is\": put it on screen with SK.image('%s', x, y, w) "
+                "-- never repainted, never a painting's ref. The film is not finished without it"
+                % (name, name)
+            )
+        elif role == "scene" and re.search(ON_SCREEN % re.escape(name), code):
+            out.append(
+                "%s is marked \"What the place has\": it is never on screen. Take SK.image('%s') "
+                "out and write two or three of the things in it into the paintings' prompts"
+                % (name, name)
+            )
     return out
 
 

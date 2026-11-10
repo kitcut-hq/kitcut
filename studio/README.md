@@ -1080,7 +1080,12 @@ film it vouches is the person's. That film is an episode:
   take the same (`picture_roles: {upload id: role}` on `POST /api/films`). Both reach the film's
   `inputs\roles.json` (the studio's; Claude never writes `inputs\`) and Claude's note, and an
   attachment (`upload<n>`) is a painting's `ref` only when its role is `style`, a `scene` picture
-  never (`_sketch.project_picture`). Every episode gets them as
+  never (`_sketch.project_picture`). The roles are held, not hinted (`validate._shown`, in the
+  check after every save of film.js, before every tool and before the final render): a `show`
+  picture that film.js (or a scene) never draws, or a `scene` picture put on screen with
+  `SK.image`, stops the film until fixed -- a fashion film (2026-11-09) marked its portrait
+  `show`, read "no other elements" in the prompt, kept the photo off screen and painted a
+  stranger. Every episode gets them as
   `inputs\pic_<name>.*`, in the manifest as `pic_<name>`; the ones neither film.js nor the cast
   draws leave before the final render, like unused attachments. `once: true` seeds only the
   project's next episode: `_seed_pictures` removes it from the project's library right after, so
