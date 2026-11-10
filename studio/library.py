@@ -111,10 +111,9 @@ PICTURE_EXT = ("png", "jpg", "webp")
 PICTURE_ROLES = _sketch.ROLES
 ROLE_NOTE = {
     "show": (
-        "show it as it is (SK.image), somewhere in the film, even where the prompt seems to "
-        "leave no room for it (then a framed print, a card, or the closing frame, and say so at "
-        "the end); never repaint it, never a painting's ref. Its role is the person's word: a "
-        "film whose code never draws it is not finished"
+        "show it as it is (SK.image), exactly where the prompt puts it (the sentence that names "
+        "it, @picture1 for upload1); never repaint it, never a painting's ref. Its role is the "
+        "person's word: a film whose code never draws it is not finished"
     ),
     "scene": (
         "what a place has: Read it, and write two or three of the things in it (a chair, three "
@@ -146,6 +145,36 @@ SHOW_IF_USED = (
     "show it as it is (SK.image) where this episode uses it; never repaint it, never a "
     "painting's ref"
 )
+
+
+# "@picture2" in a prompt: the person's second attached picture (upload2; voice notes and text files
+# are not counted), named where it goes. kitcut.ai (lib/attachments.js picturesProblem) refuses a
+# prompt that never names a picture marked "show", or names one that is not attached
+PICTURE_MENTION = re.compile(r"(?<![\w@./])@picture(\d+)\b", re.I)
+
+
+def picture_places(prompt):
+    """{n: [sentence, ...]}: the prompt's sentences that name @picture<n>, in order, each once,
+    cut at 300 characters -- where the person said picture n goes."""
+    out = {}
+    for line in re.split(r"(?<=[.!?])\s+|\n+", prompt or ""):
+        line = " ".join(line.split())
+        for d in dict.fromkeys(PICTURE_MENTION.findall(line)):
+            out.setdefault(int(d), []).append(line if len(line) <= 300 else line[:297] + "...")
+    return out
+
+
+def place_line(film, name):
+    """Where the prompt puts an attached picture (upload<n>): ' The prompt names it @picture<n>:
+    "..."', or "" when it does not."""
+    m = re.fullmatch(r"upload(\d+)", name or "")
+    said = picture_places(film.record().get("prompt") or "").get(int(m.group(1))) if m else None
+    if not said:
+        return ""
+    return " The prompt names it @picture%s, and it goes where this says: %s" % (
+        m.group(1),
+        " / ".join('"%s"' % x for x in said),
+    )
 
 
 def role_line(role, painted=True, required=True):
@@ -1751,6 +1780,8 @@ def mentioned(client, project, prompt):
     named, typos = [], {}
     for w in MENTION.findall(prompt or ""):
         n = w.lower()
+        if PICTURE_MENTION.fullmatch("@" + n):  # the film's own picture (picture_places), no character
+            continue
         if n in live:
             if n not in named:
                 named.append(n)

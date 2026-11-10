@@ -826,21 +826,23 @@ def attached_note(film):
             % (label, validate.N.summary(said), validate.MAX_LINE_CHARS),
         ]
     for a in pics:
+        place = library.place_line(film, a["name"])  # the prompt's sentence that names it
         if a.get("role") in library.ROLE_NOTE:
             lines.append(
-                "- Picture %s (%sx%s): Read %s to see it. The person said what it is for%s."
+                "- Picture %s (%sx%s): Read %s to see it. The person said what it is for%s.%s"
                 % (
                     a["name"],
                     a.get("w"),
                     a.get("h"),
                     a["file"],
                     library.role_line(a["role"], bool(films.paint_kinds(film.caps))),
+                    place,
                 )
             )
             continue
         lines.append(
-            "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w)."
-            % (a["name"], a.get("w"), a.get("h"), a["file"], a["name"])
+            "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w).%s"
+            % (a["name"], a.get("w"), a.get("h"), a["file"], a["name"], place)
         )
     if pics:
         lines += [
@@ -851,12 +853,14 @@ def attached_note(film):
             "brief itself (a screenshot, a note, a sketch of the story: read it as the prompt). "
             "Where the person gave one a role above, the role is what it is for, whatever the "
             'prompt\'s wording seems to say ("no other elements", "use it as a reference"): '
-            "the studio checks the roles and the film does not finish without them. Where there "
-            "is no role, the prompt says, or you decide. Before you write anything, say in one "
-            "short sentence per picture what you took it to be and, for one with a role, where "
-            "it goes. A photo in a drawn film sits best framed, as a pinned print or a card, so "
-            "it belongs to the drawn world; several to show in a short film can share a shot (a "
-            "wall of prints, a row of cards). A picture you don't draw never leaves the studio.",
+            "the studio checks the roles and the film does not finish without them. The prompt "
+            "names the pictures @picture1, @picture2... (@picture1 is upload1): a picture to show "
+            "goes exactly where the sentence that names it says -- that shot, that moment, that "
+            "place in the frame -- and nowhere it does not. Where there is no role, the prompt "
+            "says, or you decide. Before you write anything, say in one short sentence per "
+            "picture what you took it to be and, for one with a role, where it goes. A photo in a "
+            "drawn film sits best framed, as a pinned print or a card, so it belongs to the drawn "
+            "world. A picture you don't draw never leaves the studio.",
         ]
         if film.mode == "scenes" and any(a.get("role") == "show" for a in pics):
             lines.append(

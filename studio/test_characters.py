@@ -309,6 +309,10 @@ def mentions():
     named, typos = library.mentioned(CL, P1, "@mum and @dad")
     check(named == ["dad"] and typos == {"mum": "mom"}, "a near miss is a typo", (named, typos))
     check(library.mentioned(CL, None, "@mom") == ([], {}), "outside a project: plain text")
+    check(
+        library.mentioned(CL, P1, "@picture1 on the wall, @Picture12 too") == ([], {}),
+        "@picture1 is the film's own picture, never a character or a typo",
+    )
     library.delete(CL, "kid0", P1)
     check(library.mentioned(CL, P1, "@kid0")[0] == [], "a removed character is named by nobody")
 

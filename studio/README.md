@@ -1089,7 +1089,7 @@ film it vouches is the person's. That film is an episode:
   that scene's pass is told what it is for (`validate.scene_pictures`). Held only where it can
   be kept: a film's own attachments (a project's `show` picture is shown when an episode uses
   it, and optional), and only while Claude writes a film for the first time (not a round, a
-  translation or a template's film). The agent's note says the role beats the prompt's wording.
+  translation or a template's film). The agent's note says the role beats the prompt's wording. The prompt names the attachments `@picture1`, `@picture2`... (`upload1`..., pictures only, in the order attached), and a `show` picture goes where the sentence naming it says: each picture's note quotes that sentence (`library.picture_places`, `place_line`), a scene's pass too. kitcut.ai refuses a prompt that never names a `show` attachment, or names one that is not attached, before any credit is held (its `lib/attachments.js` `picturesProblem`); `library.mentioned` never takes `@picture1` for a character.
   Replayed on the 42 finished films with roles (2026-11-09): 40 pass, and the two it stops are
   the two that broke a role -- a fashion film that painted a stranger instead of showing the
   portrait, and an app promo that left 5 of its 9 screenshots out. Every episode gets them as

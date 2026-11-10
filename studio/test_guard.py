@@ -231,6 +231,38 @@ def role_cases(expect):
         ),
         (True, True),
     )
+    expect(
+        "roles: the show note puts it where the prompt does, with no fallback place",
+        (
+            "exactly where the prompt puts it" in library.role_line("show"),
+            "framed print" in library.role_line("show"),
+        ),
+        (True, False),
+    )
+
+    # @picture1...: where the prompt puts each picture, told to Claude with its role
+    expect(
+        "roles: the prompt's sentences that name each picture",
+        library.picture_places(
+            "Open on the sea. Then @picture1 on the last frame, big!\n"
+            "@Picture3 is the hill's look; @picture1 @picture1 again. a@picture2.com"
+        ),
+        {1: ["Then @picture1 on the last frame, big!", "@Picture3 is the hill's look; @picture1 @picture1 again."], 3: ["@Picture3 is the hill's look; @picture1 @picture1 again."]},
+    )
+    P = films.Film.create("A bakery. @picture1 on the last frame, over the shop's door.", 10, "painted")
+    os.makedirs(P.path("inputs"), exist_ok=True)
+    with open(P.path("inputs", "roles.json"), "w", encoding="utf-8") as f:
+        json.dump({"upload1": "show", "upload2": "show"}, f)
+    expect(
+        "roles: each picture's place, as the prompt says it",
+        (library.place_line(P, "upload1"), library.place_line(P, "upload2"), library.place_line(P, "pic_logo")),
+        (' The prompt names it @picture1, and it goes where this says: "@picture1 on the last frame, over the shop\'s door."', "", ""),
+    )
+    expect(
+        "roles: a scene's pass is told the place too",
+        "over the shop's door" in validate.scene_pictures(P, {"shows": "upload1 over the door"}),
+        True,
+    )
 
 
 def main():
