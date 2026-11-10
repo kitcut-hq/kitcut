@@ -5267,7 +5267,7 @@ each a pure function of t. The file's header comment is the API, and it is all t
 in the system prompt (`agent.KIT_SECTION`; the code below `// studio: cut` stays in the film's
 `engine/kit.js`). Run `python scripts/check-kit.py` after touching it: every piece the header
 names is defined, the prompt carries the header and not the code, and the gallery
-(`config/sketch/kit-example`, every piece on one clock, clean for 24 s then crayon) renders with
+(`config/sketch/kit-example`, every piece on one clock, clean for 33 s then crayon) renders with
 no page error.
 
 **What is in it, and why each.** `studio/harvest.py` read 172 films and 234 Claude sessions of
@@ -5287,6 +5287,23 @@ and listed 1,476 hand-built components; the ones that recur across unrelated fil
 | light | `glow`, `particles`, `pulse`, `flash`, `dim`, `spotlight` | glows 21, particle systems 29 |
 | scenes, camera | `pages` (slide push wipe iris whip fade cut), `shots` (paintings under their own camera, kept inside the picture), `breath`, `read` (a real page read under its own camera), `screen`, `safe` | SK.scene used by none: every collage film rebuilt the same page carousel; every painted film the same shot list |
 | paths | `S.len`, `S.at`, `S.cut` | 5 films re-derived arc length |
+
+**People's limbs** (`SK.arm`, `SK.hand`, `SK.leg`, `SK.shoe`, 2026-11-10). The arms, hands, legs and
+shoes the owner approved for her own series' characters (Leo and Mikey of the Leo project, after
+some thirty rounds of review over two days), made general: any size and colour, front or side.
+Every rule in them is a mistake she sent a film back for: hands as balls, mittens or claws; an
+arm stretched to reach (it is two bones of fixed length now, and a target out of reach is
+reached with the arm straight -- the piece returns where the hand really is); an elbow inside
+the body; a forearm drawn under the upper arm; a knee or an elbow bent the wrong way; food
+floating over a fist (what a hand holds is drawn between the arm and the fingers, `held`); a
+steering-wheel grip from the side drawn inside out because the front view's grip turns the
+fingers in towards a held box; legs as one straight stroke and a square cuff where they meet
+the shorts; shoes as blobs. `SK.P.kid` and `SK.P.person` draw with them when the film has the
+kit (`kit: false` keeps the old stick limbs). The studio's brief names the mistakes (prompt.md,
+"Hands and feet are a person's") and its kit step says a new pose or hold reuses these and
+never draws its own hand; the reviewer reports them as `limbs`. Her standing rule: a new
+character's hands and shoes reuse what was approved for other projects, never a design from
+scratch. The gallery's page 11 shows every hand shape and both shoes, front and side.
 
 **Faces.** Crisp text defaults to Inter, which has no Cyrillic: the kit's font string falls back to
 Sofia Sans, then Balsamiq Sans, so a Ukrainian label sets in a sans and not the browser's serif
