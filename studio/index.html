@@ -185,6 +185,8 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .app.solo .side { display: none; }
 .legal { max-width: 1180px; margin: 40px auto 0; padding-top: 16px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; }
 .legal a { color: var(--ink-3); }
+.legal .friends { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding-top: 10px; border-top: 1px dashed var(--line); }
+.legal .friends b { color: var(--ink-2); font-weight: 600; margin-right: 2px; }
 
 /* ---- headings */
 .head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
@@ -492,6 +494,8 @@ div.stage { background: var(--panel); border: 1px solid var(--line); border-radi
 .about .cards div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
 .about h3 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
 .about .cards p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.about.friends h3 a { color: var(--accent-2); text-underline-offset: 3px; }
+.about.friends .cards { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .faq details { border-bottom: 1px solid var(--line); padding: 12px 0; }
 .faq summary { cursor: pointer; font-weight: 600; font-size: 15px; }
 .faq details p { margin: 8px 0 2px; color: var(--ink-2); font-size: 14.5px; max-width: 80ch; }
@@ -1010,8 +1014,19 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
     </div>
   </section>
 
+  <section class="about friends" id="friends">
+    <h2>From our friends</h2>
+    <p>A few sites we like, some ours and some run by friends. Worth a look if you make videos or run a channel.</p>
+    <div class="cards">
+      <div><h3><a href="https://misterblocks.com" target="_blank" rel="noopener">Mister Blocks</a></h3><p>Photograph your loose LEGO and get models built only from those bricks, with 3D step-by-step instructions. Free.</p></div>
+      <div><h3><a href="https://videomakers.io" target="_blank" rel="noopener">VideoMakers</a></h3><p>Rather hire a person? AI video creators found on X and Threads, in one directory.</p></div>
+      <div><h3><a href="https://buildershq.net" target="_blank" rel="noopener">BuildersHQ</a></h3><p>Your channel's YouTube numbers, keyword volumes and Search Console in one MCP server for Claude.</p></div>
+      <div><h3><a href="https://whoisgrowing.com" target="_blank" rel="noopener">Who Is Growing</a></h3><p>A newsletter on which AI companies are actually growing, and by how much.</p></div>
+    </div>
+  </section>
+
   </div>
-  <footer class="legal"><span>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</span><span id="footNav" hidden><a href="/studio">Studio</a> · <a href="/pricing">Pricing</a> · <a href="/compare">Compare</a> · <a href="/connect">Use it in Claude or ChatGPT</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a> · <a href="/blog">Blog</a> · <a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></span></footer>
+  <footer class="legal"><span>&copy; 2026 KitCut. Films written, drawn, narrated and scored by Claude.</span><span id="footNav" hidden><a href="/studio">Studio</a> · <a href="/pricing">Pricing</a> · <a href="/compare">Compare</a> · <a href="/connect">Use it in Claude or ChatGPT</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a> · <a href="/docs">Docs</a> · <a href="/blog">Blog</a> · <a href="mailto:hello@kitcut.ai">hello@kitcut.ai</a></span><nav class="friends" aria-label="Friends"><b>Friends</b><a href="https://misterblocks.com" target="_blank" rel="noopener">Mister Blocks: LEGO AI build ideas</a><a href="https://videomakers.io" target="_blank" rel="noopener">VideoMakers: hire an AI video creator</a><a href="https://buildershq.net" target="_blank" rel="noopener">BuildersHQ: YouTube and search numbers</a><a href="https://instashare.to" target="_blank" rel="noopener">InstaShare: share a Claude Code session</a><a href="https://claudecoupons.com" target="_blank" rel="noopener">Claude Coupons</a><a href="https://whoisgrowing.com" target="_blank" rel="noopener">Who Is Growing: AI growth newsletter</a></nav></footer>
   </main>
 </div>
 
