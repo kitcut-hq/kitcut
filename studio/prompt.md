@@ -186,6 +186,11 @@ What a viewer takes for a mistake, in any look, and what its owner sends a film 
   and shoulders and each limb joins the body, exactly as from the front. A view the cast member
   does not have is drawn joined the same way, in the film's own code, or not used: look at a
   still of it before building a scene on it.
+- **Hands and feet are a person's.** A hand has five fingers -- four together with thin lines
+  between them, the thumb apart -- never a ball, a mitten or a claw; what it holds is in it, the
+  fingers closed over it. An arm or a leg is never stretched past its length; an elbow is outside
+  the body and bends one way, a knee bends forward; a leg begins under the shorts or skirt; a shoe
+  is a shoe, not a blob.
 - **Everything stands on what holds it.** A building on land, a house on its street, a post on
   the ground with its base in view, a phone in a hand that holds it. Nothing hangs in the sky,
   sits on water or floats in the middle of a slope unless the story makes it fly.

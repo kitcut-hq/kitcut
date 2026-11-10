@@ -137,6 +137,40 @@
      SK.pulse(x, y, t0, o)            rings spreading and fading (a status dot, an arrival)
      SK.flash(t, t0, o) / SK.dim(a, col) / SK.spotlight(x, y, r, a)   whole-frame light changes
 
+   People's arms, hands, legs and shoes -- every person a film draws, a cast member or anyone else
+   (a character's own drawing gives its size, colours and pose; these draw its limbs). Each is the
+   approved one: never a ball, mitten or claw hand, a stretched arm or leg, an elbow inside the
+   body, a knee bending backwards, or a blob for a shoe. A new pose or a new way of holding reuses
+   these (and held); it does not draw its own hand.
+     SK.arm(sx, sy, hx, hy, o) -> a    shoulder to hand: an upper arm and a forearm of fixed length (o.upper
+                                      56, o.fore 64 at o.size 1: a four-year-old's), never stretched --
+                                      a.hand is where the hand really is; the elbow out and down (o.side: 1
+                                      the viewer's right arm, -1 the left; o.el, o.fold, o.elbow [x, y];
+                                      o.body: the body's half width (or fn(y)) the elbow stays outside,
+                                      from o.mid) or o.view 'side' (o.dir 1 | -1: it bends the way an
+                                      elbow bends); the forearm over the upper arm; o.w, skin, sleeve (a
+                                      colour) + sleeveLen (.21; 1 for a long sleeve), kind (SK.hand's),
+                                      gw (how big a held thing is), held(hand, tip, ang) (drawn between
+                                      the arm and the fingers), hand: false (a.drawHand() draws it later,
+                                      over what is drawn in between). a: {hand, elbow, ang, tip}
+     SK.hand(x, y, ang, o)            a five-finger hand, its middle at (x, y), pointing along ang: o.kind
+                                      'relax' | 'flat' (open, fingers together) | 'open' (spread: a wave) |
+                                      'fist' | 'grip' (round what it holds, thumb on top) | 'point' (the
+                                      first finger) | 'cupped' (palm up); size, skin, side, thumb (1 | -1)
+     SK.leg(hx, hy, ax, ay, o) -> l    hip to ankle: a thigh and a shin of fixed length (o.thigh, o.shin 50),
+                                      never stretched, the knee forward: from the front o.z (how far the
+                                      foot is towards us: sitting, a step) and o.pole; o.view 'side' with
+                                      o.dir; one smooth stroke -- draw legs before the shorts or skirt, so
+                                      its hem is where a leg begins; o.w (15), col, size, shoe (SK.shoe's
+                                      options, or false), ground (the y a foot stands at). l: {knee, ankle,
+                                      foot}. Sitting puts the hips on the seat, the feet on the ground.
+     SK.shoe(x, y, o)                 a shoe on the ground at (x, y), the kind the person would wear there:
+                                      o.kind 'sneaker' | 'clog' | 'boot' (a tall rain or winter boot) |
+                                      'sandal' (the bare foot under a strap) | 'slipper' (a soft house
+                                      slipper) | 'dress' (a smart low shoe) | 'heel' | 'bare' (a bare foot,
+                                      five toes); view 'front' | 'side' (dir, rot); col (each kind has a
+                                      plain default), dark, sole, lace, sock, skin, size, side
+
    Paths: S.len(pts), S.at(pts, u) -> [x, y, angle], S.cut(pts, u0, u1)
 */
 // studio: cut -- the code, in the film's engine/kit.js: the header above is the studio's reference
@@ -1404,6 +1438,241 @@
     const c = ctx(), v = SK.view || { x0: -SK.W, x1: SK.W, y0: -SK.H, y1: SK.H };
     c.save(); c.globalAlpha *= a; c.fillStyle = o.col ?? '#000000';
     c.beginPath(); c.rect(v.x0 - 50, v.y0 - 50, v.x1 - v.x0 + 100, v.y1 - v.y0 + 100); c.arc(x, y, r, 0, TAU, true); c.fill('evenodd'); c.restore();
+  };
+
+  /* ================================================================ people's limbs
+     The arms, hands, legs and shoes a series' owner approved for her characters (Leo and Mikey of
+     the "Leo" project, 2026-11-09..10, after some thirty rounds of review), made general: any size,
+     any colour, front or side. Reuse them for every person instead of drawing a new hand, arm, leg
+     or shoe -- each rule below is a mistake she sent a film back for:
+       - an arm or a leg is two bones of fixed length, never stretched: a hand or foot set farther
+         than it reaches is reached with the limb straight, and the piece returns where it really is
+       - an elbow is outside the body; it bends one way only; a knee bends forward
+       - the forearm is drawn over the upper arm and the sleeve; one smooth stroke, no seam or mark
+         at a joint
+       - a hand has five fingers: four together with thin lines between them, the thumb apart; a
+         wave spreads them; a point is the first finger; never a ball, a mitten or a claw
+       - what a hand holds is drawn between the arm and the fingers (held), so the fingers close
+         over it; from the side a grip carries on along the forearm, thumb on top
+       - a leg begins under the shorts or skirt (draw the legs first); a shoe is a shoe, not a blob,
+         and of the kind the person and the moment call for (SK.shoe has eight) */
+  const lSeg = (x0, y0, x1, y1) => [[x0, y0], [(x0 + x1) / 2, (y0 + y1) / 2], [x1, y1]];
+  // a finger from (x, y) at angle a, l long, bent by c (radians, towards -y) along its length
+  const lFinger = (x, y, a, l, c = 0) => { const p = [[x, y]]; let px = x, py = y, aa = a; for (let i = 0; i < 3; i++) { px += Math.cos(aa) * l / 3; py += Math.sin(aa) * l / 3; p.push([px, py]); aa += c / 3; } return p; };
+  const lStroke = (pts, w, col, seed) => { SK.ink(pts, { w: w + 7, seed, jit: 1, taper: false, dbl: false }); SK.ink(pts, { w, col, seed, jit: 1, taper: false, dbl: false }); };
+  // [pts, w] pieces in hand space: +x out along the forearm, +y the thumb's side (armw: the wrist)
+  function handParts(kind, gw, armw) {
+    const P = [], L = [], FW = 5.6;
+    for (let x = -4; x <= 11; x += 1.5) P.push([lSeg(x - .5, 0, x + .5, 0), lerp(armw, 18.5, clamp((x + 4) / 15) ** .8)]); // the wrist widening into the palm
+    if (kind === 'open') { // spread: a wave
+      [[-7.4, -.5, 13], [-2.6, -.17, 15.5], [2.2, .13, 15], [6.4, .44, 12.5]].forEach(([y, a, l]) => P.push([lFinger(10, y, a, l, -.04), FW]));
+      P.push([lFinger(3, 7, 1.0, 11, -.2), 6.2]);
+    } else if (kind === 'flat') { // open, the four fingers held together, thin lines between them, the thumb out
+      [[-6, 11, -.05], [-2, 13.5, -.02], [2, 15, .01], [5.9, 13.5, .04]].forEach(([y, l, a2]) => P.push([lFinger(10, y, a2, l, 0), FW]));
+      P.push([lFinger(3, 7, 1.0, 11, -.2), 6.2]);
+      for (const y of [-4, 0, 3.95]) L.push(lSeg(13, y, 21.5, y + y * .02));
+    } else if (kind === 'grip') { // closed round what it holds, the thumb on top
+      const gk = clamp((gw ?? 120) / 120, .5, 1);
+      [[-5.6, 13], [-1.8, 14.5], [2, 14], [5.6, 12]].forEach(([y, l]) => P.push([lFinger(10, y, .05, l * gk, .35 + (1 - gk)), FW]));
+      P.push([lFinger(5, 7, -.1, 10, -.2), 6.2]);
+      for (const y of [-3.7, .1, 3.8]) L.push(lFinger(14, y, .05, 8 * gk, .3));
+    } else if (kind === 'fist') { // four knuckles, the thumb across them
+      [[-6.6], [-2.2], [2.2], [6.4]].forEach(([y]) => P.push([lSeg(11, y, 15, y), 7]));
+      P.push([lFinger(5, 7.5, .1, 10, -.5), 6.2]);
+      for (const y of [-4.4, 0, 4.4]) L.push(lSeg(14, y, 18, y));
+    } else if (kind === 'point') { // the first finger (beside the thumb) out, the other three curled under it
+      P.push([lFinger(10, 4.2, .03, 16, 0), FW]);
+      [[.2], [-3.6], [-7]].forEach(([y]) => P.push([lSeg(11, y, 14.5, y), 6.4]));
+      P.push([lFinger(5, 8, .25, 8, -.35), 6.2]);
+      for (const y of [-1.7, -5.3]) L.push(lSeg(13.5, y, 17.5, y));
+    } else { // relax: fingers together, hanging easy, a little curled
+      [[-6.2, 11], [-2.1, 12.5], [2, 12], [5.9, 10]].forEach(([y, l]) => P.push([lFinger(10, y, .04, l, .22), FW]));
+      P.push([lFinger(5, 7, .55, 9, -.1), 6.2]);
+      for (const y of [-4.1, 0, 4]) L.push(lFinger(14, y, .04, 7, .2));
+    }
+    return { P, L };
+  }
+  /** A five-finger hand with its middle at (x, y), pointing along ang from the wrist. */
+  SK.hand = function (x, y, ang, o = {}) {
+    const z = o.size ?? 1, HK = 1.35 * z, EDGE = 7 / HK, skin = o.skin ?? C().skin, seed = o.seed ?? 3600, sd = o.side ?? 1;
+    const [kind, flip] = String(o.kind ?? 'relax').split(':');
+    if (kind === 'cupped') { // palm up, the fingers towards us, the thumb out at the side: something resting on it
+      const P = [[lSeg(-6, 0, 6, 1), 22], [lSeg(10, -3, 21, -10), 6.5]];
+      [[-8.4, 18], [-2.8, 21], [2.8, 22], [8.4, 20]].forEach(([fx, l]) => P.push([lSeg(fx, 7, fx * 1.05, 7 + l * .6), 6]));
+      SK.at(x, y, 0, [sd * HK, HK], () => {
+        for (const [pts, w] of P) SK.ink(pts, { w: w + EDGE, seed, jit: .35, taper: false, dbl: false });
+        for (const [pts, w] of P) SK.ink(pts, { w, col: skin, seed, jit: .35, taper: false, dbl: false });
+        SK.ink(S.arc(0, -3, 8, .35, Math.PI - .35), { w: 2 / HK, seed: seed + 5, jit: .2, dbl: false, taper: false, alpha: .6 });
+        for (const fx of [-5.6, 0, 5.6]) SK.ink(S.line(fx, 11, fx * 1.05, 19.5), { w: 1.8 / HK, seed: seed + 9 + fx, jit: .15, dbl: false, taper: false, alpha: .75 });
+      });
+      return;
+    }
+    const px = -Math.sin(ang), py = Math.cos(ang), wrist = o.wrist ?? 14 * z;
+    const ts = o.thumb ?? (kind === 'grip' ? (py < 0 ? 1 : -1) : ((px * -sd + py * -.5) >= 0 ? 1 : -1) * (flip === 'out' ? -1 : 1));
+    const { P, L } = handParts(kind, o.gw, wrist / HK);
+    const wx = x - Math.cos(ang) * 6 * z, wy = y - Math.sin(ang) * 6 * z, at = (fn) => SK.at(wx, wy, ang, [HK, ts * HK], fn);
+    at(() => { for (const [pts, w] of P) SK.ink(pts, { w: w + EDGE, seed, jit: .35, taper: false, dbl: false }); });
+    if (o.from) { // over the wrist's seam: the arm's own skin, back along the forearm
+      const fa = Math.atan2(y - o.from[1], x - o.from[0]), fl = Math.min(20 * z, Math.hypot(x - o.from[0], y - o.from[1]) * .7);
+      SK.ink(S.line(wx - Math.cos(fa) * fl, wy - Math.sin(fa) * fl, wx + Math.cos(fa) * 3, wy + Math.sin(fa) * 3), { w: wrist, col: o.cuff ?? skin, seed, jit: 0, taper: false, dbl: false });
+    }
+    at(() => {
+      for (const [pts, w] of P) SK.ink(pts, { w, col: skin, seed, jit: .35, taper: false, dbl: false });
+      L.forEach((pts, i) => SK.ink(pts, { w: 2 / HK, seed: seed + 5 + i, jit: .2, dbl: false, taper: false, alpha: .75 }));
+    });
+  };
+  /** An arm from the shoulder (sx, sy) to the hand at (hx, hy): an upper arm and a forearm. */
+  SK.arm = function (sx, sy, hx, hy, o = {}) {
+    const z = o.size ?? 1, up = o.upper ?? 56 * z, fo = o.fore ?? 64 * z, R = up + fo, sd = o.side ?? 1, w = o.w ?? 14 * z;
+    const skin = o.skin ?? C().skin, seed = o.seed ?? 3700, kind = String(o.kind ?? 'relax'), side = o.view === 'side';
+    let dx = hx - sx, dy = hy - sy, d = Math.hypot(dx, dy) || 1;
+    if (d > R - 3) { const r = R - 3; hx = sx + dx * r / d; hy = sy + dy * r / d; dx = hx - sx; dy = hy - sy; d = r; } // never stretched
+    let E = o.elbow;
+    if (!E) {
+      const al = (up * up - fo * fo + d * d) / (2 * d), h = Math.sqrt(Math.max(0, up * up - al * al)), ux = dx / d, uy = dy / d, bx = sx + ux * al, by = sy + uy * al;
+      const c = [[bx - uy * h, by + ux * h], [bx + uy * h, by - ux * h]];
+      if (side) { // an elbow bends one way: from the upper arm to the forearm it turns forward (towards o.dir)
+        const dir = o.dir ?? 1, cr = (q) => ((q[0] - sx) * (hy - q[1]) - (q[1] - sy) * (hx - q[0])) * dir;
+        E = cr(c[0]) <= cr(c[1]) ? c[0] : c[1];
+      } else { // the elbow down and out (el: how much out over down; fold: how much of the bend shows)
+        const el = o.el ?? .6, fold = o.fold ?? .45, score = ([ex, ey]) => ey + el * sd * ex, pk = score(c[0]) >= score(c[1]) ? c[0] : c[1];
+        E = [lerp(bx, pk[0], fold), lerp(by, pk[1], fold)];
+      }
+    }
+    if (!side && o.body !== undefined) { // never inside the body: at or past its side (its half width at the elbow's height)
+      const half = typeof o.body === 'function' ? o.body(E[1]) : o.body, mid = o.mid ?? 0;
+      if (sd * (E[0] - mid) < half) E = [mid + sd * half, E[1]];
+    }
+    const fl = Math.hypot(hx - E[0], hy - E[1]), kk = clamp((fl / fo - .3) / .5);
+    const cmx = E[0] + (E[0] - (sx + hx) / 2) * kk, cmy = E[1] + (E[1] - (sy + hy) / 2) * kk;
+    const q = (t) => [(1 - t) * (1 - t) * sx + 2 * (1 - t) * t * cmx + t * t * hx, (1 - t) * (1 - t) * sy + 2 * (1 - t) * t * cmy + t * t * hy];
+    const part = (a, b, n = 8) => Array.from({ length: n + 1 }, (_, i) => q(a + (b - a) * i / n));
+    const long = o.sleeve && (o.sleeveLen ?? .21) >= 1, armCol = long ? o.sleeve : skin;
+    lStroke(part(0, .52), w, armCol, seed); // the upper arm
+    if (o.sleeve && !long) lStroke(part(0, Math.min(.5, o.sleeveLen ?? .21)), w + 12 * z, o.sleeve, seed + 1); // its sleeve
+    SK.ink(part(.5, 1), { w: w + 7, seed: seed + 5, jit: 1, taper: false, dbl: false }); // the forearm, in front
+    SK.ink(part(.44, 1), { w, col: armCol, seed: seed + 5, jit: 1, taper: false, dbl: false });
+    const base = kind.split(':')[0];
+    const ang = o.ang ?? (base === 'grip' && !side ? (sd > 0 ? Math.PI - .12 : .12) : base === 'cupped' ? -Math.PI / 2 : Math.atan2(hy - cmy, hx - cmx));
+    const out = { hand: [hx, hy], elbow: E, ang, tip: [hx + Math.cos(ang) * 20 * z, hy + Math.sin(ang) * 20 * z] };
+    if (typeof o.held === 'function') o.held(out.hand, out.tip, ang);
+    const drawHand = () => SK.hand(hx, hy, ang, { kind, size: z, skin, side: sd, seed: seed + 2, gw: o.gw, wrist: w, from: [cmx, cmy], cuff: long ? o.sleeve : skin });
+    if (o.hand === false) out.drawHand = drawHand; else drawHand();
+    return out;
+  };
+  /** A leg from the hip (hx, hy) to the ankle (ax, ay): a thigh and a shin, and its shoe. */
+  SK.leg = function (hx, hy, ax, ay, o = {}) {
+    const z = o.size ?? 1, l1 = o.thigh ?? 50 * z, l2 = o.shin ?? 50 * z, w = o.w ?? 15 * z, col = o.col ?? C().skin, seed = o.seed ?? 3800, sd = o.side ?? 1;
+    let K, A, k2, a2, h2 = [hx, hy];
+    if (o.view === 'side') { // in the picture's plane, the knee forward (towards o.dir)
+      const dir = o.dir ?? 1; let dx = ax - hx, dy = ay - hy, d = Math.hypot(dx, dy) || 1; const R = l1 + l2 - .5;
+      if (d > R) { ax = hx + dx * R / d; ay = hy + dy * R / d; dx = ax - hx; dy = ay - hy; d = R; }
+      const al = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - al * al)), ux = dx / d, uy = dy / d;
+      const c1 = [hx + ux * al - uy * h, hy + uy * al + ux * h], c2 = [hx + ux * al + uy * h, hy + uy * al - ux * h];
+      k2 = dir * c1[0] > dir * c2[0] ? c1 : c2; a2 = [ax, ay];
+    } else { // seen from the front: the knee placed in 3D (the foot o.z towards us), seen from a little above
+      const H = [hx, hy, 0], P = o.pole ?? [sd * .25, 0, 1]; A = [ax, ay, o.z ?? 0];
+      let v = [A[0] - H[0], A[1] - H[1], A[2] - H[2]], d = Math.hypot(v[0], v[1], v[2]); const R = l1 + l2 - .5;
+      if (d > R) { A = [H[0] + v[0] * R / d, H[1] + v[1] * R / d, H[2] + v[2] * R / d]; v = [A[0] - H[0], A[1] - H[1], A[2] - H[2]]; d = R; }
+      const dd = Math.max(d, 1e-3), u = v.map((q) => q / dd), al = (l1 * l1 - l2 * l2 + d * d) / (2 * dd), hh = Math.sqrt(Math.max(0, l1 * l1 - al * al));
+      const pu = P[0] * u[0] + P[1] * u[1] + P[2] * u[2]; let pp = P.map((q, k) => q - pu * u[k]); const pl = Math.hypot(pp[0], pp[1], pp[2]) || 1; pp = pp.map((q) => q / pl);
+      K = [H[0] + u[0] * al + pp[0] * hh, H[1] + u[1] * al + pp[1] * hh, H[2] + u[2] * al + pp[2] * hh];
+      const gy = o.ground ?? ay, tilt = o.tilt ?? .5, pj = ([a, b, c]) => [a, b + c * tilt * clamp((gy - b) / (60 * z))]; // what is on the ground stays on it
+      k2 = pj(K); a2 = pj(A);
+    }
+    lStroke([h2, [(h2[0] + k2[0]) / 2, (h2[1] + k2[1]) / 2], k2, [(k2[0] + a2[0]) / 2, (k2[1] + a2[1]) / 2], a2], w, col, seed); // one stroke, no mark at the knee
+    const foot = [a2[0], a2[1] + 12 * z];
+    if (o.shoe !== false) {
+      const sh = o.shoe || {};
+      if (o.view === 'side') { const th = Math.atan2(a2[1] - k2[1], a2[0] - k2[0]), lift = clamp(((o.ground ?? ay) - a2[1]) / (20 * z)); SK.shoe(foot[0], foot[1], { size: z, ...sh, view: 'side', dir: o.dir ?? 1, rot: (th - Math.PI / 2) * lift * .8 * (o.dir ?? 1) }); }
+      else SK.shoe(foot[0], foot[1], { size: z, side: sd, ...sh });
+    }
+    return { knee: k2, ankle: a2, foot };
+  };
+  /** A shoe standing on the ground at (x, y), under its ankle: whatever the person would wear there. */
+  const SHOE_COL = { sneaker: '#3f86dc', clog: '#fbd437', boot: '#6b4a33', sandal: '#c98d55', slipper: '#9fb8d8', dress: '#3b2a22', heel: '#c0392b' };
+  SK.shoe = function (x, y, o = {}) {
+    const z = o.size ?? 1, kind = o.kind ?? 'sneaker', seed = o.seed ?? 3900, skin = o.skin ?? C().skin;
+    const w = (p, c, sd2) => SK.wash(p, c, { seed: sd2, dx: 0, dy: 0, tex: false }), k = (p, sd2, wd = 4.5) => SK.ink(p, { w: wd, seed: sd2, dbl: false });
+    const col = o.col ?? SHOE_COL[kind] ?? '#3b3f4a', dk = o.dark ?? SK.mix(col, '#000000', .2), sole = o.sole ?? (kind === 'sneaker' ? '#ffffff' : dk);
+    const toes = (pts, sd2) => pts.forEach(([tx, ty, r], i) => { w(S.ellC(tx, ty, r, r), skin, sd2 + i); SK.ink(S.arc(tx, ty, r, -.2, Math.PI + .2), { w: 2.6, seed: sd2 + 9 + i, dbl: false }); });
+    if (o.view === 'side') { // in profile, the toe towards o.dir, turned by o.rot about the ankle; drawn on the ground (y 0) under it
+      const dir = o.dir ?? 1;
+      SK.at(x, y - 12 * z, o.rot ?? 0, [dir * z, z], () => SK.at(0, 12, 0, 1, () => {
+        if (kind === 'clog') SK.at(6, 0, 0, 1, () => { // Leo's clog: a rounded toe, a thick sole, holes, the strap round the heel
+          SK.ink(S.path([['M', -8, -24], ['Q', -24, -30, -27, -12]]), { w: 7, col: dk, seed: seed + 7, dbl: false, taper: false });
+          const so = S.path([['M', -26, -7], ['L', 45, -7], ['Q', 51, -3, 46, 2], ['L', -25, 2], ['Q', -30, -2, -26, -7], ['Z']]); w(so, dk, seed); k(so, seed + 1, 4);
+          const up = S.path([['M', -24, -6], ['Q', -27, -26, -12, -29], ['L', 2, -29], ['Q', 12, -27, 22, -22], ['Q', 46, -17, 46, -6], ['Z']]); w(up, col, seed + 2); k(up, seed + 3);
+          for (const [hx, hy] of [[10, -21], [20, -18], [30, -14], [16, -12], [27, -9]]) w(S.ellC(hx, hy, 2.6, 2.2), dk, seed + 4);
+        });
+        else if (kind === 'boot') SK.at(4, 0, 0, 1, () => { // Leo's rain boot: a tall shaft, a rim, a ribbed sole
+          const b = S.path([['M', -22, -60], ['L', 22, -60], ['L', 23, -26], ['Q', 42, -24, 46, -8], ['L', 46, 0], ['L', -24, 0], ['Q', -26, -30, -22, -60]]);
+          w(b, col, seed); w(S.poly([[-24, -9], [46, -9], [46, 1], [-24, 1]], true), dk, seed + 1); k(b, seed + 2);
+          const rim = S.rrect(-25, -68, 50, 12, 5); w(rim, dk, seed + 3); k(rim, seed + 4, 4);
+          SK.ink(S.line(-11, -50, -11, -24), { w: 4, col: 'rgba(255,255,255,.6)', seed: seed + 6, dbl: false });
+        });
+        else if (kind === 'sandal') SK.at(8, 0, 0, .52, () => { // Mom's slide: a flat sole, the bare foot, one wide strap
+          const so = S.rrect(-82, -12, 128, 16, 8); w(so, dk, seed); k(so, seed + 1);
+          const ft = S.path([['M', 30, -40], ['L', 0, -40], ['Q', -30, -30, -66, -22], ['Q', -82, -18, -78, -10], ['L', 34, -10], ['Z']]);
+          SK.at(-16, 0, 0, [-1, 1], () => { w(ft, skin, seed + 2); k(ft, seed + 3); });
+          const st = S.path([['M', -18, -10], ['Q', -12, -42, 14, -38], ['Q', 28, -36, 32, -10], ['Z']]); w(st, col, seed + 4); k(st, seed + 5);
+        });
+        else if (kind === 'bare') { // a bare foot: heel, arch, the toes in front
+          const ft = S.path([['M', -22, 0], ['Q', -26, -14, -16, -26], ['L', -6, -28], ['Q', 8, -16, 30, -12], ['Q', 46, -8, 44, 0], ['Z']]); w(ft, skin, seed); k(ft, seed + 1);
+          for (const tx of [36, 28]) SK.ink(S.arc(tx, -3, 4, Math.PI * 1.1, Math.PI * 1.9), { w: 2.4, seed: seed + tx, dbl: false });
+        } else if (kind === 'slipper') { // a soft house slipper, its opening a lighter rim
+          const sl = S.path([['M', -24, 2], ['Q', -30, -18, -10, -22], ['Q', 20, -26, 40, -10], ['Q', 50, -2, 42, 2], ['Z']]); w(sl, col, seed); k(sl, seed + 1);
+          SK.ink(S.path([['M', -18, -18], ['Q', -4, -14, 10, -20]]), { w: 5, col: SK.mix(col, '#ffffff', .45), seed: seed + 2, dbl: false });
+        } else if (kind === 'dress') { // a smart low shoe: a smooth upper, a low heel, a shine
+          const up = S.path([['M', -22, -4], ['L', -22, -22], ['Q', -6, -24, 8, -18], ['Q', 30, -14, 44, -7], ['Q', 49, -1, 40, 0], ['L', -22, 0], ['Z']]); w(up, col, seed); k(up, seed + 1);
+          const hl = S.rrect(-24, -5, 14, 7, 2); w(hl, dk, seed + 2); k(hl, seed + 3, 3.5);
+          SK.ink(S.path([['M', 14, -15], ['Q', 26, -12, 34, -8]]), { w: 3, col: 'rgba(255,255,255,.5)', seed: seed + 4, dbl: false });
+        } else if (kind === 'heel') { // a heeled shoe: a pointed toe, the arch lifted, a slim heel
+          const up = S.path([['M', -20, -30], ['Q', -6, -30, 6, -18], ['Q', 26, -8, 46, -2], ['Q', 48, 2, 40, 2], ['L', 14, 2], ['Q', 0, -10, -16, -14], ['L', -20, -14], ['Z']]); w(up, col, seed); k(up, seed + 1);
+          SK.ink(S.line(-18, -14, -17, 2), { w: 5, col: dk, seed: seed + 2, dbl: false, taper: false });
+        } else SK.at(6, 0, 0, 1.12, () => { // Mikey's sneaker: a low toe box on its sole, the laces
+          const p = S.path([['M', -22, -30], ['L', 6, -30], ['Q', 16, -18, 30, -15], ['Q', 44, -12, 44, -2], ['L', 44, 2], ['L', -24, 2], ['Q', -27, -14, -22, -30]]);
+          w(p, col, seed); w(S.poly([[-24, -5], [44, -5], [44, 3], [-24, 3]], true), sole, seed + 3); k(p, seed + 1);
+          for (const lx of [4, 14]) SK.ink(S.line(lx - 4, -26 + lx * .4, lx + 6, -22 + lx * .4), { w: 3, col: o.lace ?? '#ffffff', seed: seed + lx, dbl: false });
+        });
+      }));
+      return;
+    }
+    const sd = o.side ?? 1; // from the front, the toe a little towards its own side
+    SK.at(x + sd * 5 * z, y, 0, [sd * z, z], () => {
+      if (kind === 'clog') { // Leo's clog: a wide rounded toe on a thick flat sole, holes on top
+        const so = S.rrect(-31, -8, 62, 10, 4); w(so, dk, seed); k(so, seed + 1, 4);
+        const up = S.path([['M', -29, -6], ['Q', -33, -28, -10, -31], ['Q', 14, -33, 28, -22], ['Q', 34, -13, 30, -6], ['Z']]); w(up, col, seed + 2); k(up, seed + 3);
+        for (const [hx, hy] of [[-16, -22], [-4, -25], [8, -24], [19, -19], [-10, -14], [4, -15], [17, -11]]) w(S.ellC(hx, hy, 2.8, 2.4), dk, seed + 4);
+        for (const s2 of [-1, 1]) w(S.ellC(s2 * 25, -11, 2.6, 2.6), dk, seed + 5);
+      } else if (kind === 'boot') { // the rain boot from the front: the shaft, its rim, the toe, the sole
+        const sh = S.rrect(-20, -64, 40, 50, 8); w(sh, col, seed); k(sh, seed + 1);
+        const toe = S.path([['M', -28, -2], ['Q', -30, -24, -18, -26], ['L', 18, -26], ['Q', 30, -24, 28, -2], ['Z']]); w(toe, col, seed + 2); k(toe, seed + 3);
+        const so = S.rrect(-30, -6, 60, 8, 3); w(so, dk, seed + 4); k(so, seed + 5, 4);
+        const rim = S.rrect(-23, -70, 46, 10, 4); w(rim, dk, seed + 6); k(rim, seed + 7, 4);
+        SK.ink(S.line(-10, -54, -10, -28), { w: 4, col: 'rgba(255,255,255,.6)', seed: seed + 8, dbl: false });
+      } else if (kind === 'sandal' || kind === 'bare') { // the bare foot (Leo's: five toes along its tip), on a sandal's sole under a strap
+        if (kind === 'sandal') { const so = S.rrect(-30, -1, 62, 9, 4); w(so, dk, seed); k(so, seed + 1, 4); } // the sole under the toes
+        const ft = S.path([['M', -22, -6], ['Q', -24, -26, -8, -28], ['Q', 18, -28, 30, -12], ['Q', 34, 2, 14, 2], ['L', -16, 2], ['Q', -24, 0, -22, -6], ['Z']]); w(ft, skin, seed + 2); k(ft, seed + 3, 4);
+        toes([[-14, 0, 6.5], [-2, 2, 5], [8, 2, 4.6], [17, 0, 4.3], [25, -4, 4]], seed + 10);
+        if (kind === 'sandal') { const st = S.rrect(-26, -22, 54, 11, 5); w(st, col, seed + 4); k(st, seed + 5, 4); }
+      } else if (kind === 'slipper') { // a soft rounded slipper, its opening a lighter rim
+        const sl = S.path([['M', -30, -2], ['Q', -34, -26, 0, -28], ['Q', 34, -26, 30, -2], ['Z']]); w(sl, col, seed); k(sl, seed + 1);
+        const op = S.ellC(0, -22, 15, 5); w(op, SK.mix(col, '#ffffff', .5), seed + 2); k(S.ell(0, -22, 15, 5), seed + 3, 3); // the opening, its soft rim
+      } else if (kind === 'dress' || kind === 'heel') { // a smart shoe or a heel from the front: a narrower toe, a shine
+        const nar = kind === 'heel' ? .8 : 1, up = S.path([['M', -24 * nar, -3], ['Q', -26 * nar, -20, 0, -26], ['Q', 26 * nar, -20, 24 * nar, -3], ['Z']]); w(up, col, seed); k(up, seed + 1);
+        const so = S.rrect(-25 * nar, -5, 50 * nar, 6, 3); w(so, dk, seed + 2); k(so, seed + 3, 3.5);
+        SK.ink(S.arc(-6, -14, 8, Math.PI * 1.15, Math.PI * 1.6), { w: 3, col: 'rgba(255,255,255,.5)', seed: seed + 4, dbl: false });
+        // its opening with the foot in it: a dark sock in a smart shoe, the instep's skin above a heel
+        const op = kind === 'heel' ? S.path([['M', -13, -19], ['Q', 0, -34, 13, -19], ['Q', 0, -15, -13, -19], ['Z']]) : S.path([['M', -12, -20], ['Q', 0, -30, 12, -20], ['Q', 0, -17, -12, -20], ['Z']]);
+        w(op, kind === 'heel' ? skin : (o.sock ?? '#7a8090'), seed + 5); k(op, seed + 6, 3);
+      } else { // Mikey's sneaker: a low, wide toe box on its sole, the laces across the top
+        const up = S.path([['M', -27, -5], ['Q', -30, -21, -16, -25], ['L', 14, -25], ['Q', 29, -21, 27, -5], ['Z']]); w(up, col, seed); k(up, seed + 2);
+        const so = S.rrect(-30, -7, 60, 9, 4); w(so, sole, seed + 1); k(so, seed + 3, 4);
+        SK.ink(S.path([['M', -8, -25], ['Q', 0, -31, 8, -25]]), { w: 3.5, seed: seed + 4, dbl: false });
+        for (const ly of [-20, -14]) SK.ink(S.line(-9, ly, 9, ly), { w: 3, col: o.lace ?? '#ffffff', seed: seed + 5 + ly, dbl: false });
+      }
+    });
   };
 })();
 // studio: end cut
