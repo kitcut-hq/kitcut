@@ -10,29 +10,70 @@ down from D8ads_v5 the same evening -- Ubuntu) since 2026-09-28 -- not on the la
 (10.0.13.4). Nobody logs in by hand; everything below runs from the laptop's checkout.
 `studio/deploy/README.md` is the runbook and holds the measurements.
 
+**In a Claude cloud session** (claude.ai/code, `CLAUDE_CODE_REMOTE=true`) there is no VPN and no
+`az`. The same commands work there through `ssh.kitcut.ai`, a locked Cloudflare address, when
+the session's environment carries the setup script from `studio/deploy/cloud-env.sh`: check with
+`ssh kitcut-studio-1 hostname`. `ops.sh status` prints `?` for the two Azure lines and the rest
+as usual. The README's "SSH for Claude cloud sessions" has the pieces, the order they are made
+in, and how to take the access away.
+
 ```bash
 bash studio/deploy/ops.sh status                    # start here: health, the servers and their films,
                                                     # disks, login check, errors in the last day
 bash studio/deploy/ops.sh logs [studio|tunnel|login] [-n 200] [-f]   # studio: every server unit
 bash studio/deploy/ops.sh --dry-run ship [<commit>] # what a ship would do
-bash studio/deploy/ops.sh ship [<commit>]           # default: origin/studio-poc's head
+bash studio/deploy/ops.sh ship [<commit>]           # default: origin/main's head
 bash studio/deploy/ops.sh releases                  # built releases, the leader's marked *
 bash studio/deploy/ops.sh rollback <sha12>          # back to one already built, no rebuild
+bash studio/deploy/ops.sh autoship [--plan|on|off|now [--retry]|hook [--check]]   # a push to
+                                                    # GitHub's main ships itself (its hook,
+                                                    # and a poll every 15 min): its last decision,
+                                                    # what it would do now, start, stop, one look,
+                                                    # the webhook made or checked
 bash studio/deploy/ops.sh migrate [<commit>]        # ONCE per machine (see the rules)
-bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlisted] [--api] [--no-watch]
+bash studio/deploy/ops.sh film "<idea>" [--seconds 30] [--look collage] [--unlisted] [--api] [--no-watch] [--attach photo.png ...]
                                                     # [--person "Alex=alex.jpg" ...] [--style felt]: people drawn into it
                                                     # on the Claude login unless --api
 bash studio/deploy/ops.sh watch <film-id>...        # one or several, a line per change
 bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]  # finish a film the studio stopped
-bash studio/deploy/ops.sh resume <film-id> --finish --patched  # a DONE film changed by hand: re-mix, re-render, new URLs
+bash studio/deploy/ops.sh take <film-id> <dir>         # a DONE film's files, to change by hand here (stamped with what they were taken from)
+bash studio/deploy/ops.sh put <film-id> <dir> --summary "..."  # what changed, made the film's next version; refused if the film changed meanwhile
+bash studio/deploy/ops.sh resume <film-id> --finish --patched [--over N]  # only a film MADE IN SCENES: re-mix and re-render in its own folder
+bash studio/deploy/ops.sh review <film-id> [--machine] [--api]  # read a finished film for glitches as the
+                                                    # studio reads one before it is done: what a
+                                                    # viewer would take for a mistake, with times;
+                                                    # changes nothing. --machine: no Claude call.
+                                                    # On the Claude login unless --api (a film made
+                                                    # on the key was once read on the key: $0.31)
+bash studio/deploy/ops.sh usage [--hours 24] [--at "HH:MM"] [--film ID]   # who used the CPU and
+                                                    # memory: by hour, memory's low points, by film,
+                                                    # by step ("can we downsize", "what ate 15 GB")
 bash studio/deploy/ops.sh drafts [--days 7]          # YouTube drafts: seconds to the words, picks,
                                                     # pictures, and cost -- "why is publishing slow"
-bash studio/deploy/ops.sh pull <film-id> [dest] [--all]
+bash studio/deploy/ops.sh pull <film-id> [dest] [--all | --light]   # --light: its choices and small video, for studio/variety.py
 bash studio/deploy/ops.sh hide|show <film-id>       # public gallery
+bash studio/deploy/ops.sh unbrand <film-id>         # a finished Free-plan film drawn again without its mark and closing (a render, no Claude)
 bash studio/deploy/ops.sh replace <film-id> <folder>   # a remade film takes its place: same id
                                                     # and page, old one to backups/, new URLs
 bash studio/deploy/ops.sh forward [8765]            # the VM's studio on this laptop's 127.0.0.1:8765
 bash studio/deploy/ops.sh snapshot [--keep 7]       # data disk: films, checkout, .env, models
+bash studio/deploy/ops.sh backup [--plan | --full | status | verify | db]   # the mirror of the
+                                                    # studio's home on R2 (every 15 min by a timer)
+                                                    # and the database's nightly export; `status`
+                                                    # also shows Azure Backup's last nightly job
+bash studio/deploy/ops.sh filmgit [--plan] | --log <film-id>   # films' code in their projects' git
+                                                    # repositories (hourly by a timer): a film's
+                                                    # versions as commits; "what did version 1 look like"
+bash studio/deploy/ops.sh filmgit publish           # new film repositories made on GitHub (private,
+                                                    # github.com/kitcut-films), each with its own key;
+                                                    # run it now and then: a new project waits for it
+bash studio/deploy/ops.sh prune [--plan]            # finished films' working pictures removed (the
+                                                    # frames the review read, thumbnail stills): what
+                                                    # would go is printed first; an hourly timer does
+                                                    # the same. "the disk is filling up" starts here
+bash studio/deploy/ops.sh library-get <project> <dir>   # a series' library here (cast/<name>.js, cast.png)
+bash studio/deploy/ops.sh library-put <project> [--dry-run] [--replace] <cast/x.js>...   # back into
+                                                    # it as the next version (thumbnail, sheet)
 bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
 ```
 
@@ -41,7 +82,19 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
 - **Never start the tunnel on the laptop.** cloudflared load-balances every connector of a tunnel,
   so a second one sends half the films to the other disk. The laptop's tunnel settings are gone
   from its `.env` on purpose; `serve.ps1 -Dev` is for local development only.
-- **Ship only what is on origin/studio-poc.** `ops.sh ship` refuses anything else. It tags
+- **A push ships itself.** GitHub's push hook (studio.kitcut.ai/hooks/github: Cloudflare lets
+  only GitHub's addresses reach it, and the studio checks GitHub's signature) starts a look at
+  once, and a poll every 15 minutes catches a missed hook. A look ships a new head **live first,
+  tested after** (films hand off; failing tests switch back to the release before):
+  merging and pushing *is* deploying, live about 30 s after the push. Check it with `ops.sh autoship` rather than
+  shipping again. It waits while the sound machine is busy (KI-043) or a deploy holds the lock,
+  skips docs-only commits, and **holds** a requirements change, **refuses** a rewritten branch and
+  marks a commit whose tests fail **failed** and switched back (not retried): those three reach the owner by email
+  through the machine's note. `ops.sh rollback` pauses it; `ops.sh autoship on` lifts the pause.
+  `studio/deploy/README.md`, "A push to GitHub ships itself".
+- **Ship only what is on origin/main** (the studio followed `studio-poc` until 2026-11-02; a
+  commit pushed there now does not ship, and autoship holds and names it). `ops.sh ship` refuses
+  anything else. It tags
   `studio-stable`, pushes the code to the VM (`push.sh`: the VM holds no GitHub credentials),
   builds and tests the release there, starts the release's own server beside the running one and
   returns once it leads, then proves the studio (and studio.kitcut.ai) reports the new release.
@@ -106,6 +159,16 @@ bash studio/deploy/vm.sh ssh kitcut-studio-1 '<command>'   # anything else
   `machine.env`, and `KITCUT_SITE_TOKEN` in `.env`, the same value as the site's. The person's key
   never reaches the VM: every line goes through the site's relay with that film's grant.
 
+## Improving a series' places and characters
+
+A series' places and characters are library members (code), and every new episode starts from the
+latest version, so one can be improved on its own and the next episodes pick it up. Finished
+episodes keep their copies. The procedure is `studio/README.md`, "Improving a series' places and
+characters": `library-get`, change it keeping its contract (origin, floor line, camera, option
+names; new things are new options, off by default), render it beside the episodes and get the
+person's go, back the library up, `library-put --dry-run`, then for real while no episode of that
+series is being made, and check the next episode drew `SK.cast.<name>` instead of its own set.
+
 ## Replacing a film
 
 When a person's film should be remade (a studio fix made it better), make the new one with
@@ -114,6 +177,70 @@ When a person's film should be remade (a studio fix made it better), make the ne
 the film's log, so the log, review images and source files go with the video; the record keeps
 its person, project, prompt and cost. Check a figure the new film states against the page text
 it read (`web/<name>.txt`) before replacing: the person's name is on it.
+
+## Reworking a finished film by hand
+
+When the owner reviews a finished film and wants scenes fixed ("she is cut off coming out of the
+carrier", "nothing happens here but the narration"), its files are changed on the laptop and go
+back as the film's **next version** (`ops.sh take`, `ops.sh put`): same page, same link, the
+version before kept and one click away. Done twice on 2026-10-07 (Duchess episodes 8 and 10);
+every step below cost time when it was skipped.
+
+**Never write into a film's folder on the VM.** That is how episode 10's hand fix, made from a copy
+taken at version 1, erased the version 2 its maker had just made from notes, while the page went on
+saying "version 2" (KI-061). `put` works on a copy, as a round of notes does, and the studio takes
+the files only while the film is still what they were taken from (it compares what the film is made
+of, not a version number). `resume --finish --patched` is refused for any film a round can change;
+it is left for films made in scenes.
+
+1. **Read what its maker said first**: `claude_said` in the film's `studio.json` often names the
+   very spots worth a look. Then look at the film itself one frame a second, and closer at every
+   entrance, exit and pose change: the review sheet is twelve frames of a two-minute film.
+2. **Take the film**: `ops.sh take <id> <new folder>` copies everything a version is made of
+   (`film.js cast/ engine/ sketch.json vo.json sfx.json score.json sounds.json audio/ ...`) and
+   stamps the folder (`.kitcut-take.json`) with the version and what it is made of. Refused while
+   a version is being made from notes. Preview with `python scripts/sketch-render.py --manifest
+   <folder>/sketch.json --stills 26,27.5,29 --into review --sheet`: five seconds, and it matches
+   the real render (`review*/` and `outputs/` in the folder are never sent back). Preview the whole
+   film at one frame a second before sending anything back.
+3. **What reads as broken** (the owner's words, not a style guide): a character cut off by a clip
+   line in the open air; a character squashed, shrunk or flattened to fit somewhere (make the prop
+   bigger instead); a colour laid over the whole frame for a time of day (show it in the window);
+   a beat where only the narrator works; a caption on a ground of its own colour or behind the
+   meter. A plot step is shown, not told: she looks at the cushion before she ignores it.
+4. **Narration.** Change the line in `vo.json`; `put` records what changed in the copy. **A line
+   added in the middle renumbers the rest, and a take's file name starts with its line number**
+   (`L07_T0_<hash>`): rename the existing takes in your folder's `audio/vo/` to their new numbers
+   first, highest first, or every later line is recorded again and its timing moves. Lines keep
+   their `start`, so give a new line its own and check it ends before the next begins.
+   `score.json` counts in beats (two a second at 120 bpm); `sfx.json` in seconds.
+5. **Put it back**: `ops.sh status` (wait while another film is rendering: the cores are shared),
+   then `ops.sh put <id> <folder> --summary "what is different"`. It lists the files that differ
+   from what was taken, sends only those, and follows the version to its end: about ten minutes
+   for two minutes of film. The summary is what the film's maker reads beside the version. The
+   film plays as it is until the new version is in; a version that fails leaves it untouched and
+   says why.
+6. **Refused as "not what these files were taken from"** means the film changed after your take
+   (its maker's notes, usually). Nothing was touched. `take` it again into a new folder and put
+   your changes on top of it, file by file: `git merge-file <new>/film.js <as taken>/film.js
+   <yours>/film.js` writes the merge into the new folder's file (`<as taken>` is an untouched copy
+   of your first take: copy the folder aside before changing anything, outside it, since every
+   new file inside a taken folder is sent). Preview, then `put` from the new folder. A version
+   that ends "changed while this version was being made" is the same thing happening during the
+   render: take and put again.
+7. **Check the real video** at every changed scene, and have it read: `ops.sh review <id>`
+   (or on the laptop copy before sending it back, `python studio/review.py --folder <copy>`).
+   On 2026-10-07 it found a one-frame sliver and a caption under the meter in two films a
+   person had just fixed by hand and looked through a frame a second. Then the rest of the
+   record:
+   - YouTube, when it was already there: `npm run film -- youtube ... --description-file` files
+     the new upload with the same title and time, and `--remove <old video>` takes the old one
+     off once the new one is live (sketch-studio `scripts/film.mjs`).
+   - its summary: set `claude_said` to what the film now is (`Film.update` and `agent.save`), then
+     `studio/canon.py --film <id>` rewrites its entry in the series' episode log, so later episodes
+     do not build on the first cut.
+   - a cast member that changed: `ops.sh library-put <project> --replace cast/<name>.js`, its notes
+     saying what was learned, so the next episode does not repeat it.
 
 ## When something is wrong
 
@@ -132,16 +259,46 @@ it read (`web/<name>.txt`) before replacing: the person's name is on it.
    restart carries it on from that pass by itself, and `ops.sh resume` does the same by hand.
 3. A step that fails on the VM and not on the laptop is usually the environment: compare
    `uv pip list` there with the laptop's venv, and look for imports inside functions.
-4. Fix in the repo (worktree, commit, merge to studio-poc), then `ops.sh ship`. A missing package
+4. Fix in the repo (worktree, commit, merge to main), then `ops.sh ship`. A missing package
    can be installed into `/srv/kitcut/repo/.venv` at once (`~/.local/bin/uv pip install --python
    .venv/bin/python ...`) -- every release shares that venv, the films being made included -- but
    add it to the requirements too.
 5. The machine itself: `vm.sh` (resize, stop/start); rebuild with `provision.sh` (idempotent,
-   reattaches the data disk).
+   reattaches the data disk, keeps the machine's own `.env`).
+
+## The machine is gone, or something on it is
+
+`studio/deploy/README.md`, "If the machine is gone", has a row for each way it can go and the
+commands for each. What to know before opening it:
+
+- **Three copies.** Azure Backup nightly (the whole machine, 30 days; `ops.sh status` prints its
+  last job), the home mirrored to the R2 bucket `kitcut-backup` every 15 minutes (`ops.sh backup
+  status`; what a pass replaced or removed is kept 30 days under `_history/<day>/`), the site's
+  database exported nightly into the same bucket (`db/<day>/`).
+- **One film back** (deleted, or spoiled by a hand fix): `ops.sh restore --film <id>`; what a
+  pass replaced on a given day: `--from-history YYYY-MM-DD` (lands beside the home, to look at).
+- **The site already coped.** It emails the owner after 5 minutes without an answer and puts
+  down the films the studio left after 15, credits back (sketch-studio `lib/studiowatch.js`). So
+  the rebuild is not a race against anyone's credits.
+- **Never start a second machine built from the mirror as it is**: it adopts the films that
+  were being made and writes that into the live database. A machine to prove the mirror is a
+  rehearsal (`provision.sh --drill`, `ops.sh restore --all --drill`, `restore --settle`).
+- **The machine's `.env` is the truth about its keys**, and a sealed copy of it and of the
+  tunnel's credential rides the mirror (`studio/sealenv.py`: only the key vault can open it;
+  sealed again by itself before a pass when the `.env` changed). `ops.sh secrets check` opens
+  it through the vault and says whether it is the `.env` as it is now, by name; run it after
+  changing the `.env`, with `ops.sh secrets seal` first if no pass has run since.
+- **The disk filling** is `ops.sh prune --plan`; `ops.sh status` warns past 80 %.
+- **Do not edit `ops.sh` in the worktree a ship or a followed job is running from.** bash reads a
+  script as it goes: the ship of 2026-10-12 ended with `lder: command not found` because the file
+  grew under it (it had finished its work by then). Edit in another worktree, or wait.
 
 ## Resizing
 
-`vm.sh resize <name> <size>` deallocates, resizes and starts (about 3 minutes). Stop the studio
+Decide on the evidence first: `ops.sh usage --hours 24` (and `--hours 168` once a week of samples
+exists) says which hours are busy, who held the memory at its low points and what each film's
+steps cost; `studio/deploy/README.md`, "Who uses the machine". `vm.sh resize <name> <size>`
+deallocates, resizes and starts (about 3 minutes). Stop the studio
 first so nothing is cut off and the site shows it offline: `vm.sh ssh <name> 'bash
 /srv/kitcut/repo/studio/serve.sh stop'` (it drains). The units start with the machine. Then set
 the pools for the new size in the VM's `.env` (`STUDIO_RENDER_JOBS`, `STUDIO_BROWSERS`: the core

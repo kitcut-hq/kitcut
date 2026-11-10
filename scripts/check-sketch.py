@@ -14,14 +14,20 @@ anything under sketch/, run it.
 Invoke as:  python scripts/check-sketch.py
 """
 
+import io
 import sys
 import os
 import re
 import json
+import time
+import types
 import shutil
 import difflib
 import argparse
 import tempfile
+import threading
+import contextlib
+from concurrent.futures import ThreadPoolExecutor
 from importlib import import_module
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -275,6 +281,80 @@ def heads():
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def kept_sounds():
+    """A series' sounds.json played by name (expand_sounds): a cue's overrides, a theme moved to
+    its beats and transposed, part of a theme, and a name the kit lacks refused."""
+    kit = {
+        "sounds": {
+            "bell": {"about": "collar bell", "cue": {"fx": "chime", "db": -24, "args": {"sec": 1}}},
+            "trombone": {
+                "about": "sad trombone",
+                "cue": {"fx": "sample", "inst": "bassoon", "notes": ["F2", "E2"], "every": 0.4},
+            },
+        },
+        "themes": {
+            "main": {
+                "about": "her theme",
+                "events": [
+                    {"inst": "clarinet", "notes": "0 C5 1; 1 F5 1"},
+                    {"inst": "bassoon", "notes": "0 F2 2"},
+                ],
+            }
+        },
+    }
+    score = {
+        "bpm": 120,
+        "events": [{"type": "theme", "theme": "main", "at": [8, 16], "transpose": 2}],
+    }
+    cues = [{"t": 1.5, "sound": "bell", "db": -18, "args": {"tau": 0.3}}, {"t": 4, "fx": "pop"}]
+    s2, c2 = A.expand_sounds(score, cues, kit)
+    check(
+        "sounds: a cue's own keys override the kept one's",
+        c2[0] == {"fx": "chime", "db": -18, "t": 1.5, "args": {"sec": 1, "tau": 0.3}},
+        str(c2[0]),
+    )
+    check("sounds: other cues pass through", c2[1] == {"t": 4, "fx": "pop"})
+    ev = A.score_events(s2)
+    clar = sorted((e[2], e[1]) for e in ev if e[0] == "clarinet")
+    check(
+        "sounds: a theme plays at each beat, transposed",
+        clar == [(8, A.M("D5")), (9, A.M("G5")), (16, A.M("D5")), (17, A.M("G5"))],
+        str(clar),
+    )
+    part = {"events": [{"type": "theme", "theme": "main", "at": 0, "only": ["bassoon"]}]}
+    check(
+        "sounds: only part of a theme",
+        {e[0] for e in A.score_events(A.expand_sounds(part, [], kit)[0])} == {"bassoon"},
+    )
+    for bad in ([{"t": 1, "sound": "gong"}], []):
+        sc = score if bad else {"events": [{"type": "theme", "theme": "waltz"}]}
+        try:
+            A.expand_sounds(sc, bad, kit)
+            check("sounds: an unknown name is refused", False)
+        except ValueError as e:
+            check("sounds: an unknown name is refused, naming what there is", "have:" in str(e))
+    same = A.expand_sounds({"events": [{"inst": "celesta", "notes": "0 C5 1"}]}, [], None)
+    check(
+        "sounds: a film without sounds.json is unchanged", same[0]["events"][0]["inst"] == "celesta"
+    )
+    # a film with no music (audio.music: false): after its kept sounds are spelled out, so a kept
+    # bell is a chime here and goes too
+    q_score, q_cues, left = A.no_music(s2, c2 + [{"t": 6, "fx": "sample", "inst": "celesta"}])
+    check(
+        "no music: the score plays nothing", A.score_events(q_score) == [] and q_score["bpm"] == 120
+    )
+    check(
+        "no music: pitched cues go, the rest stay", q_cues == [{"t": 4, "fx": "pop"}], str(q_cues)
+    )
+    check(
+        "no music: and it says what it left out",
+        left == {"events": len(s2["events"]), "cues": ["chime", "sample"]},
+        str(left),
+    )
+    dry, _wet, _ = A.render_score(q_score, 2.0)
+    check("no music: an empty score renders as silence", float(abs(dry).max()) == 0.0)
+
+
 def inputs_join():
     """Every picture in inputs/ is drawable by its name, even when the manifest lists only some:
     a film listed upload1 alone and drew three real logos as blank cards (2026-10-01)."""
@@ -297,6 +377,49 @@ def inputs_join():
         )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def stillness():
+    """short-stillness.py on pictures made here, no video: a frozen picture is still, a drifting
+    background alone is slow and not still (the reason there are two bars), a picture that keeps
+    changing is neither, and --check's bar fails the first two."""
+    st = import_module("short-stillness")
+    rng = np.random.default_rng(7)
+    rows, n = 140, 200  # 40 s at 5 frames a second
+    base = rng.integers(40, 200, (rows, st.W)).astype(np.int16)
+    frozen = np.repeat(base[None], n, axis=0)
+    r = st.measure(frozen)
+    check("stillness: a frozen picture is all still", r["still"] == 1 and not r["ok"], str(r))
+    # the same picture with one thin band changing each frame: under the slow bar, over the still one
+    drift = frozen.copy()
+    for i in range(n):
+        drift[i, (i * 2) % rows : (i * 2) % rows + 2, :] = rng.integers(40, 200, (2, st.W))
+    r = st.measure(drift)
+    check(
+        "stillness: a drift alone is slow, not still, and misses the bar",
+        r["still"] == 0 and r["slow"] == 1 and not r["ok"] and r["runs"][0][1] > 39,
+        str(r),
+    )
+    moving = rng.integers(40, 200, (n, rows, st.W)).astype(np.int16)
+    moving[100:109] = moving[
+        100
+    ]  # 1.6 s held inside 40 s of movement: under both of --check's limits
+    r = st.measure(moving)
+    check(
+        "stillness: a moving picture with a short hold passes, and the hold is named",
+        r["ok"]
+        and len(r["runs"]) == 1
+        and abs(r["runs"][0][0] - 20.0) < 0.01
+        and r["still"] < 0.06,
+        str(r),
+    )
+    moving[100:120] = moving[100]  # 3.8 s: one slow stretch over the limit
+    check("stillness: a hold over 3 s fails", not st.measure(moving)["ok"])
+    check(
+        "stillness: stretches() drops runs under 1.5 s",
+        st.stretches([1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0]) == [(0.8, 1.6)],
+        str(st.stretches([1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0])),
+    )
 
 
 def main():
@@ -456,6 +579,40 @@ def main():
         "character_start_times_seconds": starts,
         "character_end_times_seconds": ends,
     }
+    # ---- words the voice adds after its line (studio-20261007-223612-ysk76f: "Chapter 1")
+    said_ = [("By", 0.0, 0.2), ("November,", 0.2, 0.7), ("it", 0.7, 0.8), ("was", 0.8, 0.9)]
+    said_ += [("gone.", 0.9, 1.1), ("Chapter", 2.2, 2.5), ("1", 2.5, 2.7)]
+    span = vo_mod.line_span("By November, it was gone.", said_)
+    check("stray: the line ends at its last word", span[1] == 1.1 and span[3] == ["Chapter", "1"])
+    take = np.concatenate([tone(1.1), np.zeros(int(1.1 * SR)), tone(0.5)])
+    y, at = vo_mod.cut_stray(take, 1.1)
+    check("stray: cut in the pause", at is not None and 1.1 < len(y) / SR < 1.5, str(at))
+    check(
+        "stray: a line with nothing after it is left whole",
+        vo_mod.cut_stray(tone(2.0), 1.9)[1] is None,
+    )
+    two = np.concatenate([tone(0.6), np.zeros(int(0.3 * SR)), tone(0.5)])
+    check("stray: a breath inside a line is not a cut", vo_mod.cut_stray(two, 1.4)[1] is None)
+    digits = [("bought", 0.0, 0.4), ("it", 0.4, 0.5), ("for", 0.5, 0.7), ("$12", 0.7, 1.0)]
+    digits += [("billion.", 1.0, 1.4)]
+    span = vo_mod.line_span("bought it for twelve billion dollars.", digits)
+    check(
+        "stray: a number heard in digits ends the line", span[1] == 1.4 and not span[3], str(span)
+    )
+    span = vo_mod.line_span(
+        "lost seventy-eight percent.",
+        [("lost", 0, 0.3), ("78%.", 0.3, 0.9), ("Chapter", 2, 2.3), ("1", 2.3, 2.5)],
+    )
+    check(
+        "stray: found after a number too", span[1] == 0.9 and span[3] == ["Chapter", "1"], str(span)
+    )
+    check(
+        "stray: a script word heard another way is not an added word",
+        vo_mod.added("Tonight. Three a.m.", ["a.m."]) == []
+        and vo_mod.added("minus twenty is sixty four", ["64."]) == []
+        and vo_mod.added("it was gone.", ["Chapter", "1"]) == ["Chapter"],
+    )
+
     y, lead, ok = vo_mod.cut_at_tail(x, align, "Alright.")
     check("tail: cut found a clean gap", ok)
     check("tail: tail removed, line kept", 0.95 < len(y) / SR < 1.3, "%.2fs" % (len(y) / SR))
@@ -538,6 +695,36 @@ def main():
         and not vo_mod.stretched(sixteen, tone(12.0)),
     )
 
+    # ---- what the voice is given: vo.json's say map, whole words, any case
+    say = {"say": {"varenyky": "va-REN-ih-kee", "Mikey": "My-key"}}
+    check(
+        "say: a word the map names is said its way, nothing else changes",
+        vo_mod.said("Varenyky! Mikey loves varenyky.", say)
+        == "va-REN-ih-kee! My-key loves va-REN-ih-kee."
+        and vo_mod.said("Mikeyville", say) == "Mikeyville"
+        and vo_mod.said("no map here", {}) == "no map here",
+    )
+
+    # ---- a refused line: the same voice again without the direction, before any backup voice
+    real_take, asked = vo_mod.gemini_take, []
+
+    def fake_take(text, v):
+        asked.append(v.get("style", ""))
+        if v.get("style"):
+            raise vo_mod.Refused("finish reason PROHIBITED_CONTENT")
+        return np.zeros(100), {"cost_usd": 0, "usage": {"input": 0, "output": 0}}
+
+    try:
+        vo_mod.gemini_take = fake_take
+        _, meta = vo_mod.gemini_plain("Like a team!", {"voice": "Puck", "style": "for kids"})
+        check(
+            "refused: read again in the same voice without its direction",
+            asked == ["for kids", ""] and meta.get("plain") is True,
+            str(asked),
+        )
+    finally:
+        vo_mod.gemini_take = real_take
+
     # ---- the backup voice, for a line Gemini refuses (no API: what decides it)
     check(
         "backup: Gemini's content block is a refusal, a glitch is not",
@@ -599,6 +786,99 @@ def main():
     finally:
         vo_mod.whisper_score = real
         shutil.rmtree(vdir, ignore_errors=True)
+    # ---- a scoring service that refuses the key: one local model, one take at a time (KI-066).
+    # Eight takes scored by eight threads, as the score stage does when a service listens; the
+    # service answers 403 as OpenRouter did when the key's limit was used up. The model here is a
+    # stand-in that takes a moment to build and to decode, so threads that are let through together
+    # are seen together.
+    seen = {"built": 0, "live": 0, "most": 0, "asked": 0}
+    tally = threading.Lock()
+
+    class Seg:
+        text, words = "hello", []
+
+    class StandIn:
+        def __init__(self, name, **kw):
+            with tally:
+                seen["built"] += 1
+            time.sleep(0.05)
+
+        def transcribe(self, path, **kw):
+            with tally:
+                seen["live"] += 1
+                seen["most"] = max(seen["most"], seen["live"])
+            time.sleep(0.02)
+            with tally:
+                seen["live"] -= 1
+            return iter([Seg()]), None
+
+    def refuses(path, lang, model, hotwords=()):
+        with tally:
+            seen["asked"] += 1
+        time.sleep(0.02)  # the threads are all in the call before the first answer comes back
+        raise vo_mod.ScorerRefused("%s 403: Key limit exceeded (total limit)" % model)
+
+    kept = (vo_mod._WHISPER, vo_mod.openrouter_heard, sys.modules.get("faster_whisper"))
+    env = {k: os.environ.get(k) for k in ("SKETCH_SCORER", "SKETCH_WHISPER_DEVICE")}
+    try:
+        vo_mod._WHISPER = None
+        vo_mod._REFUSED.clear()
+        vo_mod.openrouter_heard = refuses
+        sys.modules["faster_whisper"] = types.SimpleNamespace(WhisperModel=StandIn)
+        os.environ["SKETCH_SCORER"] = "openrouter:openai/whisper-large-v3"
+        os.environ["SKETCH_WHISPER_DEVICE"] = "cpu"
+        with contextlib.redirect_stdout(io.StringIO()) as said_out:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                got = list(
+                    pool.map(lambda i: vo_mod.whisper_score("x.wav", "hello", [], "hi"), range(8))
+                )
+            late = vo_mod.whisper_score("x.wav", "hello", [], "hi")
+        check(
+            "scorer refused: eight threads build ONE local model",
+            seen["built"] == 1,
+            "%d built" % seen["built"],
+        )
+        check(
+            "scorer refused: one take through it at a time",
+            seen["most"] == 1,
+            "%d at once" % seen["most"],
+        )
+        check(
+            "scorer refused: every take is still scored",
+            len(got) == 8 and all(g[1] == "hello" for g in got) and late[1] == "hello",
+        )
+        check(
+            "scorer refused: not asked again once it has refused, and said once",
+            seen["asked"] <= 8 and said_out.getvalue().count("refuses this key") == 1,
+            "asked %d times, said %d"
+            % (seen["asked"], said_out.getvalue().count("refuses this key")),
+        )
+        asked = seen["asked"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            vo_mod.whisper_score("x.wav", "hello", [], "hi")
+        check("scorer refused: a later take does not ask it at all", seen["asked"] == asked)
+        # a benchmark (FALLBACK off) must see the refusal, not the local model in its place
+        vo_mod.FALLBACK = False
+        try:
+            vo_mod.whisper_score("x.wav", "hello", [], "hi")
+            raised = False
+        except vo_mod.ScorerRefused:
+            raised = True
+        finally:
+            vo_mod.FALLBACK = True
+        check("scorer refused: with the fallback off it is an error", raised)
+    finally:
+        vo_mod._WHISPER, vo_mod.openrouter_heard = kept[0], kept[1]
+        vo_mod._REFUSED.clear()
+        if kept[2] is None:
+            sys.modules.pop("faster_whisper", None)
+        else:
+            sys.modules["faster_whisper"] = kept[2]
+        for k, v in env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
     # ---- the voice track: a line that runs over is cut at the end; one that starts after the end
     # is named, not a numpy broadcast error (film ewwd6b)
@@ -629,9 +909,7 @@ def main():
     # ---- a person's own ElevenLabs voice, through kitcut.ai's relay: the film's grant goes up,
     # never a key; a refusal of the person's account is a reason the studio pauses on, and
     # ElevenLabs' own words are never repeated
-    import io
     import base64
-    import contextlib
 
     import httpx
 
@@ -878,8 +1156,6 @@ def main():
     check("cover: no stand-ins, the poster", _sketch.pick_cover([(59.6, 0)]) == 59.6)
 
     # ---- cut-outs (sketch-paint.py): a collage's pictures, made without a single paid call
-    import io
-
     from PIL import Image
 
     paint = import_module("sketch-paint")
@@ -953,7 +1229,9 @@ def main():
 
     cyrillic()
     heads()
+    kept_sounds()
     inputs_join()
+    stillness()
 
     # ---- the bundler, against the committed example
     ex = os.path.join(_env.ROOT, "config", "sketch", "example")
@@ -973,6 +1251,7 @@ def main():
                 "__FILM__",
                 "__FONTFACES__",
                 "__VO__",
+                "__LENGTH__",
                 "__IMAGES__",
                 "__PREVIEW__",
             )

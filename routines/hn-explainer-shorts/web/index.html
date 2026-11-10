@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Video ideas</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1d1c1a; --muted: #6b6860; --line: #e4e1d8;
+    --accent: #c8102e; --accent-ink: #ffffff; --chip: #efede6;
+    --breaking: #c8102e; --hype: #b8590b; --evergreen: #2f5d8a;
+    --ok: #1f6f43; --warn: #8a6100; --bad: #a3122a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --card: #1e1d1b; --ink: #ecebe6; --muted: #a29f95; --line: #34322e;
+      --accent: #ff4d5e; --accent-ink: #141413; --chip: #2a2926;
+      --breaking: #ff4d5e; --hype: #f0a050; --evergreen: #7fb0e0;
+      --ok: #5ec48c; --warn: #e5b94e; --bad: #ff6b7d;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1280px; margin: 0 auto; padding: 12px 16px; display: flex; gap: 12px; align-items: center; }
+  .bar h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  .bar .sub { color: var(--muted); font-size: 13px; }
+  .bar .grow { flex: 1; min-width: 0; }
+  main { max-width: 1280px; margin: 0 auto; padding: 8px 16px 64px; }
+  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink); padding: 8px 12px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.primary.confirm { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  button:disabled { opacity: .55; cursor: default; }
+  .run { margin-top: 22px; }
+  .run > h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 4px; font-weight: 600; }
+  .run details.summary { margin: 0 0 10px; color: var(--muted); font-size: 14px; } .run details.summary summary { cursor: pointer; }
+  .run > p.summary { margin: 0 0 10px; color: var(--muted); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin: 10px 0; }
+  .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .kind { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 6px; color: #fff; }
+  .kind.breaking { background: var(--breaking); } .kind.hype { background: var(--hype); } .kind.evergreen { background: var(--evergreen); }
+  h3 { margin: 0; font-size: 18px; line-height: 1.3; }
+  .stakes { margin: 8px 0 6px; }
+  .facts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+  .fact { background: var(--chip); border-radius: 8px; padding: 3px 8px; font-size: 13px; color: var(--muted); }
+  .fact b { color: var(--ink); font-weight: 600; }
+  .links { font-size: 13px; margin-top: 6px; color: var(--muted); overflow-wrap: anywhere; }
+  .links a { color: inherit; }
+  .angles { margin-top: 12px; display: grid; gap: 8px; }
+  .angle { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; }
+  .angle .fmt { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  .angle .t { font-weight: 650; font-size: 16px; }
+  .angle .why { color: var(--muted); font-size: 14px; }
+  .angle .row { display: flex; justify-content: flex-end; }
+  details.own { margin-top: 8px; }
+  details.own summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+  textarea { width: 100%; min-height: 70px; font: inherit; padding: 8px 10px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink); margin: 8px 0; }
+  .opts { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .opts label { font-size: 14px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .pick { margin-top: 6px; font-size: 13px; }
+  .pick .state { font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: .05em; }
+  .state.published, .state.done { color: var(--ok); } .state.dropped, .state.failed { color: var(--bad); }
+  .state.picked, .state.queued, .state.started, .state.researching, .state.making { color: var(--warn); }
+  .pick a { color: var(--ink); }
+  .empty, .err { color: var(--muted); padding: 40px 0; text-align: center; }
+  .err { color: var(--bad); }
+  form.key { max-width: 420px; margin: 60px auto; display: grid; gap: 10px; }
+  form.key input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .sheet { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: flex-end; justify-content: center; z-index: 5; }
+  .sheet[hidden] { display: none; }
+  .sheet-in { background: var(--card); color: var(--ink); width: 100%; max-width: 560px; border-radius: 14px 14px 0 0; padding: 16px; display: grid; gap: 10px; }
+  .sheet-in input { font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 100%; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; font-size: 14px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--chip); }
+  td { vertical-align: top; padding: 10px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  table { table-layout: fixed; }
+  tbody tr.own-row td { border-bottom: 2px solid var(--line); }
+  textarea[rows="1"] { min-height: 30px; margin: 0; font-size: 13px; border-style: dashed; background: transparent; resize: vertical; }
+  .ang { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .ang:last-of-type { border-bottom: 0; }
+  .fmt { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  .q { font-weight: 700; font-size: 16px; line-height: 1.3; margin: 4px 0 2px; }
+  .at { font-weight: 650; font-size: 15px; line-height: 1.3; }
+  .at .fmt { margin-left: 6px; font-weight: 600; }
+  tr.skipped td { background: var(--chip); opacity: .6; padding: 8px 10px; }
+  tr.skipped .q { font-size: 14px; font-weight: 600; }
+  tr.skipped button { margin-left: 8px; }
+  .banner { display: none; max-width: 1280px; margin: 12px auto 0; padding: 10px 14px; border-radius: 10px;
+    background: var(--chip); color: var(--warn); font-size: 14px; }
+  body.no-maker .banner { display: block; margin-left: 16px; margin-right: 16px; }
+  body.no-maker button[data-make] { opacity: .4; pointer-events: none; }
+  .why, .muted { color: var(--muted); font-size: 13px; }
+  button.sm, button.sm.primary { background: transparent; color: var(--ink); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  button.sm:hover { border-color: var(--accent); color: var(--accent); }
+  button.sm.confirm { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .pub { display: block; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--bg);
+    padding: 10px 14px; border-radius: 10px; font-size: 14px; max-width: calc(100% - 32px); display: none; }
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <div class="grow"><h1>Video ideas</h1><div class="sub" id="sub">From Hacker News, every 12 hours. Pick an angle to make it.</div></div>
+  <button id="phone" title="This page's link, for your phone">Phone link</button>
+</div></header>
+<main id="main"><div class="empty">Loading…</div></main>
+<div class="toast" id="toast"></div>
+<div class="sheet" id="sheet" hidden><div class="sheet-in">
+  <div>Open this link on your phone once; the page remembers it there.</div>
+  <input id="link" readonly>
+  <div style="display:flex;gap:8px;justify-content:flex-end"><button id="copy" class="primary">Copy</button><button id="close">Close</button></div>
+</div></div>
+<script>
+(() => {
+  const $ = (s, el = document) => el.querySelector(s);
+  const main = $("#main");
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+                  set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+
+  // The key arrives once in the link (?k=...), is kept on this device, and is dropped from the address bar.
+  const params = new URLSearchParams(location.search);
+  if (params.get("k")) { store.set("ideas_key", params.get("k")); history.replaceState(null, "", location.pathname + location.hash); }
+  let key = store.get("ideas_key") || "";
+
+  function toast(msg) {
+    const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+    clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = "none"), 4000);
+  }
+
+  function when(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function askKey(msg) {
+    main.innerHTML = `<form class="key"><div>${esc(msg || "Enter the page key from your link.")}</div>
+      <input name="k" type="password" autocomplete="off" placeholder="Key"><button class="primary">Open</button></form>`;
+    $("form.key").onsubmit = (e) => { e.preventDefault(); key = e.target.k.value.trim(); store.set("ideas_key", key); load(); };
+  }
+
+  async function api(path, opts = {}) {
+    const r = await fetch(path, { ...opts, headers: { "content-type": "application/json", "x-ideas-key": key, ...(opts.headers || {}) } });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 401) { askKey("That key did not work. Enter it again."); throw new Error("key"); }
+    if (!r.ok) throw new Error(body.error || `HTTP ${r.status}`);
+    return body;
+  }
+
+  function pickHtml(p) {
+    const links = [
+      p.film && `<a href="${esc(p.film)}" target="_blank" rel="noopener">film</a>`,
+      p.youtube && `<a href="${esc(String(p.youtube).replace(/^https:\/\/(youtu\.be\/|(www\.)?youtube\.com\/watch\?v=)/, "https://youtube.com/shorts/"))}" target="_blank" rel="noopener">YouTube</a>`,
+      p.session && `<a href="${esc(p.session)}" target="_blank" rel="noopener">run</a>`,
+    ].filter(Boolean);
+    const bits = [`<span class="state ${esc(p.state)}">${esc(p.state || "picked")}</span>`, ...links,
+      p.publish === false ? `<span class="muted">not publishing</span>` : "",
+      `<span class="muted">${esc(when(p.updated_at || p.picked_at))}</span>`].filter(Boolean);
+    return `<div class="pick">${bits.join(" · ")}${p.note ? `<div class="muted">${esc(p.note)}</div>` : ""}</div>`;
+  }
+
+  function ideaRows(run, idea) {
+    const kind = String(idea.kind || "").toLowerCase();
+    const links = [...(idea.hn || []).map((h) => `<a href="${esc(h.url)}" target="_blank" rel="noopener">HN ${esc(h.points ?? "")}▲</a>`),
+                   ...(idea.sources || []).map((s) => `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || "source")}</a>`)].join(" · ");
+    const angles = idea.angles || [];
+    if (idea.skipped) {
+      return `<tr class="skipped"><td colspan="3"><span class="q">${esc(idea.question || idea.topic)}</span>
+        <span class="muted"> · skipped</span>
+        <button class="sm" data-skip="0" data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}">Bring back</button></td></tr>`;
+    }
+    const n = angles.length + 1;
+    const statusFor = (aid) => (idea.picks || []).filter((p) => p.angle_id === aid).map(pickHtml).join("")
+      + (idea.external && aid === (angles[0] || {}).id ? pickHtml(idea.external) : "");
+    const make = (aid, own) => `<button class="primary sm" data-make data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}" ${own ? "data-own" : `data-angle="${esc(aid)}"`}>Make</button>`;
+    const head = `<td rowspan="${n}" class="topic">${kind ? `<span class="kind ${esc(kind)}">${esc(kind)}</span> ` : ""}<span class="muted">${esc(idea.news_date || "")}</span>
+        ${idea.question ? `<div class="q">${esc(idea.question)}</div><div class="why">${esc(idea.topic)}</div>` : `<div class="q">${esc(idea.topic)}</div>`}${idea.stakes ? `<div class="why">${esc(idea.stakes)}</div>` : ""}${links ? `<div class="links">${links}</div>` : ""}
+        <label class="pub"><input type="checkbox" data-publish checked> publish when done</label>
+        <button class="sm" data-skip="1" data-run="${esc(run.run_id)}" data-idea="${esc(idea.id)}">Skip topic</button></td>
+`;
+    const rows = angles.map((a, j) => `<tr data-idea-row="${esc(idea.id)}">${j === 0 ? head : ""}
+      <td><div class="at">${esc(a.title)} <span class="fmt">${esc(a.format || "explainer")}</span></div>${a.why ? `<div class="why">${esc(a.why)}</div>` : ""}
+      ${statusFor(a.id)}</td>
+      <td>${make(a.id)}</td></tr>`);
+    rows.push(`<tr data-idea-row="${esc(idea.id)}" data-run="${esc(run.run_id)}" class="own-row">${angles.length ? "" : head}
+      <td><textarea rows="1" placeholder="Own angle: the question the film should answer"></textarea>
+      ${statusFor("own")}</td>
+      <td>${make("own", true)}</td></tr>`);
+    return rows.join("");
+  }
+
+  function render(state) {
+    // Keep whatever was typed into the own-angle boxes across redraws.
+    const drafts = {};
+    main.querySelectorAll("tr[data-idea-row] textarea").forEach((t) => {
+      if (t.value) drafts[t.closest("tr").dataset.ideaRow + "|" + (t.closest("tr").dataset.run || "")] = t.value;
+    });
+    const focused = document.activeElement && document.activeElement.tagName === "TEXTAREA"
+      ? document.activeElement.closest("tr").dataset.ideaRow : null;
+    renderInto(state);
+    main.querySelectorAll("tr[data-idea-row] textarea").forEach((t) => {
+      const k = t.closest("tr").dataset.ideaRow + "|" + (t.closest("tr").dataset.run || "");
+      if (drafts[k]) t.value = drafts[k];
+      if (focused && t.closest("tr").dataset.ideaRow === focused) t.focus();
+    });
+  }
+
+  function renderInto(state) {
+    const runs = state.runs || [];
+    
+    if (!runs.length) { main.innerHTML = `<div class="empty">No ideas yet. The routine adds them here every 12 hours.</div>`; return; }
+    $("#sub").textContent = `Last run ${when(runs[0].run_at || runs[0].received_at)}. Reload the page to see progress.`;
+    main.innerHTML = runs.map((run) => `<section class="run">
+      <h2>${esc(when(run.run_at || run.received_at))} · ${(run.ideas || []).length} ideas</h2>
+      ${run.summary ? `<details class="summary"><summary>What the scout read and dropped</summary><p>${esc(run.summary)}</p></details>` : ""}
+      <div class="scroll"><table>
+        <colgroup><col style="width:38%"><col style="width:53%"><col style="width:9%"></colgroup>
+        <thead><tr><th>The question</th><th>Angle</th><th></th></tr></thead>
+        <tbody>${(run.ideas || []).map((i) => ideaRows(run, i)).join("")}</tbody>
+      </table></div>
+    </section>`).join("");
+  }
+
+  async function load() {
+    if (!key) return askKey();
+    try { render(await api("/api/state")); }
+    catch (e) { if (e.message !== "key") main.innerHTML = `<div class="err">Could not load: ${esc(e.message)}</div>`; }
+  }
+
+  // Two taps: the first arms the button, the second makes the film. Nothing fires by accident.
+  main.addEventListener("click", async (e) => {
+    const sk = e.target.closest("button[data-skip]");
+    if (sk) {
+      sk.disabled = true;
+      try { await api("/api/skip", { method: "POST", body: JSON.stringify({ run_id: sk.dataset.run, idea_id: sk.dataset.idea, skip: sk.dataset.skip === "1" }) }); }
+      catch (err) { if (err.message !== "key") toast(`Not saved: ${err.message}`); }
+      return load();
+    }
+    const b = e.target.closest("button[data-make]");
+    if (!b) return;
+    if (!b.classList.contains("confirm")) {
+      main.querySelectorAll("button.confirm").forEach((x) => { x.classList.remove("confirm"); x.textContent = "Make"; });
+      b.classList.add("confirm"); b.textContent = "Confirm";
+      clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove("confirm"); b.textContent = "Make"; }, 5000);
+      return;
+    }
+    const card = b.closest("tr");
+    const ideaRowsEls = main.querySelectorAll(`tr[data-idea-row="${CSS.escape(b.dataset.idea)}"]`);
+    const body = { run_id: b.dataset.run, idea_id: b.dataset.idea, publish: [...ideaRowsEls].map((r) => r.querySelector("input[data-publish]")).find(Boolean)?.checked !== false };
+    if (b.dataset.own !== undefined) {
+      body.custom_angle = $("textarea", card).value.trim();
+      if (!body.custom_angle) { toast("Write the angle first."); return; }
+    } else body.angle_id = b.dataset.angle;
+    b.disabled = true; b.textContent = "Starting…";
+    try { await api("/api/pick", { method: "POST", body: JSON.stringify(body) }); toast("Queued. The maker picks it up within the hour; reload to see it move."); }
+    catch (err) { if (err.message !== "key") toast(`Not started: ${err.message}`); }
+    load();
+  });
+
+  $("#phone").onclick = () => {
+    if (!key) return askKey();
+    $("#link").value = `${location.origin}/?k=${encodeURIComponent(key)}`;
+    $("#sheet").hidden = false; $("#link").select();
+  };
+  $("#close").onclick = () => ($("#sheet").hidden = true);
+  $("#copy").onclick = async () => {
+    try { await navigator.clipboard.writeText($("#link").value); toast("Copied."); }
+    catch { $("#link").select(); toast("Select the link and copy it."); }
+  };
+  load();
+})();
+</script>
+</body>
+</html>

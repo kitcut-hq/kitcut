@@ -121,7 +121,22 @@ def pin_vo(film):
 
 def pin_paint(film):
     """paint.json: the painter, its model and the cap on paintings are the studio's."""
-    return _pin(film, "paint.json", paint_pins(film.length, film.caps), keep=validate.PAINT_KEYS)
+    frozen = (film.record().get("pins") or {}).get("paint")  # a round's copy (rounds.copy_of)
+    want = (
+        frozen
+        if isinstance(frozen, dict) and frozen
+        else paint_pins(
+            film.length,
+            film.caps,
+            film.record().get("paint_route"),
+            film.record().get("paint_quality"),
+        )
+    )
+    # a style picture is the project's (stylekit.seed), never one Claude names; the quality is
+    # the route's (film.STYLE_ROUTES) or a sharper version's, and redo a sharper version's
+    # (rounds.sharpen): never Claude's
+    keep = validate.PAINT_KEYS - ({"style_ref", "quality", "redo"} - set(want))
+    return _pin(film, "paint.json", want, keep=keep)
 
 
 def pin_after(file_path, film):

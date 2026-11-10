@@ -25,7 +25,12 @@ python studio/test_isolation.py                 # names, the gate, secrets, the 
 python studio/test_direction.py                 # one cached prompt per look, a film's choices, the recent note
 python studio/test_server.py                    # the API end to end, 3 films at once, Claude stubbed out, no cost
 python studio/test_media.py                     # the copy online, against a stand-in for Azure
+python studio/test_delete_film.py               # a film deleted for good, against stand-ins: no network
 python studio/test_share.py                     # a film's share page words and picture, Claude stubbed
+python studio/test_outro.py                     # the Free plan's mark and closing, on a right-to-left film too
+python studio/test_voroom.py                    # the voice's room, and vo.json "dry": a voice with none
+python studio/test_paintref.py                  # a painting made from a project's picture ("ref": "pic_<name>")
+python studio/test_characters.py                # painted characters in the cast, kept paintings, @name in a prompt
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.
@@ -169,7 +174,7 @@ curl -s $BASE/api/health                                      # running, queued,
 
 **Poll the status, every 2-5 s.** There is no push, because quick tunnels do not carry
 server-sent events. A 10 s film takes about 8-12 minutes, a minute-long one about half an hour,
-most of it Claude (the site's `estimateMinutes`). The prompt is capped at 12000 characters.
+most of it Claude (the site's `estimateMinutes`). A prompt may be up to 30,000 characters (`server.PROMPT_MAX`; it was 12,000 until 2026-10-09); a longer one is refused, never trimmed.
 `GET /api/limits` (no token) lists the limits a person can meet, with no money in it: the
 site's docs (kitcut.ai/docs) are built from it, so a change to a limit here means rebuilding
 them (`npm run docs` in sketch-studio).
@@ -188,6 +193,34 @@ writes), pictures join the manifest's `images` as `upload1...`, and the first me
 with the instruction to look at each and say what it took it to be; a film nobody typed a word for
 gets its title from Claude (`name_film`). Pictures film.js never draws leave the manifest before
 the final render, so they never reach the film's files.
+
+**A Short** (`film.FRAMES`, `film.CAPS["captions"]`, 2026-10-08). `"frame": "9:16"` (or
+`"1:1"`; `"16:9"` is the default and is never recorded) makes a film from an idea in that frame:
+the manifest's `frame`, the record's `frame`, and a paragraph in the first message
+(`film.frame_note`) that replaces the brief's 1920x1080 -- the canvas, the box to keep to, and for
+a tall film what a phone's own buttons cover (`film.TALL_COVERED`: the bottom fifth and a strip
+down the right of the lower half). The system prompt is not touched, so every 16:9 film's prompt
+is byte for byte what it was. `"captions": true` adds the `captions` capability: the engine
+module `sketch/captions.js` draws the narration's words into the picture a card at a time, from
+the voice timeline, in a band that depends on the frame's shape (`film.caption_band`, which
+`studio/test_shorts.py` holds equal to the module's own `SK.captionBox`); the first message tells
+Claude to keep that band clear and to draw no captions of its own. Claude's stills, strips and
+motion sheets show the cards, and so does the review. A YouTube Short needs both: YouTube shows
+no soft subtitle track. From this machine: `python studio/agent.py "..." --frame 9:16 --captions`;
+from the site: `npm run film -- make ... --short`. Not yet on the site's idea box.
+
+A 9:16 film from an idea also opens as a feed needs it to (2026-10-09; `docs/shorts-guidebook.md`
+is the rulebook and says why). Its first word comes 0.1 s in, not 0.5 (`film.vo_lead`,
+`film.TALL_LEAD`: the lead in `vo.json` and in the pins `guard.pin_vo` puts back, so a film made
+before this gets it with its next version). And the video's first frame is the film's own frame 0:
+`Film.create` writes `"cover": false` into the manifest, because the renderer's cover frame is the
+film's ending and a Shorts feed shows frame 0 before anything plays. The first message says both.
+
+**No music** (`"music": false`; `agent.py --no-music`; the site's `npm run film -- make ...
+--no-music`). The manifest gets `audio.music: false`, which `sketch-audio.py` obeys whatever the
+score holds: no score event is played, and no pitched cue either (`_sketchaudio.TONAL_FX`: a
+sampled note, a chime). The record says `"music": "none"` and the first message tells Claude to
+leave the score empty. For a film from an idea in any frame; a template keeps its own sound.
 
 **People** (`film.CAPS["people"]`). `"people": [{"upload": id, "name": "Alex"}]` (up to
 `film.MAX_PEOPLE`, image uploads, one photo per person) and `"character_style"` (`"auto"` or a
@@ -217,6 +250,17 @@ subtitles are copied to Azure blob storage (account `kitcutst`, container `films
 while this machine is off. A copy that fails leaves the film as it was. `python studio/media.py
 --backfill` copies earlier films; `--film <id>` one; `--delete <id>` removes one. Never use the
 container `media`: the catalog site's `upload-media.py` prunes it of anything not its own.
+
+The copies can go to Cloudflare R2 instead, which charges nothing for downloads: set
+`STUDIO_MEDIA_BASE` to the bucket's public address and folder (`https://media.kitcut.ai/films`),
+`STUDIO_R2_ENDPOINT` to its S3 address (`https://<account>.r2.cloudflarestorage.com/<bucket>`) and
+`STUDIO_R2_KEY_ID` / `STUDIO_R2_SECRET` to an R2 token that may write objects; the three win over
+the SAS. Records keep the URLs they were given, so earlier films play from Azure until they are
+moved: `media.py --move-from <old base> --blobs <names>` copies the files (again and again:
+what is already there at the same size is skipped), then `--move-records <old base>` points
+every record at the new place, the ones only the database still has included; both take
+`--dry-run`. While the old place is kept, `STUDIO_MEDIA_OLD_BASE` names it: nothing is written
+there, but a film deleted for good is removed there too, so its old address stops playing.
 
 **Publishing to YouTube** (`youtube.py`). The public site holds each person's channel grants and
 opens a resumable upload session with YouTube for the film. The studio gets only that session's
@@ -254,8 +298,13 @@ Only links it was given survive, chapters must fit the film, and a draft that pa
 back is refused. Try one by hand with `python studio/ytdraft.py --film <id> --sample-from @handle`
 (`--plan` prints the ask and its price). Details: `docs/reference.md`.
 
-**The thumbnail** (`thumbs.py`, `scripts/_thumb.py`): four options, each a moment of the film itself
-with a few big words on it, offered in the publish dialog. The same Claude call chooses them: it
+**The thumbnail** (`thumbs.py`, `scripts/_thumb.py`): four options with a few big words on each,
+offered in the publish dialog. A film that shows pictures (cut-outs, photographs) gets posters
+composed from them -- one picture large on the film's own page, another behind it, the words beside
+or above, by a template that varies with the film and the option; its writer answers four
+`{at, hero, with, words}`, naming the pictures (`ytdraft.ASK_POSTERS`). What follows is the other
+case, a film that draws everything itself, whose options are moments of it (and what a poster
+falls back to). The same Claude call chooses them: it
 sees a sheet of the film's clean moments with their times (made first, ~12 stills; no Free-plan
 mark) and answers four `{at, words, layout, place}` -- headline, card, panel, headline, the first
 the video's main message. Once the draft is written, the job makes the options the way YouTube
@@ -265,7 +314,16 @@ large on the other, drawn by the film itself in its own look (its title type and
 labels and logo, read off it by `sketch/thumb.js`) in one browser run; options 1 and 3 carry its
 logo. Then checks (legible at 168 px wide, 4.5:1 contrast, clear of YouTube's duration stamp). An
 option that fails falls back (a glow of the film's paper, one of its cards, the frame alone) before
-anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The draft's
+anyone sees it; options saved under an older design (`_thumb.DESIGN`) are made again. The first of
+the four is the video's punch line -- a short title of 2-5 words -- very large on a dark box of the
+film's colours over the frame as the film drew it (`layout_punch`, config `punch.options`; the
+Yandex video's thumbnail, `docs/reference.md` "The punch line"); every option of a Short is one, at
+its own 1080x1920 frame. The second is the video's title in a box of the film's accent on a whole
+frame of the film (`layout_title`, config `title.options`); a title too long to read on a thumbnail
+leaves it as its moment's own words. The other options' words are a short question the film answers
+or a short quote of its narration, both kinds among them, and a title box carries its option's own
+question or quote (`docs/reference.md` "A question or a quote"). Every worded layout tries a punch
+before it gives up its words. The draft's
 answer carries them:
 
 ```bash
@@ -287,7 +345,9 @@ of four; `outputs/share.jpg` 1200x628 and `outputs/thumb.jpg` 1280x720, copied o
 film under names carrying a hash of the pictures, so a remade picture gets a new URL). It lands on the record as `share` (only that field is written) and in `GET /api/films/{id}`.
 It runs in the background and never fails the film; about $0.05-0.13 on the key. Earlier films:
 `python studio/share.py --missing --dry-run` prices it, without it does it (`ops.sh share` on the
-VM). Details: `docs/reference.md` "Share title and image".
+VM). A film's own frame as the thumbnail instead of the drawn one: `python studio/share.py --film
+<id> --frame 2` (`ops.sh share <id> --frame 2`; `off` puts the drawn one back). Details:
+`docs/reference.md` "Share title and image".
 
 ## What it costs, and where that is recorded
 
@@ -410,15 +470,157 @@ docs/studio-scenes-plan.md.
    priced at $0.01 (`WEB_SEARCH_USD`, `tokens.web_search`).
 3. Claude writes the narration and records it (`voice`), writes `film.js` (for a painted film,
    the paintings first), renders review stills and looks at the sheet, runs `motion` -- the film a few
-   times a second, reporting its cuts and any stretch where nothing moves for 4 s
-   (`motion.py`) -- fixes what it sees, writes the score and the cues, and checks the
-   soundtrack (`sound`). It is told its working time
+   times a second: the whole of it a frame a second on sheets, its cuts, any stretch where nothing
+   moves for 4 s, and what the drawing code shows for a moment only (`motion.py`, "A second pair
+   of eyes" below) -- looks inside the seconds with `strip`, fixes what it sees, writes the score
+   and the cues, and checks the soundtrack (`sound`). It is told its working time
    (`film.limits`). **When the time runs out,** a film that is whole and passes the checks is
    finished anyway (`overtime` on its record); one whose picture is written gets one short last
    turn in the same session to write what is missing (`wrap_up`, 4 minutes); only then does it
    fail.
-4. The studio then mixes the soundtrack and renders the video (three browsers at once), and the
+   **The length is a target, not a wall** (`film.may_run_to`, `tools.fit_length`, 2026-10-09).
+   The film is written to the length asked for, and the narration's word budget is unchanged
+   (`agent.narration_words`). But after every recording, and once more before the final mix, the
+   studio makes the film as long as its narration needs: a last word that ends within 0.8 s of
+   the end (under the closing fade) or past it lengthens the film to 1.5 s after that word
+   (`TAIL_S`), up to a quarter over what was asked and ten seconds at least (`GROW`,
+   `GROW_MIN_S`; a vertical film asked for inside YouTube's three minutes stays inside them). A
+   narration recorded shorter again brings the film back; it never goes below what was asked.
+   Only past that allowance is Claude told to cut words. The manifest's `duration` is what
+   changes; the record keeps `length` (what was asked: credits, limits) and gets `runs` (what it
+   became). `SK.film` plays to the manifest's length whatever `duration` film.js names
+   (`SK.LENGTH`, set by the page: `sketch/engine.js`), so the fade-out follows the real end. A
+   template's film keeps its template's length. A line may ask for quiet before it
+   (`{"text": ..., "pause": 1.5}`: `sketch-vo.py`, `validate.MAX_PAUSE_S`), which is how a gag
+   gets a beat without words, and a film may have a narration line for every 3 s (it was every
+   5: `film.limits`). Before this, the length was fixed: Leo episode 11 (odoais) went out with
+   its last line faded under its last word and 59 lines merged into 48 with no pause anywhere
+   (docs/known-issues.md, KI-062).
+   **A length left to Claude** (`"auto_length": true`, kitcut.ai's "Let Claude choose the
+   length" on paid plans; 2026-10-16): `seconds` is then the longest the film may be, which the
+   site holds in credits. The film is laid out at that and recorded with `auto_length` and
+   `length_max`; the first thing `make_film` does is one short turn of Claude, with no tools
+   (`agent.pick_length`: the idea, what came with it, the project's brief, the range), that
+   answers with a length. `Film.relength` lays the film out again at it (the manifest, the
+   paintings' cap, scenes past `STUDIO_SCENES_OVER_S`), the record's and the run's `length`
+   become it (`length_picked`), and the site gives back the rest of what it held at once. No
+   answer in `PICK_TIMEOUT_S`: `PICK_FALLBACK_S`, or the longest when that is less. Everything
+   after is made for the length picked, as for one the person chose; the turn's cost goes into
+   Claude's (`length_pick_usd`). `python studio/test_autolength.py` covers it.
+4. The studio reads the finished film once more itself, and Claude gets one bounded turn to fix
+   what must be fixed ("A second pair of eyes" below).
+5. The studio then mixes the soundtrack and renders the video (three browsers at once), and the
    MP4 lands in the film's `outputs\film.mp4`.
+
+### A second pair of eyes (`motion.py`, `sketch/probe.js`, `review.py`)
+
+A film's author checks it against what it meant to draw, and misses what it did not mean. Three
+two-minute episodes shipped on 2026-10-07 with 4-8 glitches each that last between a tenth of a
+second and a second (docs/known-issues.md, KI-059): the author had looked at twelve frames. Three
+things now look at every film, and each was measured on a bench of those glitches before it was
+wired in (`python studio/defects.py --score`; the labels are `bakeoff/defects.json`, the film
+folders stay out of the repo).
+
+- **The whole film, a frame a second.** `motion` tiles the frames it already renders onto sheets
+  of 20 (`outputs/review/film-01.jpg` ...), each frame with its time and the words being said in
+  that second (`motion.sheets`), in the film's own shape. `strip` shows up to six moments as eight
+  frames a tenth of a second apart (`outputs/review/strip-N.jpg`). The review step of every look
+  is written round them: read the whole film against the narration, then strip every moment
+  somebody goes into, out of or behind something, turns round, or changes place.
+- **What the drawing code shows.** The same browser run plays the film once more every 0.1 s
+  without painting it (`sketch-render.py --stills ... --probe 0.1`, `sketch/probe.js`): each call
+  made through a cast object (`SK.cast.duchess.sit(...)`) is a named scope, and the canvas calls
+  inside it are counted instead of drawn -- where it drew, under what transform, through what
+  clip. A muted frame costs about 10 ms; a film that will not fit 30 s is read at a coarser step,
+  whole. `motion.events()` turns the report into sentences: the same character on screen twice for
+  a moment (two functions of one cast member that otherwise take turns), a body cut by the edge of
+  what it is inside (more than 30% of it hidden by the clip it was called in: a cat inside her
+  carrier loses 25% and looks right, one too big for its door 49-60%), going into or out of a
+  thing, squashed through flat (the ratio of its transform's two scales under 0.6, and changing),
+  a jump across the frame, and a colour laid over the whole frame that comes or goes (kept only
+  when the pixels move with it: `motion.shown`). Nothing is asked of how a film is written: a set
+  fills the frame, furniture never leaves its place in the world and is there as long as its set,
+  a carrier has others drawn inside it; what is left is somebody. These are pointers for a closer
+  look, never verdicts: a door turns through flat too, and a cat may be half hidden on purpose.
+  What a film draws with its own local functions has no name and is not reported.
+- **The reader** (`review.py`). After the author's last turn the studio lays the film out the
+  same way and a fresh Claude, with no tools and nothing of the author's conversation, reads it
+  against a fixed list of glitch kinds (`prompts/review.md`: through, squash, double, poke, idle,
+  untold, wash, stray, text, apart, float, cutoff, continuity -- never taste). Two calls: the whole film, with
+  the narration's times and the machine's notes; then close-ups of the moments it and the machine
+  asked for. A finding is a `must` only when a viewer would call it a mistake at normal speed;
+  one about framing or continuity never is (`SOFT`), and a body through a wall, squashed or twice
+  on screen for 0.3 s or more always is, whatever the reader called it (`HARD`: a reader told to
+  be sure reported a dog's head in a wall as "could be better", and the fix turn left it).
+  When there are any, Claude's own session gets one turn of `FIX_S` (6 minutes, effort high, the
+  tools `check`, `stills` and `strip` only) to fix exactly those. The fix is then judged: the
+  film must still run, the narration's words must not have moved (vo.json is put back), and the
+  frames that changed more than 2 s away from every finding are shown to the reader side by side
+  with what they were; a fix that broke something is thrown away (`temp/before-review`) and the
+  film goes out as its author finished it. What it found and what came of it is kept under
+  `review` on the film's record (`outcome`: clean, fixed, or kept as it was and why), its cost in
+  `review_cost_usd`, its time in `stages.review`.
+
+**What its owner sent a film back for (2026-10-09, KI-062).** Leo episode 11 was read "clean" and
+came back the same evening: a boy seen from behind with his head floating over his shoulders, a
+city drawn on the sea, a phone message too small to read, a phone hanging under a hand. None of
+it moves, so nothing above was looking for it. Three additions:
+
+- **Two more measurements in the probe.** `g`: a figure drawn in two pieces. A figure is what one
+  cast call draws (not a place) or one `SK.at(...)` group of the film's own code; the boxes of
+  the solid marks drawn inside it (each cut to the clip in force, so a wash's texture counts as
+  its shape) are projected on the vertical, and a band of nothing that leaves an upper and a
+  lower piece, each of four marks or more and 12% of the figure's height or more, one above the
+  other, is a gap. `motion.events` tells it as `apart` when it lasts 1.5 s (`APART_S`: a boiling
+  line opens a gap for a moment; a sun's rays did, for 0.75 s at a time). `x`: words set small.
+  `SK.txt` is wrapped (it draws a string a character at a time), and the type size is taken as it
+  lands on the frame, under the camera's zoom; under 3% of the frame's height (`SMALL`, 32 px of
+  1080) for 1.5 s it is told as `small`, the six smallest. On episode 11 as it went out: the head
+  (1:14 to 1:22 and 1:30) and the message ("Why are you not home yet?", 28 px beside 44 px
+  lines). Both are measurements that point; they are in the author's `motion` and in the
+  reader's notes, and `apart` gets a close-up.
+- **Two more kinds for the reader** (`prompts/review.md`): `apart` (a body in pieces: always a
+  must when it lasts, `HARD`) and `float` (what should stand on the ground or be held does not:
+  buildings on water, a post through the road, a phone beside a hand). Words the story needs
+  that cannot be read are a must.
+- **The fix turn takes small things too** (`review.to_fix`, `EASY`): after the musts, up to three
+  "could be better" findings of the kinds `text`, `float` and `stray`, each one local change. It
+  gets two minutes more for each thing past the second, to fifteen (`fix_s`). Episode 11 had three
+  such findings on its list and no fix turn.
+- **A measured gap stands by itself** (`review.measured`). The reader sees frames at a fifth of
+  their size: the head, 12 px off the shoulders on a 1080 px frame, is under three pixels there,
+  and the reader left it out with the machine's note and a close-up in front of it. An `apart`
+  measured for 3 s or more that the reader did not report goes to the fix turn as a must, said
+  as a measurement ("look at a still at full size; join them, or leave them if they are meant").
+
+Episode 11 as it went out, read again with all of this (2026-10-09, one reading): two musts (the
+phone hanging under the hand, the message nobody can read) and the measured head, where the
+reading that shipped had none. Still not found: the city on the sea, which a reader takes for a
+far shore. What stands where is the brief's to get right, not the reader's to catch.
+
+It never fails a film: a reader that raises or runs out of time (`CALL_S`, 5 minutes a call)
+leaves the film as it was. It does not run on a film that was
+read before (one carried on after a restart), on a film remade from a template (a remake of a film
+a person approved, whose flips and wipes are meant: not measured yet), or when Claude is stood in
+for by a test. A film made in scenes has no one session to fix it in once it is whole, so it is
+read before its last pass and the editor is told what was found (`review.for_editor`): the editor
+is its fix turn.
+
+`python studio/review.py --film <id>` (on the VM: `ops.sh review <id>`) reads a finished film the
+same way and prints what it finds, changing nothing; `--machine` prints only the drawing code's
+moments, with no Claude call.
+
+Measured (2026-10-07, `defects.py`, 27 known glitches in six film versions and three fixed
+ones): `motion` as it was named 1; the drawing code 11, of the 12 that are of a kind it can see
+(it misses legs drawn over a box's front: a matter of draw order, not of a clip); the reader 25
+on its first run and 21 on its second, with the final wording. On the three fixed films the
+second run raised two must-fixes, both about framing (a crown on a name plate), the kinds that
+are now never a must (`review.SOFT`); under the final rules, none. Five of the 27 labels are the
+reader's own finds in two films a person had just fixed and believed clean (a one-frame sliver,
+legs over a box, a shout under the meter, a caption in red on a red door, twice). What it
+misses, run to run: a story point that is only implied ("she ignores the cushion"), and now
+and then one of several glitches in a crowded film. A reading takes 3-5 minutes on a quiet
+machine (two calls, 7-12 close-ups; 154-477 s on a busy laptop).
 
 **The live preview** (`tools.PREVIEW`, for a film sent with `X-Preview: 1`): while Claude works,
 the film's page shows the film itself instead of a sheet of stills. After the narration is
@@ -440,9 +642,186 @@ instead (`film.mark_note`, in the first message, and in each scene's and the edi
 made in scenes): the corner `film.MARK_BOX` (x 1660-1920, y 950-1080) is taken, nothing to be
 read goes there. Before that, i4d52n ran its race timer under the mark.
 
+**A finished film without them** (`unbrand.py`, `POST /api/films/<id>/unbrand`, 2026-10-05): when
+its maker moves to a paid plan the site asks for the same film with no mark and no closing, at the
+plan's frame rate (`X-Fps`, `X-Priority`). No Claude and no voice: a render, minutes of machine.
+- **The film is never at risk.** It is made a second time BESIDE the first: `sketch.clean.json`
+  (the manifest with no `tail`, the new `fps`, and `"work": "temp/unbrand"`, so the tools read the
+  film's own files and write into `temp/unbrand/`), the film's own `audio/mix_pre.wav` cut at the
+  film's end and mastered again (`sketch-audio.py --from-mix`), then `sketch-render.py` on the
+  server's pools. It goes online under the next revision's names (`media.blob_of`), and only then
+  takes the old film's place: files, then the record (`branding` false, `fps`, `media`,
+  `media_rev`, `unbrand: {state: "done", before: {...}}`). It never goes through
+  `agent.make_film`, whose failure path marks a film failed and takes its files off its page.
+- **What it leaves alone:** the film's `state`, `finished`, `seconds`, costs, log, share page and
+  `sketch.json` (the YouTube draft and thumbnails are keyed on its bytes; `agent.debrand` drops
+  the `tail` if the film is ever finished again by hand).
+- **A failure** leaves the film exactly as it was and says why in `unbrand` (`{"state":
+  "failed", "error"}`); it can be asked for again. The film's status carries `branded` and
+  `unbrand` (queued, running, done, failed).
+- **One at a time,** and a server that is stopping puts its job back in the queue: the leader
+  starts it again (`unbrand.orphans`, from the marks in `<home>/unbrand/`), three times at most. A
+  YouTube send of the film is not started while it runs, and the swap waits for one to end.
+- `test_server.py` covers it on the Free-plan film it makes: refused for another client, a forced
+  failure that changes nothing, then 5 s at 60 fps, still the film it was.
+
+**A film's words on screen live in `words.json`** (since 2026-11-01, `film.WORDS`): a new film from an
+idea gets an empty `words.json` and `"data": {"words": "words.json"}` in its manifest, and prompt.md
+asks Claude to put every word it shows there by name and draw `SK.DATA.words.<name>`. The check tool
+names words still written in film.js (`localize.words_in_code`; never a failure, never in a scene
+pass). An episode that starts from the last one's code gets its words.json too (`episode.CODE`). A
+translation then changes words.json and the narration, and film.js only by its cue words. Films
+made before, and template films (content.json), have none. `import_film.py` also turns a narration
+kept inline in a manifest into vo.json.
+
+**A film in another language** (`localize.py`, `POST /api/films {"localize": {...}}`, 2026-11-01):
+kitcut.ai's Translate. The site asks as the original's own client with a film's usual headers:
+`{"localize": {"from": <film id>, "version", "language", "key": <the site's hold id>}, "listed"?}`.
+- **A film of its own**: a new id, record and page; `localized: {from, version, language, key}` in
+  its record and in `GET /api/films/<id>`. It gets the original's idea, length, look, frame,
+  captions, music, narrator and paint quality, and its folder (`localize.seed`): the code, cast,
+  pictures, engine, music, sounds and `vo.json` (the same voice and lines, its `language` the new
+  one), with the original's narration and word times in `localize/` to read. Never carried: the
+  original's narration takes and mix (`audio/`), renders, YouTube drafts and thumbnails, share,
+  notes, versions, records (`NOT_CARRIED`), and inside what is carried any video and
+  `rigs/spend.jsonl` (what drawing its people cost). Carried: `web/` (the pictures it brought in,
+  `SK.image('web_...')`), `template/` and `content.json` (a template's film), `rigs/` (people
+  drawn from photos: never drawn again; the record gets no `people`, so nothing redraws or waits).
+  Nothing is painted again.
+- **No narration** (a template's music-only film, or any with `narration: false` or no lines):
+  no `vo.json`, `narration: false` on the record, a first message about the words on screen only;
+  it fails if film.js and content.json are both the original's word for word
+  (`localize.unchanged`).
+- **Only the words change** (2026-11-01, the owner's rule: "absolutely nothing is changed except
+  the voice"). The picture keeps the original's clock: `localize.slots` reads where each line was
+  said (the original's timeline) and the translation's vo.json lines carry that `start`, each to be
+  said before the next begins (`end_by`; the last before the closing fade). Narration kept inline
+  in the manifest (a Short built by hand and imported) becomes the translation's vo.json. The film
+  never changes length (`tools.fit_length` skips it) and is not reviewed (a fix would change more).
+- **Claude's first message** (`localize.ask`): translate the lines to fit their times, translate
+  the words on screen, never change a number, colour, font, size, position, time, key or line of
+  code; a translation that does not fit takes a shorter wording.
+- **The proof** (`localize.check_film`, after Claude's part): film.js and the cast token by token
+  (comments ignored; a quoted string may change only if it is words, `localize.wordish`, never a
+  setting, key, colour, font or file), the manifest and content.json as JSON on the same rule,
+  score/sfx/paint.json the same (paint.json less the studio's painting service), every file under
+  images/ web/ assets/ template/ rigs/ inputs/ music/ byte for byte, the same narrator (tts, voice,
+  style, cast) and number of lines, and each line recorded at its start and inside its time
+  (`localize.overruns`). What else changed goes back to Claude to put back (`agent.localize_strict`,
+  two turns); still changed, the film fails and its credits go back. The report is
+  `localize/check.json`. Words of the original left on screen still get one turn
+  (`localize.leftovers`), never a failure.
+- **Refused before anything is made**: 400 `language` for any language not in `LANGUAGES` (the
+  site's 19; never Russian); 404 for another's film; 409 with `reason`: `state` (not finished),
+  `round` (a new version being made), `own_voice` (told in the person's own ElevenLabs voice and
+  asked without a fresh pass to that same voice: the site mints one and sends it as `voice`),
+  `same` (its own language), `exists` (that language done or being made, with `film`), and not yet
+  (none left: a film made scene by scene is carried with its scenes/ and translated in one
+  conversation, `mode: single`, its scene files held to the same only-words check).
+- **Asked twice with one key: the same film** (202 with its id), so the site can ask again when
+  it got no answer.
+- **Its YouTube draft** is written in its language: the site sends `"language"` and `"fresh":
+  true` with `POST /api/films/<id>/youtube/draft` (`ytdraft.options`), and a fresh ask never falls
+  back on a draft written before.
+- **By hand:** `python studio/localize.py --plan <film-id> <language>` says what it would carry,
+  or why it is refused. `test_localize.py` covers it.
+
+**A film deleted for good** (`delete_film.py`, `POST /api/films/<id>/delete`, 2026-10-05): the
+film's own client (the site, for its owner) or this machine asks, and nothing is kept, not even
+a backup. `{"plan": true}` answers what would go and removes nothing.
+- **The order is the one that asking again can always finish:** the copy online first (every
+  revision, every version a round left, the share pictures: it is what the public can reach),
+  then the record in `kitcut.studio_runs` and its rounds' (`store.forget`, which also takes them
+  out of the outbox so a later sync cannot write them back), then what names the film outside
+  its folder (its library's index and cast lists, its project's episode log `canon.json`, the
+  cached poster, its Claude sessions, a round's copy and marks, the backups `ops.sh replace`
+  kept), and last the folder, moved out of `projects/` in one rename and then removed.
+- **Storage that refuses stops it with the record and the folder in place** (502); **a database
+  that cannot be reached leaves the folder** (503), so the same request finishes the job.
+- **Refused (409, with `reason`)** while the film is being made or waits for a voice (`making`),
+  has a round under way (`round`), is being drawn again (`unbrand`) or is on its way to YouTube
+  (`youtube`).
+- **What it leaves:** a cast member the film made (it is the library's), and everything in the
+  site's own collections (views, likes, notes, YouTube rows, the credit table): the site cleans
+  what is its own (`lib/films.js` `deleteFilm`).
+- **By hand:** `ops.sh --dry-run delete <film-id>`, then `ops.sh delete <film-id>`; beside the
+  server, `python studio/delete_film.py <film-id> [--plan]`.
+- `test_delete_film.py` covers it: gone everywhere with the film beside it untouched, a plan
+  that removes nothing, each refusal, storage and the database failing, and the endpoint's own
+  client, a stranger and a second ask.
+
+**A finished film changed from its maker's notes** (`rounds.py`, `GET|POST
+/api/films/<id>/versions`, 2026-10-05): the film's maker points at a moment, a spot in the
+picture, a stretch, a line of the narration or the whole film and says what should change; one
+ROUND makes all of it into the film's next VERSION -- the same film, page and link.
+- **The film is never at risk.** A round works on a COPY of the film in
+  `<home>/rounds/<rid>/` (rid is `<film id>.r<k>`), never in the film's folder and never through
+  `agent.make_film`. Claude gets the notes at once (`rounds.ASK`), each with the frame it points
+  at drawn from the film's code at that moment (`notes/<n>.png`, a spot ringed) and what is being
+  said there, and two tools of the round's own: `note` (one sentence per note: done, or not
+  changed and why) and `summary`. Then the studio mixes, renders and puts the copy online under
+  the next revision's names. Only then the swap: the copy's files take the film's place and the
+  film's own go to `versions/v<n>/` -- renames, under a marker (`versions/.swap.json`) that
+  `rounds.heal` undoes if a restart cut it short -- and then the record (`version`, `versions`,
+  `media`, `media_rev`).
+- **A round that fails, is stopped or changes nothing is its copy deleted.** The film's `state`
+  stays `done` throughout; its page plays the version it has. The round has its own document in
+  `kitcut.studio_runs` (`_id` rid, `kind: "round"`, `state` queued, running, finishing, done,
+  failed, cancelled, interrupted or unchanged), which the site settles its credits on, with
+  Claude's answer to each note (`notes`) and what the round cost. The film's own costs are left
+  as they were.
+- **A version's files are in one place:** the film's folder while it is the film,
+  `versions/v<n>/` when it is not. So going back (`POST .../versions/<n>/current`, `rounds.use`)
+  is the same swap the other way with nothing rendered, and the master YouTube is sent is always
+  the version on the page. The last `rounds.KEEP` versions are kept beside the film; an older
+  one still plays from its copy online and says `kept: false`.
+- **What does not move in a round:** the film's length; the voice's and the painter's models,
+  pinned in the copy's record to what the film was made with (`pins`, read by `Film.vo_pins`
+  and `guard.pin_paint`), or a changed default would record every line again in another voice;
+  and what each tool spent before (the copy starts with no `spend.jsonl`, so a round's allowance
+  and its cost are its own: `rounds.limits`).
+- **What it cannot do yet:** change the words of a film told in a person's own ElevenLabs voice
+  (their pass to their account was for the film's making), or change a film made in scenes.
+- **Limits.** A round takes one of its maker's films-at-once places and holds its reserve of the
+  day's budget (`rounds.mine`, `rounds.reserve`), but is not one of the day's films. A film may
+  have `STUDIO_ROUNDS_PER_DAY` (5) rounds in a day, a round up to 20 notes. A YouTube send and a
+  redraw without branding each wait for a round, and a round for them.
+- **A sharper version** (2026-10-29): `POST .../versions {"key", "from", "sharpen": "medium"|"high"}`
+  instead of notes. Every film's paintings are drafts (`film.DRAFT`, wherever the painter has a
+  quality: `film.QUALITY_MODELS`); `rounds.pictures` says a film's quality and what it may be
+  raised to (`pictures` on `GET .../versions`: nothing for Muse, a drawn film or one in scenes).
+  The round takes no turn with Claude: `rounds.sharpen` keeps each painting in the copy's
+  `drafts/` and pins the quality and `redo`, `sketch-paint.py` paints every picture again from its
+  own draft alone ("this exact picture, finished": the camera moves were written for where things
+  stand), `rounds.unsharpen` takes `redo` and the drafts away, and the round renders as any other.
+  The paintings are cached under the keys they have without `redo`, so the version's next round
+  of notes paints nothing again. The draft stays one of the versions. It is one of the film's
+  rounds of the day; the site holds its credits as for notes, and the film's document gets
+  `paint_quality`.
+- **A filmstrip per version** (`rounds.make_strip`, `outputs/strip.jpg`, online beside the rest):
+  24 small frames in a row, each sought in the web copy rather than the film decoded. The
+  site's notes page cannot read a video's pixels off another host, so it cannot make its own.
+- **By hand:** `ops.sh notes <film-id> <notes.json>` (followed to the end, Claude's answers
+  printed), `ops.sh versions <film-id>`, `ops.sh version <film-id> <n>`; beside the server,
+  `python studio/rounds.py <film-id> --notes notes.json [--plan]`.
+- `test_rounds.py` covers it on a Free-plan film it makes: a version made and the one before
+  kept, the film done and playable throughout, a failed, a stopped and an unchanged round each
+  leaving it byte for byte as it was, back to version 1 and forward again, a swap cut short
+  undone, a round whose server went away made again once, and the limits.
+
+**What a run is doing, in the database** (`live.py`, 2026-10-05). A film being made and a round
+each keep one line in their document in `kitcut.studio_runs`: `now` (the sentence the page
+shows: the stage, or what it waits for), `now_at` (written again every 30 s while the run lives,
+so a reader can tell a run that is thinking from one whose server is gone), and for a film
+`stage` and `ahead` (the films before it in the line for Claude). The site asks this studio for
+a film's status, and until now had only "running" to say when it could not reach it -- during a
+restart, a ship or a dropped tunnel, exactly when a person wants to know. Each change is written
+once, one write in flight per run, and a write that fails is dropped: a status never fails a
+film. The log itself stays the studio's (`events.jsonl`).
+
 **A series: the person's cast and memory** (`library.py`). A signed-in person's workspace (the
 site's `o:<id>` client; `u:<id>` before workspaces, the same owner) has a library that outlives
-its films, next to `projects\`, never in git:
+its films, next to `projects\` (its text is in its project's git repository too: `filmgit.py`):
 - **What is kept.** Their cast is characters, places or things as small modules
   (`SK.cast.<name> = {about, draw(x, y, o)}`), plus the films they made.
 - **What a new film gets.** Before Claude starts, a new film gets:
@@ -458,9 +837,231 @@ its films, next to `projects\`, never in git:
 - **After an ok film.** `agent.keep_cast` takes in each new or changed member as a new version
   (the last five are kept), draws it alone for a thumbnail, and remembers which films used it.
   A failed film keeps nothing.
+- **Only over the version it started from.** A member whose library version moved on while the
+  film was made (another episode changed it, or an old film is finished again) is not saved:
+  the newer one stays, the film keeps its copy in its own `cast\`, and the film's `cast` summary
+  says `clashed`. On 2026-10-01 four Leo episodes were finished again, oldest first, and the
+  first wrote its night-before Leo over the series' newest: rain boots, bike helmet and sitting
+  poses gone until a later one happened to put them back.
+- **Two episodes at once** (2026-10-18; the Pro plan makes two). Before that rule refuses, a
+  member another episode changed meanwhile is merged (`library.merges`, from `agent.keep_cast`):
+  `git merge-file` with the version this episode started from as the base (one of the five kept),
+  the library's as it is now, and the episode's. A clean merge that parses is drawn on the cast
+  sheet like any member, and saved as the next version only if it draws (and only while the
+  library still holds what it merged onto); its summary says `merged`. One that touches the same
+  lines, does not parse or draws nothing is a clash as before, and in a project the episode's
+  copy is kept beside the series' version (`<project library>\clashed\<name>\<film>.js`,
+  listed by `/api/library` as `clashed`): the next episodes get it in `library\clashed\`, are
+  told to fold in what it added, and it goes once one of them saves the member. A kept sound two
+  episodes changed at once is reported (`sounds_clashed`), not dropped in silence.
+- **Places.** A set the films return to (a room, a yard) is a member with `kind: 'place'` and
+  `camera: [x, y, zoom]`: the sheet draws it at its origin through that camera, the note and
+  `/api/library` mark it a place. Its header comment is its manual: floor line, camera, options,
+  and what it draws in front of the cast (`o.layer = 'front'`).
+- **Painted characters** (2026-10-27). A project's cast also holds characters that are pictures,
+  not code: `"painted": true` in the index, `cast\<name>\v<N>.png|jpg|webp` and `thumb.png`. They
+  share the cast's names, its listing, thumbnails and Remove.
+  - **Two ways in.** The person puts in a ready-made one on the Cast tab
+    (`POST /api/library/characters`, `library.add_character`). It needs a name, a one-line
+    description, and at least 512 px on the short side. Or an episode keeps one of its
+    paintings: `"keep": true` with `"about"` in `paint.json` (`library._keep_painted`, from
+    `keep`).
+  - **Limits.** At most 16 per project (`library.CHARACTERS`). A repaint under the same name is
+    the next version, and, as with a drawn member, only over the version the episode started
+    from. A drawn member never replaces one, and one never takes a drawn member's name.
+  - **Every episode gets them** as `inputs/cast_<name>.*` (`_seed_painted`). Its note says who
+    they are and to paint every scene they are in with `"ref": "cast_<name>"`, or a list of up
+    to 4 references for several together (`sketch-paint.py`). A drawn episode draws them as they
+    are with `SK.image`.
+  - **Named in the prompt.** `@mom` in a project film's prompt names a cast member
+    (`library.mentioned`). The film is told it must have them (`named_note`), and its paintings
+    are held to their pictures (`validate._named`). An `@word` close to a member's name (`@mum`)
+    is refused before anything is made, with "did you mean @mom?". Any other `@word` (a handle,
+    an e-mail) stays the prompt's own text.
+- **The episode log** (`canon.py`, 2026-10-02). An episode sees only its last five episodes'
+  files, so at episode twelve the first seven are gone and a twist comes round again. After every
+  finished episode one Claude call with no tools (beside the share, `server.py`; ~$0.02-0.05 on
+  the key, uncharged on the login) writes its entry into the project's `canon.json`: title, a
+  one-line story, its catchphrases, the twist, the true fact, what was new, what could come back.
+  Every next episode's note carries the whole log (`library.canon_note`, ~16k characters at most:
+  the newest eight whole, older ones shrinking to their story, then their title).
+  `ops.sh canon <p-id> [--show | --dry-run | --force]` back-fills a series made before it.
+- **A series, or a collection** (2026-10-08). A project is a series unless it says what it
+  keeps: every episode sees its last five and is told to keep their cast, look, voice and music,
+  and the "recent films chose" tally yields to them. That is right for a show and wrong for a
+  news feed: ten Shorts made in one project came out as one film ten times (same paper, same
+  type, same narrator, same pulse). A project's `keep` (the site's `lib/projects.js`, sent with
+  the film: a list from `film.PROJECT_KEEPS`, cast, look, voice, music) names what its films
+  share; fewer than all four makes it a collection (`library.keeps`, `is_collection`). A
+  collection's film hears what each earlier film chose -- ground colours, type, painting style,
+  voice, instruments and tempo, how much narration and how it opens -- as what to differ from,
+  is not sent to their code, is not told to keep the series, gets no kept sounds unless it keeps
+  its music, and its log says only what has been told. `Film.direction()` records what that
+  needs (`paper`, `accent`, `opening`, `lines`, `words`), read from an older film's files when
+  its record has none. A project with no `keep` hears byte for byte what it heard before
+  (`test_variety.py`). The system prompt is unchanged: all of it is the first message.
+  `studio/variety.py` measures a set of films: per choice, how many different values it has and
+  how much of the set the commonest takes, and how far apart the films' frames are
+  (`ops.sh pull <id> <dest> --light` fetches what it reads). The ten Shorts made as a series
+  are the baseline: sameness 0.71 -- one look, one narrator in all ten, one ensemble at one
+  tempo in nine, a red accent in seven, Anton in seven; frames 0.348 apart on average.
+- **Kept sounds** (2026-10-02). An episode's `sounds.json` (named sound effects and themes,
+  played by name from sfx.json and score.json: `docs/reference.md`, "Kept sounds") is kept like a
+  member: seeded into the next episode, its new and changed entries saved after an ok film, only
+  over the version the film started from. `sounds_note` tells the episode (and a scenes film's
+  editor, who writes the music) what the series has and how to play it.
+- **Starting from the last episode** (`episode.py`, 2026-10-18; on while `STUDIO_EPISODE_CARRY`
+  says so: `all`, or project ids). An episode wrote its film.js from nothing, with its earlier
+  episodes only to read, and the first write of a film's picture is 47% of Claude's time; a
+  template's remake, which starts from finished code, takes a median 5.6 minutes of Claude against
+  13.7 for a 30 s film from scratch (`docs/studio-speed.md`). Now, after its length is picked and
+  before Claude starts (`agent.make_film`), a series' episode is given the last one's -- the one
+  made last (`created`), not finished last -- as its own to edit:
+  - **film.js and score.json** as they finished; **vo.json** with the series' voice, style,
+    language and character voices and no lines (the narration is new, and recorded anew; the
+    person's narrator still wins, `pin_vo`); **paint.json** with the series' style and no
+    pictures; the faces the last episode fetched; cast members a round changed after it (rounds
+    never reach the library), unless another episode has changed them since.
+  - **Never** sfx.json (its cues are seconds on the old narration), scenes, pictures or a spend log.
+  - **The engine:** core fixes reach every series because every film still gets this release's
+    engine (`Film.create`). When the last episode changed its own copy, each changed file is
+    merged three ways onto this release's (`git merge-file`, base = the engine that episode started
+    from: `Film.engine_base`, its release's `sketch\` under `releases\` or in the checkout); the
+    same release is its copy exactly. A file that does not merge, or does not parse once merged,
+    leaves this release's engine and the old changes in `library\start\engine.diff`, which the
+    first message names. `engine_diff` measures every film against the engine it started from
+    (`engine_from`), so what an episode carried is not counted as its own change.
+  - **library\start\**: the last episode as it was, read-only (film.js, vo.json with its
+    narration, score.json, sfx.json, paint.json, about.json).
+  - **The first message** (`episode.note`, after the library's) says it starts from that code:
+    keep the series' frame -- the look and its helpers, the ground and palette, the type, the
+    camera's habits, how the characters are drawn, the opening and end card, the music -- and
+    replace the story, with Edit, part by part. A long one is told to change it a few scenes at a
+    time (`episode.LONG`); the "recent films chose" tally is left out.
+  - **Guards:** a film.js still exactly the last episode's fails the film (`episode.untouched`, in
+    `written` and after Claude); words of the last story still on screen -- strings of a few words
+    in its film.js that fewer than two of the earlier episodes share -- get one short turn to go
+    (`agent.episode_leftovers`), never a failure. `check` names any `SK.w` cue on a word its line
+    does not say (`validate.cue_misses`, every film): the engine falls back to 0 s there, silently.
+  - **When not:** a collection, another look, frame, captions or music-or-none, people from photos,
+    a film made in scenes, music only, or no earlier episode: it starts empty and its record's
+    `carried` says why (`{"skipped": ...}`). Once: a requeued film keeps what it has. A carry that
+    fails half-way puts every file back and the film starts empty.
+  - The record's `carried` (`{film, version, release, title, length, hashes, cast, fonts,
+    engine}`) goes to `studio_runs` and into the film's repository (`filmgit.py`: film.json's
+    `carried_from`, the commit's `Started-from: <film>/v<n>`). `python studio/episode.py --plan
+    <id>` says what a film would start from. `test_episode.py`.
+- **A project's brand** (`brandkit.py`, 2026-10-02). Pictures are things to show; a brand is how
+  every frame looks and sounds. The person sends anything (a zip of the brand folder, PDF
+  guidelines, logos, fonts, slides) in parts of up to 4 MB (the site's functions take 4.5 MB), into
+  `<project library>/brand/files/`, kept so a read can run again. A read:
+  - **ingest, no Claude:** zips unpacked to three deep (a zip-bomb entry skipped), PDF pages drawn
+    with pdfium (not PyMuPDF: AGPL) and each PDF kept for sharp logo crops, office files' words,
+    media and theme colours and fonts, SVGs drawn by the browser (`web-grab.svg_raster`), fonts
+    read with fontTools (woff/woff2 unpacked to sfnt, licence bits noted), colour codes found in
+    the words, junk (`__MACOSX`, `.DS_Store`) ignored, an EPS or a video listed with the reason;
+  - **one Claude call with no tools:** the ten pages that matter most (by their words), a numbered
+    sheet of the pictures, the words, and the evidence -> the card, held to its shape (`clean_card`);
+  - **assets:** each logo trimmed and keyed off a plain background (only where the background
+    touches the edge: a white letter in a blue badge stays), cut from its page when it is only
+    there; the faces in use (uploaded ones only with the person's `fonts_consent`, else the free
+    stand-in from Google Fonts); `brand.js` (`SK.BRAND`, the kit's font, `SK.BRAND.logoFor(bg)`);
+  - **the preview:** three frames the film engine draws in the project's look, with the brand.
+  An episode gets it at seed (`brandkit.seed`: `brand/` in the film, its faces in the manifest's
+  fonts, logos as `brand_logo*` images, `brand.js` first in `head.scripts`, which thumbnails and the
+  cast sheet keep too) and a note in its first message (`brandkit.note`).
+  - **The brand's own pictures** (2026-10-05): a project's person attached the same logo and
+    mascot to film after film, and they took two of the project's six Pictures. The card now has
+    `pictures`: up to `MAX_PICTURES` (8) of the pictures found in the files (a mascot, a product,
+    a screenshot of the app), each `{image, name, note}`, proposed by the read (which now hears
+    each picture's file name) and corrected on the card. `build_assets` keeps each as it is
+    (never keyed out or trimmed: a mascot's orange ground is hers) as `brand_pic_<name>.png`;
+    `seed` puts them in the manifest's images; `note` lists each with its size and its person's
+    words on what it is and how to use it, and says they are shown with `SK.image`, never redrawn.
+    A logo's note is told by the name a film draws it with (two "other" versions no longer share
+    one). One a film never draws leaves its manifest before the final render
+    (`agent.drop_unused_uploads`); the logos always stay. `GET /api/limits` says
+    `library.brand_pictures`. Routes:
+  `/api/library/brand[...]` (`server.py`); the site's are `/api/projects/<id>/brand[...]`.
+  Measured on two public brand books and a made-up one: 21-30 pages read in 1-10 s, the card in
+  16-30 s at $0.15-0.41 on the key. `test_brandkit.py` covers it without Claude.
+- **A project's style** (`stylekit.py`, 2026-10-15). A brand is who is speaking; a style is how
+  the pictures look, from one to four pictures the person gives (the site's Style tab;
+  `specs/features/style-tab.md` in the site's repo has the plan and what six style pictures
+  measured). Pictures (JPEG, PNG, WebP, AVIF, a GIF's first frame; a HEIC refused with what to do)
+  and font files go up in parts as a brand's do, into `<project library>/style/`, each picture a
+  JPEG of 2048 px on arrival. A read: the colours measured by k-means (the same each time), ONE
+  Claude call with no tools that writes the card -- a style line that names no thing in the
+  pictures (a noun there gets painted: a bust by a bridge, bottles in a bakery; one that slips in
+  is asked for again), the things it saw, the layout, the look that suits it, each line of
+  lettering with its box and 2-3 Google Fonts that come close, and a subject from the brief --
+  then each line cut out and set in each face (`brandkit.standin` fetches them), then the proof:
+  the subject painted each way (`film.STYLE_ROUTES`: GPT Image and Muse, each given the pictures
+  and the line; Gemini too for the team, `X-Team: 1` from the site's `KITCUT_TEAM`) as a step of its own
+  (`stylekit.py --proof <dir>`, handed only OpenRouter's key: the server's environment has none).
+  The person picks a route on the card; only the team may pick Gemini, and anyone else's edit moves
+  a Gemini style to GPT Image and says so. An episode gets it at seed after the brand
+  (`stylekit.seed`: `style/` in the film, its faces in the manifest, `style.js` -- `SK.STYLE` --
+  ahead of `brand.js`, so the brand wins) and the record's `paint_route`, from which
+  `film.paint_pins` sets the painter, the style line and, on a picture route, `style_ref`: every
+  style picture (`style/style.jpg`, the main one, then `style2.jpg`...), sent with every painting
+  and cut-out by `sketch-paint.py` beside the line (2026-10-29: given only a main picture of people
+  on a plain ground and no line, a reel painted its full places in the painter's own look). GPT
+  Image paints a draft (`film.DRAFT`, quality low; collage cut-outs too), and a sharper version is
+  its person's to ask for (below). The guard holds all of it, and a round keeps what its film was
+  painted with (a film from before keeps no quality, so nothing repaints); the run's
+  document says `paint_route`, and the site marks a Gemini episode. Measured on KitCut's own collage
+  still: the read in ~40 s, the card ~$0.05 on the key, a proof $0.03 (GPT Image + Muse) or $0.13
+  with Gemini. `test_stylekit.py` covers it with Claude and the painters stood in for.
+  **A style is its project's alone:** nothing of it reaches another project, a film outside
+  projects or an episode made before it (nor that episode's next versions). The paths that read
+  across films leave a styled film (its record's `paint_route`) out: `agent.recent_films` (the
+  "recent films chose" note), `harvest.py`'s kit candidates, and `template_from_film.py`
+  (refused without `--with-style`). The looks' briefs say nothing of it, so every other film's
+  prompt is unchanged; `stylekit.note` tells a styled episode its painter is given the picture.
+- **Back-fill by hand.** A set a series drew in its episodes' film.js never reached the library:
+  write it as a cast file and `ops.sh library-put <project> [--dry-run] <cast/x.js>...`
+  (`studio/library_put.py`) makes it the next version, thumbnail and sheet included, as keep()
+  would. Leo's townhouse, street, park, bedroom and home and Duchess's room went in this way on
+  2026-10-01. A character's file needs a plain `draw(x, y, o)` for the sheet to show it.
+  Improving a member outside any episode: "Improving a series' places and characters" below.
 - **Routes** (the asker's own library): `GET /api/library`, `GET /api/library/<name>/thumb.png`
   and `DELETE /api/library/<name>`. A delete keeps the files, and later films leave the member
   out.
+
+**Improving a series' places and characters.** A library member is code, and every new episode
+starts from its latest version, so a place (or a character) can be made better on its own, outside
+any episode, and the next episodes pick it up without being told. Finished episodes keep their own
+copies and do not change. The procedure:
+1. **Get what the library holds now:** `ops.sh library-get <project> <dir>` writes each member's
+   latest version as `<dir>/cast/<name>.js`, with `cast.png` (what Claude sees) and `index.json`.
+   Read the member's header comment first: it is the contract the next episodes work from.
+2. **Keep the contract; add to it.** Improve the drawing freely, but keep the origin, the floor
+   line, the `camera`, and every option's name and meaning, and keep what it draws in front of the
+   cast in `o.layer = 'front'`. Episodes already written against them (and Claude's habits) rely
+   on them. Something new is a new option, off by default (`o.playground`), never a change to
+   what the default draws in a way that moves where characters stand. Keep it self-contained
+   (the engine, the props, other members by `SK.cast.<name>`, nothing from a film.js) and under
+   64 KB, and add each new option to the header in the same words as the rest.
+3. **Look before and after, in context:** render a small test film (a `sketch.json` with
+   `"cast": "cast"` and the newest episode's `fonts`, and a film.js that draws the place through
+   its own `camera`, with the series' star standing on its floor line at the episodes' scale, in
+   each option you touched) with `scripts/sketch-render.py --stills`, the old version beside the
+   new. Render a moment of a finished episode that shows the set too (its own `sketch.json`, its
+   folder pulled from the VM), so the comparison is with what viewers saw. Show the person the
+   pictures and wait for their go: it changes every later episode's look.
+4. **Dry run, then put it in:** `ops.sh library-put <project> --dry-run --replace <dir>/cast/<name>.js`
+   draws the thumbnail on the VM with the whole cast loaded and writes nothing; without
+   `--dry-run` it becomes the next version, the sheet redrawn. It refuses when an episode changed
+   the member since your `library-get`: get it again and carry your change onto theirs. Do it
+   while no episode of the series is being made (`ops.sh status`): a running one started from
+   the older version, and its own change to the member would then be refused (clashed).
+5. **Back it up first** (`tar` the project's library folder into `STUDIO_HOME/backups/`, as on
+   2026-10-01); the library keeps only the last five versions of a member.
+6. **Check the next episode used it:** its `cast/<name>.js` should be the new version or a later
+   one of its own, its film.js should draw `SK.cast.<name>`, and it should not have redrawn the
+   set inline. If an episode drew the set itself instead, say so to the person; that is the
+   signal the member's header or options do not cover what the story needed.
 
 **Projects: a series or a channel with a library of its own.** The site keeps projects (a name,
 a brief, defaults) in Mongo and sends `"project": {id, name, brief, from_account_cast}` with a
@@ -469,10 +1070,21 @@ film it vouches is the person's. That film is an episode:
   the person's. It seeds from there and keeps into there, never into the person's own, and a film
   outside projects never sees a project's. A project made with "bring in my characters" starts
   with a copy of the person's own cast, once.
-- **Pictures.** A project holds up to six (`pictures\<name>.*`), made from uploads with `POST
-  /api/library/pictures`. Every episode gets them as `inputs\pic_<name>.*`, in the manifest as
-  `pic_<name>`; the ones neither film.js nor the cast draws leave before the final render, like
-  unused attachments.
+- **Pictures.** A project holds up to nine (`pictures\<name>.*`), made from uploads with `POST
+  /api/library/pictures {project, upload, name, once, role}`. A role says what it is for
+  (`library.PICTURE_ROLES`, the site's words in brackets): `show` ("Show it as it is": on screen,
+  never repainted nor a ref), `scene` ("What the place has": Claude names two or three things in
+  it in the paintings' prompts; never shown, never a ref) or `style` ("How we draw this": a drawn
+  example of one kind of thing, the `ref` of the paintings that show it). `POST
+  .../pictures/{name}/role` changes it; none is the old way, Claude decides. A film's attachments
+  take the same (`picture_roles: {upload id: role}` on `POST /api/films`). Both reach the film's
+  `inputs\roles.json` (the studio's; Claude never writes `inputs\`) and Claude's note, and an
+  attachment (`upload<n>`) is a painting's `ref` only when its role is `style`, a `scene` picture
+  never (`_sketch.project_picture`). Every episode gets them as
+  `inputs\pic_<name>.*`, in the manifest as `pic_<name>`; the ones neither film.js nor the cast
+  draws leave before the final render, like unused attachments. `once: true` seeds only the
+  project's next episode: `_seed_pictures` removes it from the project's library right after, so
+  a later episode needs a picture of its own.
 - **Voice lines.** Recordings of narration lines the person approved by ear, up to twelve
   (`voice\<key>.wav|mp3`), filed under `_sketch.voice_line_key` (the words, the TTS, the voice,
   the model; not the style). Approved from a finished episode's own lines (`POST
@@ -496,10 +1108,16 @@ A sketch film made by hand with `scripts/sketch-render.py` (a `projects/<id>/` f
 account's film and an episode of one of its projects with `studio/import_film.py`: a new studio id
 and folder (the manifest as slug "film", the film's code and pictures, the engine it was drawn with
 in `engine/`, `outputs/film.mp4` and its poster), a done `studio.json` with `source: "import"`, its
-`kitcut.studio_runs` record (owner, `project_id`, state done) written before anything goes online,
+`kitcut.studio_runs` record (owner, `member` -- the `--as` account, so the site's All videos says
+who made it -- `project_id`, state done) written before anything goes online,
 then `media.publish` (web copy, card, blobs), and with `--vm` the folder copied into the VM's home,
 where the film page, Download and Publish to YouTube read it. No credits are spent and no Claude
-call is made; `--unlisted` keeps it link-only; `--plan` says what it would do. Run it on the laptop
+call is made; `--unlisted` keeps it link-only; `--plan` says what it would do. A square or vertical
+film's record carries its `frame` ("1:1", "9:16"): KitCut TV sizes its player by it, and without
+it takes the film for 16:9. Every picture the manifest names must sit in one of the folders that are
+copied (`assets/`, `images/`...): one reached for outside the folder (`../../studio/brand/...`)
+is refused, because on the studio the film could not be drawn again -- no share picture, no
+thumbnails. Run it on the laptop
 with `STUDIO_ENV_FILE` naming the studio's `.env` (MONGODB_URI, the media SAS); the VPN must be up
 for `--vm`. The first import (2026-09-30): the Web Summit speaker promo,
 `studio-20260930-114530-nhdy7i`, in project `p-s2alo2aepx`.
@@ -527,7 +1145,7 @@ content is a data edit with its clicks and pops to match.
   "attachments", "frame"}` (a draft only from this machine; a prompt, or at least one attachment).
   It gets the template's exact length (26 s is no multiple of 5), look, capabilities (`space`: the
   3D module; `portraits`: people cut out of their photos) and frozen engine, the frame asked for,
-  no narration (no vo.json, no voice tool), and up to the template's own number of pictures (a
+  no narration unless the template is narrated (below), and up to the template's own number of pictures (a
   line-up of 24 speakers; a plain film keeps 6). It starts from the template's code and its sample
   content (`templates.seed`), with the sample's pictures under `template/sample/` so it draws from
   the first second; the person's cast and earlier films are not seeded.
@@ -541,7 +1159,66 @@ content is a data edit with its clicks and pops to match.
   (its event, people, places, address) in film.js or content.json, and its pictures still named in
   content.json -- a word the person asked for is theirs, and asking for the sample's own event
   (`identity`, e.g. its name in their words) turns the check off -- and after Claude one short turn
-  takes them out, or the film fails.
+  takes them out, or the film fails. A sample word that is the film's own too (a label any such
+  film says, "Register"; a fact the events share, the same city) stays when Claude lists it in
+  content.json's `"_own"`; the spec's `identity` and `watch` words are never freed that way. A
+  spec's `generic` (matched without case) saves that turn, and no template needs it to work.
+- **Data beside the content, and assets.** A film may keep more than its content in `"data"`:
+  `{"content": ..., "route": "route.json"}` -- each extra file is a sample of its own
+  (`<key>.sample.json`), seeded as the film's own (`route.json`) and searched for the sample's
+  pictures like the content, so the sample's map is a leftover until a route of the person's own
+  replaces it. A spec's `assets` are the template's own generic pictures (a ride's bike, jersey,
+  gels): copied to `assets/`, seeded as `template/assets/`, kept by every film, never a leftover.
+- **From a film to a live template: `studio/template_from_film.py`** (the `film-to-template`
+  skill walks it). One command a stage, each with `--plan`: `find <email>` (someone's films, the
+  site's `prod.mjs films`), `pull <film>` (code, cast, engine, its own fonts, narration, sound and
+  the pictures it draws into `projects/<slug>/`; a facts object at the top of film.js --
+  `const FACTS`, which the brief asks every film for since 2026-10-02 -- becomes content.json, else
+  a refactor brief for an agent), `prove` (pixel-identical to the film), `alt` (other content, read
+  by eye), `check` (no sample word in the code), `spec` (both specs from the film), `make --push
+  --publish`, `site --publish` (runs `templates.mjs check` first), and `test`: a film from one
+  sentence on the VM, graded blind with bakeoff's grader -- professional >= 4 and fidelity >= 4 or
+  it fails. The tech meetup template (2026-10-02) went from film to live in under an hour, with no
+  hand refactor; its first test, a real You.com event from its link alone, graded 4 and 5.
+- **A night of templates, unattended: `studio/overnight_templates.py`** (runs on the VM under a
+  memory cap; no Claude of its own). From a jobs file it waits for source films, starts the ones
+  the account's two-at-once limit refused, makes a DRAFT template of each finished film (pull,
+  prove, check, spec, make) and test films from each draft, and writes REPORT.md. Nothing is
+  published. The morning after is a person's: look at the films, rewrite the specs from them,
+  choose the frames, make the next version, then the site. `studio/deploy/overnight.example/` is
+  the first night's jobs and prompts (2026-10-03: booth invitation, open house, webinar promo).
+- **Several logos**: `template_pictures(logos=[...])` makes each (co-hosts, sponsors) readable on
+  dark and light grounds as `logo-1`, `logo-1-light`...; a film's own fonts (`web/fonts/`, the font
+  tool) travel with its template into every remake.
+- **A narrated template** (spec `"narration": true`; the birthday invitations, 2026-10-02). The
+  version keeps the sample's script as `vo.sample.json` (lines, style, and a Gemini voice -- never
+  an author's own ElevenLabs voice, never the takes) and its word times as `timeline.sample.json`,
+  which the preview and the health check draw on (`SK.w`). A film from it gets the script as its
+  `vo.json` (pinned to the studio's voice backend; a voice the person picked wins), captions, the
+  voice tool, and is not done until it records. Claude rewrites every line for the new party,
+  keeping the number of lines and their length so the scenes keep their timing. `"sound":
+  "files"` keeps the sample's `score.json` and `sfx.json` instead of code-written sound; each time
+  the voice records, `vo-retime.py --by-line` moves every cue with its line, from the sample's word
+  times (`template/timeline.sample.json`) or the film's last recording. `cast/*.js` (the drawn
+  characters) are copied with any template. The leftovers check also reads the narration, as
+  written and as recorded (a line changed but not recorded again still says the sample's name),
+  and a spec's `watch` paths find words too short for it (a child's name) as whole words.
+- **Routes** (`ride-replay`, `caps: ["routes"]`): the route tool draws the film's real route on a
+  real map -- from a GPX the person attached, or places it routes along real roads and trails --
+  with `scripts/route-map.py --film` (docs/reference.md, "A real map and a real route"): the map as
+  `images/route_map.jpg`, the route as `route.json` (SK.DATA.route). Its tiles and answers are
+  cached in `STUDIO_HOME/cache/`. `template_pictures(qr=...)` makes a QR code of a link with
+  OpenCV's own encoder and reads it back before keeping it.
+- **Maps** (every film, no capability): the `map` tool makes the real street map of an address or a
+  place with `scripts/place-map.py --film` (docs/reference.md, "A real map of a real address") --
+  `images/place_map.jpg` and `place.json` (SK.DATA.place), drawn with the kit's `SK.map` and
+  `SK.mapPin`. The brief's rule: a map that shows a pin or an address is the real one, never a
+  drawn stand-in. It tells Claude how exactly the address was found; a place that is not on the map
+  (`no map:`) leaves the film with none -- `place.json` says why, the manifest's sample map is
+  dropped, and the film shows the address in type. A template whose sample has a map
+  (`open-house-invitation`: `"data": {"place": "place.json"}`) is seeded with the sample's, which
+  the leftovers check then finds until the person's own replaces it. Answers are cached in
+  `STUDIO_HOME/cache/`.
 - **The health check** (`templates.py check`): every live and draft version drawn again with this
   release's renderer at its moments, compared with its preview by SSIM (bar 0.99); a release that
   draws a template differently must not ship.
@@ -635,6 +1312,19 @@ There are two ways to pay:
   line, and a POST from this machine itself. `{"auth": "api"}` in the POST puts one on the key.
   With a `CLAUDE_CODE_OAUTH_TOKEN` (the VM) a login film gets its own config folder too, as on
   the key: no other film's history, settings or memory.
+
+**Two keys: a month's credit first, then the paid one** (`apikey.py`). `ANTHROPIC_CREDIT_KEY` is
+a key whose organisation holds a monthly credit (the $100 a Max plan comes with; added
+2026-11-02). Every run on the key gets it while this month's credit lasts, and
+`ANTHROPIC_API_KEY` after that. The credit is over when our own count reaches
+`STUDIO_CREDIT_USD` (default 100) or when the API refuses the key ("credit balance is too low").
+A conversation refused half-way goes on in the same session on the paid key, as a film does
+when the login runs out. The month starts on day `STUDIO_CREDIT_RESET_DAY` (default 1, UTC).
+The API cannot report a balance: its usage and cost reports need an Admin key, and an
+individual organisation has none (measured: 401). So every run charges its cost to its key in
+`STUDIO_HOME/apikey/spend.jsonl`, and `bash studio/deploy/ops.sh credit` (or
+`python studio/apikey.py` on the machine) prints the month: spent on each key, what is left, the
+pace, and the day the credit runs out at that pace. `--plan` says which key the next run gets.
 
 **The site's films follow `STUDIO_SITE_AUTH`** (`server.site_auth()`): `login` by default since
 2026-09-29, when the user chose to try the site on the subscription; `STUDIO_SITE_AUTH=api` in the

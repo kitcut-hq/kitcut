@@ -1,0 +1,63 @@
+{
+  "_": "Defaults for actor-pack.py: an actor is a character an image model draws once and redraws with one change at a time, cut into a pack a film animates by swapping pieces (sketch/actors.js). A spec (projects/<id>/actors/<name>.json) names the character and overrides any key here. Every prompt is here, not in the script. Measured 2026-10-17 on seven models (padel-tactics films/05-history/character/ai/README.md): openai/gpt-image-2.5-sunburst kept a figure as still as any (0.4-1.8 % drift on face edits) at $0.019 a picture with a real transparent background; google/gemini-3-pro-image was steadier still (0.4-0.9 %) at $0.136 and no transparency.",
+  "model": "openai/gpt-image-2.5-sunburst",
+  "quality": "medium",
+  "aspect": "2:3",
+  "candidates": 3,
+  "jobs": 4,
+  "head": 0.30,
+  "looks": {
+    "explainer": "Flat 2D cartoon character for an animated explainer: bold clean dark outlines of even weight, flat colour fills with one soft shade, big expressive eyes, a big head on a small body (about two and a half heads tall), warm and appealing, like a modern TV cartoon.",
+    "storybook": "A warm children's picture-book character: soft pencil outlines, gentle watercolour and gouache colour with paper texture, rounded friendly shapes, a big head and small body.",
+    "editorial": "A clean editorial illustration character: confident thin ink lines, a limited palette of flat colours with a little grain, slightly elongated elegant proportions, like a magazine illustration.",
+    "papercut": "A character made of layered cut paper: flat shapes of coloured card with crisp scissor edges and a thin shadow between layers, simple rounded features."
+  },
+  "base": "{describe} Full body, standing, front view, facing the viewer, arms relaxed at the sides, a friendly neutral expression with the mouth closed and the eyes open. The whole figure in frame from the top of the head to the soles of the shoes, with a margin all round. One character alone on a plain background: no ground, no cast shadow, no text, no logos.",
+  "edit": "This exact picture, identical in every way: the same character, design, proportions, outline, pose, framing, size, position and colours, on the same plain white background. One change only: {change}. Nothing else moves or changes: the head's outline, the hair and anything worn on the head, the body, the hands, the clothes and anything held stay exactly as they are, line for line.",
+  "pose": "The same character as in this picture: identical design, colours, outfit, proportions and size, drawn at the same scale with the feet at the same place, now {change}. A neutral friendly face with the mouth closed. One character alone on a plain white background: no ground, no cast shadow, no text.",
+  "faces": {
+    "happy": "a warm happy smile with the mouth closed, the eyes a little narrowed by the smile",
+    "laugh": "laughing out loud: the eyes squeezed shut in happy arcs, the eyebrows raised, the mouth wide open",
+    "sad": "sad: the eyebrows tilted up in the middle, the eyes looking down, the corners of the mouth turned down",
+    "angry": "angry: the eyebrows pulled down hard into a V, the eyes narrowed, the mouth a tight frown",
+    "shocked": "shocked: the eyes wide open with small pupils, the eyebrows high up, the mouth a small round 'o'",
+    "thinking": "thinking: the eyes looking up and to one side, one eyebrow raised, the mouth pressed to one side",
+    "smug": "smug: half-closed eyes, one eyebrow raised, a lopsided confident smile with the mouth closed",
+    "worried": "worried: the eyebrows raised and tilted up in the middle, a small wavy nervous mouth"
+  },
+  "talk": ["neutral", "happy", "sad", "angry"],
+  "mouths": {
+    "small": "the mouth slightly open, as in the middle of saying 'eh', the teeth just showing",
+    "open": "the mouth open wide, as in the middle of saying 'ah'",
+    "round": "the lips rounded and pushed forward into a small 'o', as in the middle of saying 'oo'",
+    "wide": "the mouth stretched wide with the teeth showing, as in the middle of saying 'ee'"
+  },
+  "blink": "the eyes closed, as in the middle of a blink",
+  "poses": {
+    "wave": "waving hello with one hand raised above the shoulder, palm open, the other arm relaxed",
+    "point": "pointing to the right of the picture with one arm stretched out",
+    "present": "presenting something to the right of the picture with one open palm turned up",
+    "thumbs_up": "giving a thumbs up at chest height with one hand",
+    "shrug": "shrugging with both palms turned up and the shoulders raised",
+    "cheer": "cheering with both arms raised high above the head",
+    "think": "thinking with one hand on the chin",
+    "turn_right": "turned in a three-quarter view towards the right of the picture, arms relaxed",
+    "turn_left": "turned in a three-quarter view towards the left of the picture, arms relaxed"
+  },
+  "pose_mouths": ["open", "round"],
+  "gate": {
+    "_": "the most a redraw may change outside the head, as a share of the figure; over it the redraw is drawn again (up to `retakes` times) and the best kept",
+    "face": 0.025,
+    "mouth": 0.015,
+    "blink": 0.012,
+    "retakes": 2,
+    "front": 0.8,
+    "same": 0.6
+  },
+  "pack": {
+    "height": 1400,
+    "page": 4096,
+    "format": "webp",
+    "quality": 92
+  }
+}

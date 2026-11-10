@@ -45,6 +45,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 sys.path.insert(0, HERE)
 import procs  # noqa: E402
+import apikey  # noqa: E402
 import film as films  # noqa: E402
 import library  # noqa: E402
 import media  # noqa: E402
@@ -56,7 +57,9 @@ procs.load_secrets(os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO,
 import store  # noqa: E402
 import scenes  # noqa: E402
 import templates  # noqa: E402
+import localize  # noqa: E402
 import validate  # noqa: E402
+import episode  # noqa: E402
 from film import (  # noqa: E402
     HOME,
     KIT,
@@ -68,7 +71,9 @@ from film import (  # noqa: E402
     Film,
     direction_fields,
     fills,
+    frame_note,
     limits,
+    may_run_to,
     mark_note,
     paint_kinds,
     paint_words,
@@ -166,12 +171,14 @@ def claude_env(film=None, auth="api"):
         "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "128000",
     }
     if auth == "api":
-        key = procs.secret("ANTHROPIC_API_KEY")
+        # the credit key while this month's credit lasts, then the paid one (apikey.py); the
+        # tag says which, so the run's cost goes on that key's line (apikey.charge)
+        which, key, _ = apikey.choose()
         if not key:
             sys.exit("ANTHROPIC_API_KEY is not set (put it in the studio's .env)")
         cfg = film.claude_dir if film else os.path.join(HOME, "claude", "_smoke")
         os.makedirs(cfg, exist_ok=True)
-        env.update(ANTHROPIC_API_KEY=key, CLAUDE_CONFIG_DIR=cfg)
+        env.update({"ANTHROPIC_API_KEY": key, "CLAUDE_CONFIG_DIR": cfg, apikey.TAG: which})
     elif procs.secret("CLAUDE_CODE_OAUTH_TOKEN"):
         # a machine nobody logs into (the Azure VM) carries its login as a long-lived token
         # (`claude setup-token`), not as an interactive /login in its config folder -- so a film
@@ -271,6 +278,8 @@ def system_prompt(look, caps=None):
     # the people (film.CAPS "people"): only a film given people carries the section, so every
     # other film's prompt stays byte for byte what it was
     fill["PEOPLE"] = _read("studio", "people.md") if "people" in (caps or ()) else ""
+    # the project's actors (film.CAPS "actors", library._seed_actors): the same, for a film given them
+    fill["ACTORS"] = _read("studio", "actors.md") if "actors" in (caps or ()) else ""
     # a capability's own references, read only for the looks made of it (film.CAPS "fills")
     fill.update({k: _reference(*parts) for k, parts in fills(caps or RECIPES[look]).items()})
     # the kit's section, for the films made with it (a template's film made before it has none)
@@ -280,7 +289,9 @@ def system_prompt(look, caps=None):
     # own pills, phones, glows, arrows and confetti, and every one the old `w` cue wrapper
     kit = "KIT" in fill
     fill["CUE_RULE"] = CUE_RULE_KIT if kit else CUE_RULE
-    fill["CUE_SHORT"] = "`const T = SK.cues({...})` at the top" if kit else "`SK.w(line, 'word', fallbackSeconds)`"
+    fill["CUE_SHORT"] = (
+        "`const T = SK.cues({...})` at the top" if kit else "`SK.w(line, 'word', fallbackSeconds)`"
+    )
     fill["KIT_STEP"] = KIT_STEP if kit else ""
     # the look's own sections (studio/looks/<look>.md, "## NAME" headed) go in first, since
     # they carry placeholders of their own
@@ -330,15 +341,20 @@ def ask(film, recent=()):
     """The first message: the film's own facts, then the visitor's prompt, then what recent
     films chose -- here and not in the system prompt, which stays the same for every film of a
     look (and so stays cached). A remake of a template gets the template's own (templates.ask)."""
+    if film.record().get("localized"):  # a translation of a finished film (localize.py)
+        return localize.ask(film) + mark_note(film)
     if film.record().get("template"):
         return templates.ask(film) + mark_note(film)
-    n = film.length
+    n = film.asked
     text = (
-        "Make the film.\n\nLength: %d seconds (fixed). Narration: about %d words, ending by "
+        "Make the film.\n\nLength: %d seconds: what was asked for, and what to write to. If the "
+        "narration as recorded needs a little more, the studio lengthens the film to fit it (to "
+        "%d s at most) rather than cut its last words. Narration: about %d words, ending by "
         "about %d s. Your working time: about %d minutes (waiting for the machine is not "
         "counted); keep the last few for the music, the cues and the sound check.\n\nPrompt: %s"
         % (
             n,
+            may_run_to(n, film.record().get("frame")),
             narration_words(n),
             n - closing_s(n),
             limits(n)["claude_s"] // 60,
@@ -346,13 +362,149 @@ def ask(film, recent=()):
             or "(nothing typed: the idea is in what is attached)",
         )
     )
+    # an episode that starts from its series' last one's code (episode.py)
+    carried = episode.note(film)
     if n > LONG_S and film.mode != "scenes":  # a scenes film is written in passes anyway
-        text += LONG_FILM
+        text += episode.LONG if carried else LONG_FILM
+    text += frame_note(film)
     text += attached_note(film) + people_note(film) + mark_note(film) + voice_note(film)
     mine = library.note(film)  # the project, or the person's own cast and earlier films
-    project = bool(film.record().get("project"))
-    note = recent_note(film.look, recent, series=bool(mine), project=project)
-    return text + "".join("\n\n" + x for x in (mine, note) if x)
+    of = film.record().get("project")
+    # what recent films chose, to choose freshly: not for an episode that keeps its series' look
+    note = (
+        ""
+        if carried
+        else recent_note(
+            film.look,
+            recent,
+            series=bool(mine),
+            project=bool(of),
+            collection=library.is_collection(of),
+        )
+    )
+    return text + "".join("\n\n" + x for x in (mine, carried, note) if x)
+
+
+# A film whose length Claude picks (kitcut.ai's "Let Claude choose the length", paid plans): the
+# site holds the longest it may be and sends that as `seconds`, with auto_length (its README,
+# "Claude picks the length"). Before anything is written, one short turn of Claude reads the idea
+# and what came with it and says how long the film should be; the film is laid out again at that
+# (film.relength), and the record's length tells the site what to give back. No answer:
+# PICK_FALLBACK_S, or the longest when that is less.
+PICK_SYSTEM = (
+    "You decide how long a short animated film should be, for KitCut, which makes films from a "
+    "person's idea: Claude writes, draws, narrates and scores each one. Every second costs the "
+    "person one credit, and a film uses at least 30 credits however short it is. Pick the length "
+    "the idea needs to be told well, never the longest for its own sake. Reply with the number of "
+    "seconds and nothing else."
+)
+PICK_GUIDE = (
+    "A single joke, moment or announcement: 15-30 s. One idea explained, a product shown: 30-90 s. "
+    "A story with several beats, a how-to with steps, an episode of a series: 1-4 minutes. Longer "
+    "only when what was given needs it: a long script to narrate, many steps, many people to "
+    "introduce. Narration runs at about 2.5 words a second."
+)
+PICK_FALLBACK_S = 60
+PICK_TIMEOUT_S = 180
+PICK_CONTEXT_MAX = 12000  # characters of what came with the idea the pick reads
+
+
+def pick_ask(film):
+    """The pick's one message: the idea, its look and frame, what came with it, the project it is
+    an episode of, and the range."""
+    rec = film.record()
+    top = int(rec.get("length_max") or rec.get("length") or LENGTHS[-1])
+    project = rec.get("project") or {}
+    extra = (attached_note(film) + people_note(film)).strip()
+    parts = [
+        "Choose this film's length.",
+        "Idea: %s"
+        % (rec.get("prompt", "").strip() or "(nothing typed: the idea is in what is attached)"),
+        "Look: %s. Frame: %s." % (film.look, rec.get("frame") or "16:9"),
+    ]
+    if extra:
+        parts.append(extra[:PICK_CONTEXT_MAX])
+    if project:
+        parts.append(
+            "An episode of the series %s. Its brief: %s"
+            % (json.dumps(project.get("name") or ""), (project.get("brief") or "")[:4000])
+        )
+    parts.append(
+        "%s\n\nThe length is a multiple of 5 seconds, from %d to %d. Reply with the number of "
+        "seconds only." % (PICK_GUIDE, LENGTHS[0], top)
+    )
+    return "\n\n".join(parts)
+
+
+def picked_from(text, top):
+    """The length in a reply ("95", "95 seconds", "1:35"), on a 5 s step in [5, top], or None."""
+    t = str(text or "").strip()
+    m = re.search(r"\b(\d{1,2}):([0-5]\d)\b", t)
+    if m:
+        s = int(m.group(1)) * 60 + int(m.group(2))
+    else:
+        m = re.search(r"\d+", t)
+        if not m:
+            return None
+        s = int(m.group(0))
+        if re.search(r"\bmin", t[m.end() : m.end() + 12], re.I):
+            s *= 60
+    s = round(s / 5) * 5
+    return max(LENGTHS[0], min(int(top), s))
+
+
+async def _pick_query(prompt, opts):
+    """The pick's reply and its cost: the SDK's query, one turn, no tools (tests replace it)."""
+    said, usd = "", 0.0
+    async for m in query(prompt=prompt, options=opts):
+        if isinstance(m, ResultMessage):
+            if m.is_error:
+                raise RuntimeError(m.result or m.subtype)
+            said, usd = m.result or "", m.total_cost_usd or 0.0
+    return said, usd
+
+
+async def pick_length(film, emit, auth="api"):
+    """The length Claude picks for a film whose length is left to it, the film laid out again at
+    it (film.relength). (seconds, what the pick cost); a failed pick gives PICK_FALLBACK_S."""
+    rec = film.record()
+    top = int(rec.get("length_max") or rec.get("length") or LENGTHS[-1])
+    emit({"type": "stage", "name": "claude", "text": "Claude is choosing the film's length"})
+    seconds, usd, why = None, 0.0, None
+    try:
+        opts = ClaudeAgentOptions(
+            model=MODEL,
+            effort="low",
+            cwd=film.dir,
+            system_prompt=PICK_SYSTEM,
+            tools=[],
+            strict_mcp_config=True,
+            setting_sources=[],
+            max_turns=1,
+            env=claude_env(film, auth),
+            cli_path=claude_cli() if auth == "login" else None,
+        )
+        said, usd = await asyncio.wait_for(_pick_query(pick_ask(film), opts), PICK_TIMEOUT_S)
+        apikey.charge(opts.env, usd, "length", film.id)  # on the key's line, when on a key
+        seconds = picked_from(said, top)
+        why = None if seconds else "no length in %r" % said[:80]
+    except Exception as e:  # noqa: BLE001 -- the film goes on at the fallback length
+        why = "%s: %s" % (type(e).__name__, e)
+    if not seconds:
+        seconds = min(PICK_FALLBACK_S, top)
+        print("film %s: no length picked (%s); %d s" % (film.id, why, seconds), file=sys.stderr)
+    seconds = film.relength(seconds)
+    await save(film.id, {"length": seconds, "length_picked": True})  # the site gives the rest back
+    emit(
+        {
+            "type": "say",
+            "text": "Length: %s, the length Claude chose for this idea (up to %s)."
+            % (_mmss(seconds), _mmss(top))
+            if not why
+            else "Length: %s (Claude did not choose one in time)." % _mmss(seconds),
+        }
+    )
+    return seconds, round(usd, 6)
 
 
 def people_note(film):
@@ -385,7 +537,12 @@ def people_note(film):
 LEFTOVERS = (
     "The film still shows the template's own sample: %s. None of the sample's event, people, "
     "places or addresses may be in this film -- replace them with the person's content (or leave "
-    "them out), in film.js and content.json, call check, and stop with one sentence."
+    "them out), in film.js and content.json -- and in vo.json, recording the changed lines again "
+    "with the voice tool, when the film is narrated -- call check, and stop with one sentence. "
+    "A word of these that is this film's own too -- an ordinary label any film of this kind says "
+    '("Register", "Kitchen"), or a fact their event truly shares with the sample (the '
+    "same city, the same hours) -- may stay: list it, exactly as written here, in content.json "
+    'under "_own" (a list). Never list the event, people, places or addresses of the sample.'
 )
 
 
@@ -409,6 +566,106 @@ async def no_leftovers(film, emit, meter, tools, auth):
         left = await asyncio.to_thread(templates.leftovers, film)
     if left:
         raise RuntimeError("the film still shows the template's own words: %s" % ", ".join(left))
+
+
+async def localize_leftovers(film, emit, meter, tools, auth):
+    """A translation (localize.py) whose film.js still shows words of the original word for word:
+    one short turn to translate them. Never fails the film: names and brands rightly stay."""
+    left = await asyncio.to_thread(localize.leftovers, film)
+    sid = film.record().get("claude_session")
+    if not left or not sid:
+        return
+    emit(
+        {
+            "type": "stage",
+            "name": "claude",
+            "text": "Claude is translating the last words on screen",
+        }
+    )
+    with contextlib.suppress(TimeoutError):
+        await _within(
+            run_claude(
+                film,
+                emit,
+                meter,
+                tools,
+                auth,
+                prompt=localize.LEFTOVERS % ", ".join('"%s"' % s for s in left),
+                resume=sid,
+            ),
+            Clock(),
+            {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 120},
+        )
+
+
+PUT_BACK_TURNS = 2  # turns a translation gets to put back what changed beyond its words
+
+
+async def localize_strict(film, emit, meter, tools, auth):
+    """A translation (localize.py) is the original with only its words said and shown changed:
+    localize.check_film compares every file, and what else changed goes back to Claude to put
+    back (PUT_BACK_TURNS turns). Still changed after that: the film fails, so its credits go
+    back. The last report is localize/check.json, the proof of what changed."""
+    report = await asyncio.to_thread(localize.check_film, film)
+    sid = film.record().get("claude_session")
+    for _ in range(PUT_BACK_TURNS):
+        if report["ok"] or not sid:
+            break
+        emit(
+            {
+                "type": "stage",
+                "name": "claude",
+                "text": "Claude is putting back what changed beyond the words",
+            }
+        )
+        with contextlib.suppress(TimeoutError):
+            await _within(
+                run_claude(
+                    film,
+                    emit,
+                    meter,
+                    tools,
+                    auth,
+                    prompt=localize.PUT_BACK % "\n".join("- " + p for p in report["problems"]),
+                    resume=sid,
+                ),
+                Clock(),
+                {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 240},
+            )
+        report = await asyncio.to_thread(localize.check_film, film)
+    with open(film.path(localize.SOURCE, "check.json"), "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=1, ensure_ascii=False)
+    if not report["ok"]:
+        raise RuntimeError(
+            "The translation changed more than the words: %s" % "; ".join(report["problems"][:3])
+        )
+
+
+async def episode_leftovers(film, emit, meter, tools, auth):
+    """An episode that started from its last one's code (episode.py) with words of that one's
+    story still in film.js: one short turn to take them out. Never fails the film: the words are
+    the same series' and the same person's, and some are the series' own."""
+    left = await asyncio.to_thread(episode.leftovers, film)
+    sid = film.record().get("claude_session")
+    if not left or not sid:
+        return
+    emit(
+        {"type": "stage", "name": "claude", "text": "Claude is taking out the last episode's words"}
+    )
+    with contextlib.suppress(TimeoutError):
+        await _within(
+            run_claude(
+                film,
+                emit,
+                meter,
+                tools,
+                auth,
+                prompt=episode.LEFTOVERS % ", ".join('"%s"' % s for s in left),
+                resume=sid,
+            ),
+            Clock(),
+            {"claude_s": WRAP_UP_S, "wall_s": WRAP_UP_S + 120},
+        )
 
 
 # ------------------------------------------------------------------ drawing the people
@@ -531,6 +788,14 @@ def attached_note(film):
             a["file"],
         )
         text = _doc_text(film.path(*a["file"].split("/")))
+        if (
+            text is not None and "<gpx" in text[:600]
+        ):  # a route: the route tool's, not words to read
+            lines.append(
+                head + ": a GPX track. The route tool reads it: route(gpx=%s); there is no need "
+                "to Read it." % json.dumps(a.get("name") or "Document %d" % i)
+            )
+            continue
         if text is not None and len(text) <= DOC_INLINE:
             lines += [head + ":", "<<<", text.strip(), ">>>"]
         else:
@@ -545,7 +810,34 @@ def attached_note(film):
             "itself, but the film keeps its length: cut to what matters most rather than cram. "
             "Keep names, figures and quoted lines exactly as written.",
         ]
+    script = validate.narration_script(film) if docs else None
+    if script:
+        label, said = script
+        lines += [
+            "",
+            "%s is a narration written word for word: %s, each with what is on screen while it "
+            "is said. Unlike any other script, its words are the film's: vo.json says its lines "
+            "exactly and in order, all of them unless the typed prompt names fewer -- one vo line "
+            "for each (or several in a row for a line over %d characters, split at a sentence's "
+            "end), never two in one; nothing added, reworded or left out. Punctuation, pauses and "
+            "the say map are yours. The film is as long as these lines take to say: never shorten "
+            "or drop one to fit. vo.json is checked against it every time it is saved, and the "
+            "tools wait until it matches."
+            % (label, validate.N.summary(said), validate.MAX_LINE_CHARS),
+        ]
     for a in pics:
+        if a.get("role") in library.ROLE_NOTE:
+            lines.append(
+                "- Picture %s (%sx%s): Read %s to see it. The person said what it is for%s."
+                % (
+                    a["name"],
+                    a.get("w"),
+                    a.get("h"),
+                    a["file"],
+                    library.role_line(a["role"], bool(films.paint_kinds(film.caps))),
+                )
+            )
+            continue
         lines.append(
             "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w)."
             % (a["name"], a.get("w"), a.get("h"), a["file"], a["name"])
@@ -557,10 +849,11 @@ def attached_note(film):
             "(a logo, a product, a person, a place: put it on screen with SK.image), a reference "
             "to match (a look, a character, a layout: draw in its spirit, don't paste it), or the "
             "brief itself (a screenshot, a note, a sketch of the story: read it as the prompt). "
-            "Where the person said how to use one, do that; otherwise decide. Before you write "
-            "anything, say in one short sentence per picture what you took it to be. A photo in "
-            "a drawn film sits best framed, as a pinned print or a card, so it belongs to the "
-            "drawn world. A picture you don't draw never leaves the studio.",
+            "Where the person said how to use one (its role above, or the prompt), do that; "
+            "otherwise decide. Before you write anything, say in one short sentence per picture "
+            "what you took it to be. A photo in a drawn film sits best framed, as a pinned print "
+            "or a card, so it belongs to the drawn world. A picture you don't draw never leaves "
+            "the studio.",
         ]
     if not rec.get("prompt", "").strip():
         lines += [
@@ -586,18 +879,22 @@ def _doc_text(path):
         return None
 
 
-# the visitor's pictures, their project's, and what Claude took from the web (web-grab.py)
-PICTURE = r"upload\d+|pic_[a-z0-9_]+|web_[a-z0-9_]+"
+# the visitor's pictures, their project's, its brand's (brandkit.py: brand_pic_<name>; never its
+# logos, which the end card draws through SK.BRAND), and what Claude took from the web (web-grab.py)
+PICTURE = r"upload\d+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+|web_[a-z0-9_]+"
 
 
 def drop_unused_uploads(film):
     """The pictures (the person's, attached or their project's, and those Claude took from the
     web) that neither film.js nor the cast draws leave the manifest before the final render, so
-    they are never bundled into the film's files. Returns the names dropped."""
+    they are never bundled into the film's files. Returns the names dropped. A template's film
+    names its pictures in its data (content.json), not its code: read too, or every photo it
+    found left the film and its frames drew empty (an open house remake, 2026-10-04)."""
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     images = m.get("images") or {}
     code = [film.path("film.js")]
+    code += [film.path(*str(rel).split("/")) for rel in (m.get("data") or {}).values()]
     if os.path.isdir(film.path("cast")):
         code += [film.path("cast", n) for n in os.listdir(film.path("cast")) if n.endswith(".js")]
     used = set()
@@ -617,21 +914,24 @@ def drop_unused_uploads(film):
 
 def recent_films(film, n=8):
     """The directions of the last n finished films made here, other than this one, newest
-    first: what they chose, never what they were asked."""
+    first: what they chose, never what they were asked. A film made under its project's style
+    (stylekit.py: its record's paint_route) is left out: its painting style, colours and faces
+    are that project's, and nothing of a project's style may reach any other film."""
     out = []
     for f in Film.all():
         if len(out) >= n:
             break
-        if f.id != film.id and f.state == "done":
+        if f.id != film.id and f.state == "done" and not f.record().get("paint_route"):
             out.append(f.record().get("direction") or f.direction())
     return out
 
 
-def recent_note(look, dirs, series=False, project=False):
+def recent_note(look, dirs, series=False, project=False, collection=False):
     """What recent films chose, counted: 'grounds: paper x5, night'. Only the choices from the
     menus: never what a film was asked, nor its cast (a person's own). series: the person has
     films of their own (library.note), which a continuation keeps to; project: the film is an
-    episode, and its project's brief and episodes come first."""
+    episode, and its project's brief and episodes come first; collection: the project's films
+    are each their own (library.is_collection), so only its brief does."""
     if not dirs:
         return ""
 
@@ -671,7 +971,9 @@ def recent_note(look, dirs, series=False, project=False):
         "Recent films made here, by everyone, chose (choose freshly for this prompt; repeat one "
         "only when it clearly calls for it%s):\n"
         % (
-            ", or when the project's brief or its earlier episodes above do"
+            ", or when the project's brief does"
+            if collection
+            else ", or when the project's brief or its earlier episodes above do"
             if project
             else ", or when it continues one of this person's films above"
             if series
@@ -695,6 +997,10 @@ def _describe(name, inp, film):
             return "looking at the %s" % paint_words(film.caps)[1]
         if p.endswith("motion.png"):
             return "looking at the cuts"
+        if re.search(r"review/film-\d+\.jpg$", p):
+            return "looking at the whole film, a frame a second"
+        if re.search(r"review/strip-\d+\.jpg$", p):
+            return "looking at a moment closely"
         return "looking at the review sheet" if p.endswith("sheet.png") else "read %s" % p
     if name == "WebSearch":
         return "searching the web: %s" % str(inp.get("query", ""))[:120]
@@ -715,6 +1021,12 @@ def _describe(name, inp, film):
         return "rendering the soundtrack"
     if tool == "motion":
         return "checking the cuts and the motion"
+    if tool == "strip":
+        return "rendering a close look at %d moment(s)" % len(inp.get("times") or [])
+    if tool == "route":
+        return "drawing the route on a real map"
+    if tool == "map":
+        return "making the real map of %s" % str(inp.get("at", ""))[:120]
     if tool == "voice":
         if inp.get("retake_line") is not None:
             return "recording line %s again" % inp["retake_line"]
@@ -1027,7 +1339,8 @@ async def run_claude(
         # reads the two together
         extra_args={"debug-file": debug_log(film)},
     )
-    streamed, signin = {}, None
+    streamed, signin, credit_out = {}, None, None
+    m0 = meter.usd()  # what this run adds goes on its key's line (apikey.charge), however it ends
     try:
         async with ClaudeSDKClient(options=opts) as client:
             await client.query(prompt or ask(film, recent_films(film)))
@@ -1066,6 +1379,11 @@ async def run_claude(
                         said = [getattr(b, "text", "") for b in msg.content]
                         limited = " ".join(s for s in said if s).strip() or msg.error
                         continue
+                    if auth == "api" and msg.error == "billing_error":
+                        said = " ".join(getattr(b, "text", "") for b in msg.content).strip()
+                        if apikey.out(said or msg.error, opts.env):  # the credit key's month
+                            credit_out = said or msg.error
+                            continue
                     before = meter.usd()
                     meter.add(msg.message_id or msg.uuid, msg.usage, msg.model)
                     if meter.usd() != before:
@@ -1096,10 +1414,15 @@ async def run_claude(
                         signin = signin or msg.result or "401 from the API"
     except CLINotFoundError as e:  # the CLI the login needs is not there
         raise SignInError(str(e)) from None
+    finally:
+        if auth == "api":
+            apikey.charge(opts.env, meter.usd() - m0, "film", film.id)
     if signin:
         raise SignInError(signin)
     if limited:
         raise PlanLimit(limited)
+    if credit_out:
+        raise apikey.CreditOut(credit_out)
     return result
 
 
@@ -1232,7 +1555,24 @@ async def make_film(
     if film.record().get("server") != peers.SERVER_ID:
         film.update(server=peers.SERVER_ID)
     rec = film.record()
-    prompt, length, look = rec.get("prompt", ""), film.length, film.look
+    # its length left to Claude: picked first, so everything below is made for the length picked
+    pick_usd = 0.0
+    if rec.get("auto_length") and not rec.get("length_picked") and not (finish_only or resume):
+        _, pick_usd = await pick_length(film, emit, auth)
+        rec = film.record()
+    # a series' next episode starts from its last episode's code: after the pick, which can make
+    # a film one made in scenes; once (its record's `carried`), so a requeued film keeps its own
+    # (asked first, without a thread hop: the answer to POST /api/films reads, a moment after the film
+    # starts, whether it holds a Claude slot yet -- an await before the slot answers "running" for a
+    # film that should wait)
+    if not (finish_only or resume) and episode.wanted(film):
+        got = await asyncio.to_thread(episode.carry, film)
+        if got and not got.get("skipped"):
+            emit({"type": "say", "text": 'Starting from the last episode, "%s".' % got["title"]})
+        rec = film.record()
+    # the length asked for: a film may have grown past it (film.may_run_to), and a film picked up
+    # again must not take what it grew to for what was asked
+    prompt, length, look = rec.get("prompt", ""), film.asked, film.look
     # an earlier attempt's Claude part, costed by the server that ran it: carried, not replaced
     carry = rec if (finish_only or resume) else {}
     prior_calls = None  # finish_only: the record's per-call detail is left as it is
@@ -1298,6 +1638,10 @@ async def make_film(
             metered = round(metered + (carry.get("cost_metered_usd") or 0), 4)
             for k, v in (carry.get("tokens") or {}).items():
                 tokens[k] = tokens.get(k, 0) + v
+        if pick_usd:  # choosing its length (pick_length), a turn of its own
+            claude = round(claude + pick_usd, 4)
+            metered = round(metered + pick_usd, 4)
+            summary["length_pick_usd"] = pick_usd
         summary.update(
             # everything this film cost: Claude + the voice + the paintings
             # on the key after the plan ran out (to_key): only what it spent from there
@@ -1387,6 +1731,7 @@ async def make_film(
             1.0, limits(length)["budget_usd"] - (carry.get("claude_cost_usd") or 0)
         )
         attempt = 0  # stalls so far (a plan limit is picked up once, and does not count)
+        credit_retried = False  # the credit key's month ran out (apikey.CreditOut): once
         while True:
             tools.pulse.beat()
             try:
@@ -1406,6 +1751,22 @@ async def make_film(
                     "resume": sid,
                     "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
                 } | {k: say[k] for k in ("system", "effort") if say.get(k)}  # a scenes pass's
+                continue
+            except apikey.CreditOut as e:
+                # the month's credit ran out under this conversation: the same session goes on
+                # on the paid key (claude_env chooses it now), once
+                if credit_retried:
+                    raise RuntimeError("Claude's key was refused: %s" % e) from None
+                credit_retried = True
+                sid = tools.session or film.record().get("claude_session")
+                print("film %s: CREDIT SPENT, on the paid key: %s" % (film.id, e), file=sys.stderr)
+                if sid:
+                    left = max(RESUME_MIN_S, within["claude_s"] - clock.active())
+                    say = {
+                        "prompt": OVER_LIMIT % round(left / 60),
+                        "resume": sid,
+                        "budget_usd": max(1.0, budget0 - (meter.usd() - m0)),
+                    } | {k: say[k] for k in ("system", "effort") if say.get(k)}
                 continue
             except Stalled as e:
                 silent = int(e.args[0]) if e.args else STALL_S
@@ -1564,10 +1925,14 @@ async def make_film(
             sheets = []
             for i, ts in enumerate(scenes.contact_times(film)):
                 sheets.append(await tools.sheet_of(ts, "contact-%d" % (i + 1)))
+            import review  # noqa: PLC0415 -- it imports this module
+
+            # the whole film read by a second pair of eyes first: the editor is its fix turn
+            found = await review.for_editor(film, emit, tools, auth)
             res = await one(
                 "editor",
                 scenes.EDITOR,
-                scenes.editor_message(film, sheets),
+                scenes.editor_message(film, sheets) + found,
                 ["scenes/*.js", "score.json", "sfx.json"],
                 text="Claude is checking the whole film",
             )
@@ -1654,13 +2019,46 @@ async def make_film(
                 )
                 if res.is_error:
                     raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
+            await own_sound(film, tools)
             missing = [f for f in MADE if not os.path.exists(film.path(f))]
             if missing:
                 raise RuntimeError("Claude finished without writing %s" % ", ".join(missing))
+            if episode.untouched(film):  # the last episode again, under this one's name
+                raise RuntimeError("Claude finished without changing the last episode's film.js")
             if unvoiced(film):  # its lines are written but were never spoken: not a silent film
                 raise RuntimeError("Claude finished without recording the narration")
-            if film.record().get("template"):
+            if localize.untranslated(film):  # a translation whose narration is still the original's
+                raise RuntimeError("Claude finished without translating the film")
+            if film.record().get("localized"):
+                await localize_leftovers(film, emit, meter, tools, auth)
+                await localize_strict(film, emit, meter, tools, auth)
+            elif film.record().get("template"):
                 await no_leftovers(film, emit, meter, tools, auth)
+            elif episode.carried(film):
+                await episode_leftovers(film, emit, meter, tools, auth)
+            # a second pair of eyes on the whole film, and one bounded turn to fix what it must
+            # (review.py). It never fails a film: one it could not read goes on as it is.
+            s = time.time()
+            import review  # noqa: PLC0415 -- it imports this module
+
+            # a translation is not reviewed: its original was, and a fix would change more than
+            # its words (localize_strict has just proved it changed nothing else)
+            rv = (
+                None
+                if film.record().get("localized")
+                else await review.gate(
+                    film, emit, meter, tools, auth, overtime=bool(summary.get("overtime"))
+                )
+            )
+            if rv:
+                stages["review"] = time.time() - s
+                # its two readings and its fix turn are Claude's work too: price() above took
+                # the main conversation's own total, so they are added here, once
+                extra = round((rv.get("cost_usd") or 0) + (rv.get("fix_cost_usd") or 0), 4)
+                summary["review_cost_usd"] = extra
+                summary["claude_cost_usd"] = round((summary.get("claude_cost_usd") or 0) + extra, 4)
+                if summary.get("claude_billed"):
+                    summary["cost_usd"] = round((summary.get("cost_usd") or 0) + extra, 4)
             film.update(state="finishing", **summary)
             await save(film.id, {"state": "finishing"})
         pin_vo(film)  # whatever Claude left there, the backends and models stay the studio's
@@ -1672,6 +2070,11 @@ async def make_film(
             if missing:
                 print("film %s: no closing: %s" % (film.id, missing), file=sys.stderr, flush=True)
                 summary["branding_error"] = missing
+        else:
+            debrand(film)
+
+        # once more before the mix: whatever was recorded last, the film ends after its last word
+        await asyncio.to_thread(tools_mod.fit_length, film)
 
         s = time.time()
         emit({"type": "stage", "name": "sound", "text": "Mixing the soundtrack"})
@@ -1685,7 +2088,11 @@ async def make_film(
 
         s = time.time()
         emit(
-            {"type": "stage", "name": "render", "text": "Rendering %d frames" % round(length * fps)}
+            {
+                "type": "stage",
+                "name": "render",
+                "text": "Rendering %d frames" % round(film.length * fps),
+            }
         )
         await tools.render()
         stages["render"] = time.time() - s
@@ -1803,11 +2210,25 @@ async def make_film(
                 "engine_changed": summary.get("engine_changed"),
                 "direction": summary.get("direction"),
                 "cast": summary.get("cast"),  # what the person's library took in (library.py)
+                # the episode whose code it started from, or why it did not (episode.py)
+                "carried": film.record().get("carried"),
                 # again here: the first record is not retried if the database was away
                 "project_id": (film.record().get("project") or {}).get("id"),
+                # again here, like project_id: a translation is found by its original and key
+                **(
+                    {"localized": film.record()["localized"]}
+                    if film.record().get("localized")
+                    else {}
+                ),
                 # again here, like project_id: a template's films are counted by it
                 **(
-                    {"template": film.record()["template"]} if film.record().get("template") else {}
+                    {
+                        "template": {
+                            k: film.record()["template"].get(k) for k in ("id", "version", "title")
+                        }
+                    }
+                    if film.record().get("template")
+                    else {}
                 ),
                 "title": film.record().get("title"),  # name_film's, when nothing was typed
                 "media": summary.get("media"),  # its lasting copy online (media.py)
@@ -1864,10 +2285,24 @@ def unvoiced(film):
         return False
 
 
+async def own_sound(film, tools):
+    """A template's film writes its score and cues in its code, and the sound tool works them
+    out. Claude can stop without calling it (a card whose picture it reviewed and never heard
+    was refused for 'not writing score.json, sfx.json'): worked out here instead."""
+    if not film.record().get("template") or not os.path.exists(film.path("film.js")):
+        return
+    with contextlib.suppress(ToolError):  # the check below names what is still missing
+        async with tools.lock:
+            await tools._sound_data_if_needed()
+
+
 async def written(film, tools):
     """Whether the film Claude wrote is whole: every file it must make, a recorded narration,
     and files that pass the gate and the syntax check."""
+    await own_sound(film, tools)
     if any(not os.path.exists(film.path(f)) for f in MADE):
+        return False
+    if episode.untouched(film):  # started from the last episode's code and never changed it
         return False
     narrated = film.record().get("narration") is not False  # a template's film is music only
     if narrated and not os.path.exists(film.path("audio", "vo", "timeline.json")):
@@ -1972,6 +2407,26 @@ def brand(film):
     return None
 
 
+def debrand(film):
+    """The other way: a film whose record says it carries no branding is finished without a
+    `tail`, at its record's frame rate. One that lost its branding after it was made (unbrand.py
+    swaps in a second render and leaves the manifest as it was, so what is keyed on the manifest
+    stays valid) would otherwise get the closing back the next time it is finished by hand.
+    Writes nothing when there is nothing to change."""
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        return
+    fps = film.record().get("fps")
+    if "tail" not in m and (fps not in (30, 60) or m.get("fps", 60) == fps):
+        return
+    m.pop("tail", None)
+    if fps in (30, 60):
+        m["fps"] = fps
+    films._write_json(film.manifest, m)
+
+
 async def keep_cast(film, tools, emit):
     """After a finished film, the person's library takes in what it made (library.keep): its new
     and changed cast members, each drawn alone for a thumbnail. None when the film's client has
@@ -1979,18 +2434,39 @@ async def keep_cast(film, tools, emit):
     if not library.lib_of(film.record()):
         return None
     try:
-        items = library.changes(film)
+        own = library.changes(film)
+        # a member another episode changed meanwhile, merged onto the library's (library.merges)
+        items, _ = await asyncio.to_thread(library.merges, film, own)
         pictures = {}
         if items:
             names = [it["name"] for it in items]
             emit({"type": "stage", "name": "cast", "text": "Keeping the cast for the next films"})
-            man, times = library.sheet(film, names)
+            man, times = library.sheet(film, names, items)
             try:
                 await tools.cast_sheet(man, times)
                 pictures = await asyncio.to_thread(library.thumbs, film, names)
             except ToolError as e:  # kept all the same, without a picture
                 print("film %s: no cast pictures: %s" % (film.id, e), file=sys.stderr, flush=True)
-        return await asyncio.to_thread(library.keep, film, items, pictures)
+        elif library.kept_paintings(film):  # painted characters only (library._keep_painted)
+            emit({"type": "stage", "name": "cast", "text": "Keeping the cast for the next films"})
+        # a merge that draws nothing is not one: the film's own copy, kept as a clash
+        items = [
+            mine if it.get("merged_from") and it["name"] not in pictures else it
+            for it, mine in zip(items, own, strict=True)
+        ]
+        kept = await asyncio.to_thread(library.keep, film, items, pictures)
+        if kept and (kept.get("clashed") or kept.get("sounds_clashed")):
+            # its copy stays in its own cast/ (and the project's clashed/); the newer one leads
+            print(
+                "film %s: not saved over a newer version: %s"
+                % (
+                    film.id,
+                    ", ".join((kept.get("clashed") or []) + (kept.get("sounds_clashed") or [])),
+                ),
+                file=sys.stderr,
+                flush=True,
+            )
+        return kept
     except Exception as e:  # noqa: BLE001 -- the film is made; its cast is a bonus
         print("film %s: cast not kept: %s" % (film.id, e), file=sys.stderr, flush=True)
         return {"error": (str(e) or type(e).__name__)[:200]}
@@ -2011,6 +2487,8 @@ def first_record(film, source, client):
         "effort": EFFORT,
         "job": film.id,
         "length": rec.get("length"),
+        # its length is Claude's to choose (pick_length): `length` is the longest until it has
+        **({"auto_length": True} if rec.get("auto_length") else {}),
         "look": rec.get("look"),
         "release": RELEASE,
         "priority": rec.get("priority", 0),
@@ -2018,6 +2496,14 @@ def first_record(film, source, client):
         "branding": bool(rec.get("branding")),
         "listed": rec.get("listed") is not False,  # false: link-only (no gallery, no sitemap)
         **({"app": rec["app"]} if rec.get("app") else {}),
+        # its project's style painted its pictures this way (stylekit.py): gpt, words or gemini --
+        # the site marks a Gemini episode, which costs more, wherever it shows it. A drawn film
+        # paints nothing, so it names no route
+        **(
+            {"paint_route": rec["paint_route"]["route"]}
+            if (rec.get("paint_route") or {}).get("route") and paint_kinds(film.caps)
+            else {}
+        ),
         # people drawn as talking characters: how many and the style (never their photos)
         **(
             {"people": len(rec["people"]), "character_style": rec.get("character_style")}
@@ -2036,7 +2522,21 @@ def first_record(film, source, client):
         # the site's project it is an episode of: the id only (the name and brief are the site's)
         "project_id": (rec.get("project") or {}).get("id"),
         # the template it was remade from (templates.py): kitcut.ai counts a template's films by it
-        **({"template": rec["template"], "frame": rec.get("frame")} if rec.get("template") else {}),
+        **(
+            {
+                "template": {k: rec["template"].get(k) for k in ("id", "version", "title")},
+                "frame": rec.get("frame"),
+            }
+            if rec.get("template")
+            # a film from an idea in a frame of its own (a Short): the site shapes its page by it
+            else ({"frame": rec["frame"]} if rec.get("frame") else {})
+        ),
+        # the narration's words drawn into the picture (film.CAPS "captions")
+        **({"captions": "burned"} if "captions" in (rec.get("caps") or ()) else {}),
+        # asked for with no music at all (film.create)
+        **({"music": "none"} if rec.get("music") == "none" else {}),
+        # a translation of a finished film (localize.py): kitcut.ai finds it by its key and its original
+        **({"localized": rec["localized"]} if rec.get("localized") else {}),
         "state": "queued",
         "cost_usd": 0.0,
     }
@@ -2079,6 +2579,7 @@ async def smoke(auth="api"):
                 meter.add(m.message_id or m.uuid, m.usage, m.model)
             elif isinstance(m, ResultMessage):
                 ok, why = not m.is_error, (m.result or m.subtype) if m.is_error else None
+                apikey.charge(opts.env, m.total_cost_usd, "smoke")
                 print("  reply:      %r%s" % (m.result, "  (ERROR)" if m.is_error else ""))
                 print("  cost:       $%.4f in %.1fs" % (m.total_cost_usd or 0, time.time() - t))
                 print("  metered:    $%.4f  %s" % (meter.usd(), meter.tokens()))
@@ -2280,7 +2781,20 @@ def main():
         metavar="FILE",
         help="a picture or a short document the person attached (repeatable)",
     )
-    ap.add_argument("--frame", help="with --template: one of its frames (16:9, 1:1...)")
+    ap.add_argument(
+        "--frame",
+        help="16:9 (as ever), 1:1 or 9:16 (a YouTube Short); with --template, one of its frames",
+    )
+    ap.add_argument(
+        "--captions",
+        action="store_true",
+        help="draw the narration's words into the picture (sketch/captions.js)",
+    )
+    ap.add_argument(
+        "--no-music",
+        action="store_true",
+        help="a film with no music at all: voice and unpitched sounds only",
+    )
     ap.add_argument(
         "--unlisted", action="store_true", help="keep the film out of every gallery (link-only)"
     )
@@ -2336,6 +2850,9 @@ def main():
             client="local",
             source="cli",
             listed=not args.unlisted,
+            frame=args.frame,
+            captions=args.captions,
+            music=not args.no_music,
         )
     print("  film    %s" % film.dir)
 

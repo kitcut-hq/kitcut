@@ -147,7 +147,8 @@ Two fixes, both in `scripts/sketch-vo.py`:
   lines for 180-225 s when only a few had changed; now they score only those.
 - **The studio scores on a service** (`SKETCH_SCORER`, set by `studio/procs.py` `SCORER`;
   `STUDIO_SCORER=local` puts Whisper back): **Whisper large-v3 on Groq, through OpenRouter.**
-  A failed call scores that take locally, so the service being down costs time, not the film.
+  A failed call scores that take locally, so the service being down costs time, not the film:
+  one local model, one take at a time (KI-066), and `ops.sh status` says what the key has left.
 
 How it was chosen, with `scripts/vo-scorer-bench.py`. Agreeing with small.en proves nothing
 about quality, so every candidate is held to a **referee**: Whisper large-v3, run locally on the
@@ -228,8 +229,16 @@ under the voice itself, then asks Claude to lower the score anyway: 10 of 19 nar
 extra sound runs per 25 films -- whether the automatic duck is good enough is a listening decision);
 a default camera breath on holds (`SK.breath` exists; the motion check's 4 s rule drew hand-written
 drift in 10-14 of 30 films); scene passes that cannot share helpers (10 of the 8-minute bike film's
-12 scene sessions pasted the same 1.7 KB renderer); a series pack (episodes re-read the last
-episode's film.js in 8-10 films); stills over 12 times refused (3-5 films).
+12 scene sessions pasted the same 1.7 KB renderer); stills over 12 times refused (3-5 films).
+
+**Built, to be measured: a series' episode starts from its last one's code** (2026-10-18,
+`studio/episode.py`, off until `STUDIO_EPISODE_CARRY` names a project or says `all`). Episodes
+re-read the last episode's film.js in 8-10 films and then wrote their own from nothing; a
+template's remake, which starts from finished code, takes a median 5.6 minutes of Claude against
+13.7. The measure, before it is on for every series: on for Leo, Ocheretyne, S&P 500 Explained and
+Racket sports, at least five episodes each, against each series' last five made without it --
+`stages.claude`, `claude_cost_usd`, the review's fixes, and the owner's word on whether the
+episodes still differ. `bakeoff.py` cannot run it (its films have no library).
 
 ### The kit bakeoff (2026-10-01)
 
@@ -264,3 +273,39 @@ six films (studio.json `claude`), voice recordings, kit calls in the code, and t
 
 So it ships for the narration (clear), and for the kit at no cost in quality, with the speed claim
 held to what was measured. A bigger set is what would show the total.
+
+## What the second pair of eyes costs (2026-10-07)
+
+The studio now reads every finished film for what breaks inside a second (studio/README.md, "A
+second pair of eyes"; docs/known-issues.md, KI-059): the author gets the whole film a frame a
+second and a `strip` tool, and after its last turn a fresh Claude reads the film and may hand back
+one bounded fix turn. Measured on the VM (4 vCPU, the Claude login) with the same three 60-second
+prompts of `studio/bakeoff/motion.json`, made by the release before (7d5a0c8) and the releases
+with it (c628f07, then d2352eb), two or three films at once:
+
+| prompt | before | with it | change | Claude's own part | the studio's reading |
+|---|---|---|---|---|---|
+| a kitten in a suitcase | 31.1 min | 34.5 min | +11% | 1,623 s -> 1,357 s | 400 s (read while another film rendered) |
+| a dog too big for his house | 23.2 min | 28.8 min; 31.2 min on the second release | +24%; +34% | 1,090 s -> 1,177 s; 1,409 s | 228 s with a fix turn of about a minute; 176 s |
+| a hamster and a parcel | 22.7 min | 27.3 min | +20% | 1,085 s -> 1,257 s | 140 s |
+
+About a fifth longer: 3 to 6 minutes on a film of 23 to 31. The reading itself is 2-3 minutes for
+a minute of film when the machine is free (two calls of 40-60 s each and about 70 stills), 3-5 for
+two minutes; the rest is the author reading its own sheets and strips (three sheets and one or two
+strips for a 60 s film). A reading costs $0.24-0.38 at list price for 60 s ($0.60-0.89 for 120 s),
+recorded on the film (`review_cost_usd`) and billed only on a film made on the key; a fix turn
+$1.37. The reading reuses the frames of the author's last `motion` when nothing changed since
+(`Tools._motion_fresh`), which saves about a minute when it applies.
+
+What it bought, on six films read afterwards by a reader that had not seen them: the three made
+before each carried a glitch a viewer would call a mistake in two of three (a kitten with two
+tails for a second and a half; a dog's head going into the wall beside his door). Of the films
+made with it, the kitten's and the hamster's were clean; the dog's first one had one glitch found
+and fixed (a leg showing through a wall) and two of the same through-the-wall kind found but rated
+"could be better", so left -- which is why that kind is now a must-fix whatever it is called
+(`review.HARD`); the dog's second film, on that release, was clean. Three pairs are not a
+measurement of a rate: they show the path works end to end, what it costs, and one way it failed.
+
+Not built, and where the next minute is: the 2-fps frames are full-size PNG (the same #6 as
+above: JPEG stills, 123 -> 54 ms a still); the reader's two calls could be one when the first
+finds nothing and the drawing code points at nothing.

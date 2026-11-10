@@ -1,0 +1,5 @@
+KitCut makes animated films from one prompt: Claude writes, draws, narrates and scores each one in code.
+
+Every film in this video was made with KitCut: a padel lesson in 3D (three.js), a noir micro-drama for Shorts, Apollo 13 painted scene by scene, a Web Summit speaker promo with the real speakers, a weekly kids' series, research films with real charts and sources, invitations on real maps, and more, in English, Ukrainian and Hindi.
+
+Make your own film: https://kitcut.ai

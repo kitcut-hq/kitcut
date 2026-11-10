@@ -1,15 +1,26 @@
-"""A film's YouTube thumbnail options: four moments of the film itself, each with a few big words.
+"""A film's YouTube thumbnail options: four posters composed from the film's own pictures, or --
+for a film that draws everything itself -- four moments of it, each with a few big words.
 
 The draft (ytdraft.py) picks them: Claude, which already writes the title and description from
 the film, is shown the film's moments -- a sheet of clean stills with their times, made here --
-and answers with four {at, words, layout, place}, the first the video's main message. The
+and answers with four {at, words, layout, place}, the first the video's main message; for a film
+with pictures, four {at, hero, with, words} naming the pictures each poster is built on. The
 options are then made from the film with scripts/_thumb.py, drawn by the film itself in its own
-look (its title type and outline, colours, labels, logo) the way YouTube thumbnails are made: the
-frame near each moment that is not mid-transition, the film's own words left out of it, its
-subject pushed in on one side and the words large on the other, checked to be legible at
-YouTube's smallest size, in contrast, and clear of its duration stamp. An option that fails a
-check falls back (a glow of the film's paper, one of its cards, the frame alone) before anyone
-sees it. Options saved under an older design (_thumb.DESIGN) are made again.
+look (its title type and outline, colours, labels, logo) the way YouTube thumbnails are made. A
+poster: one of the film's pictures large on its own page, another tucked in behind it, the words
+beside or above, by a template that varies with the film and the option. A moment: the frame near
+it that is not mid-transition, the film's own words left out of it, its subject pushed in on one
+side and the words large on the other. Both are checked to be legible at YouTube's smallest size,
+in contrast, and clear of its duration stamp. An option that fails a check falls back (a poster's
+words onto strips of the film's paper, then a frame; a glow of the film's paper, one of its cards,
+the frame alone) before anyone sees it. Options saved under an older design (_thumb.DESIGN) are
+made again. The first of the four (config punch.options) is the video's punch line, two to five
+words very large on a dark box of the film's colours over its moment as the film drew it
+(_thumb.layout_punch, after the thumbnail of the channel's best video); every one of a Short's is
+one, at its own frame. The second (config title.options) is the video's title itself, in a box of
+the film's accent on a whole frame of the film at its moment (_thumb.layout_title) -- the title as
+the draft wrote it, cut at its colon, what follows small beside it; a title too long to read on a
+thumbnail leaves it as its moment's own words.
 
     outputs/youtube/<channel>/thumb-<n>.jpg   the options (served by /files, token or signed)
     youtube/thumbs-<channel>.json             what they are, keyed by the draft they came from
@@ -130,19 +141,46 @@ def saved(film, channel, key=None):
     return rec
 
 
+def wide(film):
+    """Whether the film is 16:9, the frame posters and frames are composed for: _thumb lays a
+    1280x720 poster out of the film's own pieces, and on a tall film it came out as one corner of
+    a poster (the first Short, wwxftc, 2026-10-08: "DEEPNAS / NEVER / PLAYED" cut by the frame's
+    edge). A square or a tall film gets its YouTube options at its own frame, every one a punch
+    (_thumb.layout_punch, since 2026-10-22: YouTube has taken a Short's own thumbnail since July
+    2026), and no share picture (share.py leaves it out when none was made)."""
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            w, h = (json.load(f).get("frame") or [1920, 1080])[:2]
+    except (OSError, ValueError, TypeError):
+        return True
+    return w * 9 == h * 16
+
+
 def make_now(film, channel, draft, want=4):
     """The `want` options for a draft -- four for YouTube (blocking: stills, layout, one browser
-    shot, checks). Fewer concepts than that are made up from the film; more are cut."""
+    shot, checks). Fewer concepts than that are made up from the film; more are cut. The ones
+    config punch.options names are the video's punch line on a dark box over the frame as the
+    film drew it (every one on a film that is not 16:9, wide); the ones title.options names, its
+    title in a box. A film that is not 16:9 gets none for the share picture (want 2)."""
     t0 = time.time()
     concepts = (draft.get("thumbnails") or [])[:want]
-    if len(concepts) < want:
-        concepts = _thumb.fill_concepts(concepts, moments(film), length(film), n=want)
-    d = out_dir(film, channel)
-    opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
+    opts = []
+    is_wide = wide(film)
+    if is_wide or want == 4:
+        if len(concepts) < want:
+            concepts = _thumb.fill_concepts(concepts, moments(film), length(film), n=want)
+        if want == 4 and is_wide:  # YouTube's four: one is the title in a box (title.options)
+            concepts = _thumb.title_concepts(concepts, draft.get("title") or "")
+        if want == 4:  # ...and one the video's punch line (punch.options), every one on a Short
+            every = list(range(1, len(concepts) + 1))
+            concepts = _thumb.punch_concepts(concepts, None if is_wide else every)
+        d = out_dir(film, channel)
+        opts = _thumb.make_options(film.dir, concepts, d, log=lambda *_: None)
     rec = {
         "key": draft.get("key"),
         "design": _thumb.DESIGN,
         "channel": channel,
+        "frame": list(_thumb.film_frame(film.dir)),
         "options": [
             {
                 "n": o["n"],
@@ -180,14 +218,20 @@ async def make(film, channel, draft, want=4):
 
 
 def public(rec, state=None):
-    """What the site is told: the state and, when done, each option's picture and words."""
+    """What the site is told: the state and, when done, each option's picture and words. `v`
+    names what the pictures were made from -- the draft and the design: the site puts it in each
+    picture's address and lets a browser keep the picture for an hour, so options made again
+    under a new design for the same draft need an address of their own, or the person who looked
+    within the hour is shown the old ones."""
     if rec is None:
         return {"state": state or "none"}
     if rec.get("state") in ("making", "failed"):
         return {k: rec[k] for k in ("state", "error") if rec.get(k)}
     return {
         "state": "done",
-        "v": rec.get("key"),
+        "v": "%s-%s" % (rec.get("key"), rec.get("design") or ""),
+        # [w, h] of the pictures: a Short's are 1080x1920, and the site shows them that shape
+        "frame": rec.get("frame") or [1920, 1080],
         "options": [
             {k: o[k] for k in ("n", "path", "layout", "words", "at", "t")}
             for o in rec.get("options") or []

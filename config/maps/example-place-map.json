@@ -1,0 +1,10 @@
+{
+  "id": "example",
+  "title": "The Ferry Building, San Francisco",
+  "at": "Ferry Building, San Francisco, CA",
+  "radius_m": 420,
+  "px": 1400,
+  "tone": "light",
+  "out": "projects/example/outputs/map",
+  "_comment": "Copy to projects/<id>/place-map.json. at: an address as written (with its town), a place's name, or \"lat, lon\". tint: the film's own colour (#rrggbb), colors: any surface outright. --list prices it (the match, how exact, what is there) and draws nothing; the run writes place_map.jpg, place.json (SK.DATA.place) and preview.jpg -- check the preview first. This one is the map in the kit gallery (config/sketch/kit-example). docs/reference.md, 'A real map of a real address'."
+}

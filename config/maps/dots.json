@@ -1,0 +1,42 @@
+{
+ "_comment": "Every place of one kind in a city, as dots on its real map, drawn by scripts/dot-map.py from OpenStreetMap: the city's land inside its boundary, the land round it, water, the main roads, and one dot per place. No lettering: the film writes its own words in its own look. Sizes are pixels on a 1920-wide picture and scale with the picture.",
+ "px": [1920, 1080],
+ "margin": 0.05,
+ "tones": {
+  "light": {
+   "outside": "#E4E7EB",
+   "land": "#F6F4EF",
+   "edge": "#C9CDD3",
+   "water": "#B9D5EA",
+   "road": "#DADDE2",
+   "road_major": "#CDD1D7",
+   "dot": "#C2410C",
+   "dot_edge": "#FFFFFF"
+  },
+  "dark": {
+   "outside": "#11151B",
+   "land": "#1B2129",
+   "edge": "#323B47",
+   "water": "#12304A",
+   "road": "#2A323D",
+   "road_major": "#36404D",
+   "dot": "#FFB347",
+   "dot_edge": "#1B2129"
+  }
+ },
+ "edge_w": 2.0,
+ "roads": {
+  "_comment": "which highways are drawn, thinnest first, and their width in pixels at 1920 wide",
+  "secondary": 1.0,
+  "primary": 1.6,
+  "trunk": 2.2,
+  "motorway": 2.6
+ },
+ "dot_r": 3.2,
+ "dot_edge_w": 0.8,
+ "dot_alpha": 0.85,
+ "credit": "© OpenStreetMap contributors",
+ "credit_px": 15,
+ "jpeg_quality": 90,
+ "max_bytes": 3000000
+}

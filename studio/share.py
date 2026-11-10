@@ -23,6 +23,12 @@ runs after the film is done, and a failure is logged (SHARE) and noted as share_
     python studio/share.py --film <id>              write (or remake) one film's share
     python studio/share.py --missing [--limit N]    every finished film without one, newest first
     python studio/share.py --missing --dry-run      which films, and what it would cost; no call
+    python studio/share.py --film <id> --frame 2    the film's own frame at 2 s as its thumbnail
+    python studio/share.py --film <id> --frame off  back to the drawn one
+
+--frame changes thumb alone (what the film's page shows before it plays): the words and the link
+preview stay, no call is made and it costs nothing. The share keeps the time as `frame`, so a
+later remake of the share keeps the frame too.
 
 A draft costs about $0.05-0.13 on the key (one call, occasionally two); on the login it is counted
 but not charged. Asking again costs nothing until the film changes.
@@ -87,23 +93,24 @@ the way a good publisher titles a film like this -- not a label, not the request
 
 Hold it to the film:
 - Every fact comes from the narration, the pages listed, or what the maker said. Name no number, \
-feature, date or claim the film does not make, and where the maker says something is unconfirmed \
-or came only from the brief, do not state more than the film does.
-- The brief is the request the film was made from, and it is private. Do not quote it, restate \
-it as a request, or say the film was asked for, generated or made with AI.
+feature, date or claim the film does not make, and where the maker says something is unconfirmed, \
+do not state more than the film does. Do not say the film was asked for, generated or made with AI.
 
 Then choose two pictures for its link, made the way YouTube thumbnails are: one moment of the \
 film, its subject pushed in large on one side, and a few big words on the other -- the only \
 words on the picture (the film's own titles and labels are left out of it), set in the film's \
 own title type and colours:
 - "at": the moment, in seconds, from the sheet of its moments (the time is printed on every \
-frame) -- one where the film's subject is on screen, large and fully drawn: a character, an \
-object, a chart. Two different moments.
+frame) -- one where the film's subject is on screen, large and finished: every line and colour \
+of it drawn in, not still appearing, not half off the frame -- and is what its words are about: \
+a character, an object, a chart. Two different moments.
 - "layout": one each of "headline" (the words large over the picture) and "card" (the words on \
 the film's own label or card).
 - "words": at most 4 words and 32 characters, in the film's language: the film's main message, \
-the title's question or promise in fewer words, that makes the right person want to watch, held \
-to the film like everything above. Star one word to colour it (write it as *word*).
+that makes the right person want to watch, held to the film like everything above -- one as a \
+short catchy question the film answers, ending with "?", the other as a short quote, words said \
+in the film's narration word for word, in \u201cquotation marks\u201d. Star one word to colour it \
+(write it as *word*).
 - "place": the side the words go on, so they leave the subject clear: left, right, top or bottom.
 Put first the one you would choose yourself.
 
@@ -124,7 +131,7 @@ def ask_text(mat):
 
 
 def key_of(mat, model, effort):
-    """What a draft was written from: a changed film, prompt or model is a new one."""
+    """What a draft was written from: a changed film or model is a new one."""
     h = hashlib.sha256()
     rest = {k: v for k, v in mat.items() if k not in ("sheet", "moments_sheet")}
     for part in (WRITER, ASK, model, effort, json.dumps(rest, sort_keys=True, default=str)):
@@ -195,11 +202,7 @@ def check(d, mat):
 
 
 def problem(out, mat):
-    """Why the words must be written again, or None: the brief pasted back, or the film said to
-    be generated."""
-    why = ytdraft.leak(out, mat)
-    if why:
-        return why
+    """Why the words must be written again, or None: the film said to be generated."""
     m = GENERATED.search(out["title"] + " " + out["description"])
     if m:
         return 'it says how the film was made ("%s")' % m.group(0)
@@ -232,7 +235,7 @@ def auth_of(film):
 
 async def write(film, auth=None, model=MODEL, effort=EFFORT, mat=None, record=True):
     """The share words for this film: from the cache, else one call (and one more if the first
-    repeated the brief, said the film was generated, or broke the pictures' rules)."""
+    said the film was generated, or broke the pictures' rules)."""
     auth = auth or auth_of(film)
     mat = mat or await asyncio.to_thread(ytdraft.material, film)
     key = key_of(mat, model, effort)
@@ -280,8 +283,8 @@ async def write(film, auth=None, model=MODEL, effort=EFFORT, mat=None, record=Tr
         asks = []
         if why:
             asks.append(
-                "Your last answer broke a rule (%s). The brief is private and the film is not "
-                "said to be generated: write the title and description from the film itself." % why
+                "Your last answer broke a rule (%s). The film is not said to be generated: "
+                "write the title and description from the film itself." % why
             )
         if problems:
             asks.append(
@@ -352,8 +355,12 @@ def utc_now():
 
 async def save(film, share):
     """The share on the film's record (studio.json) and in studio_runs: `share` alone is set, the
-    rest of the record is left as it is."""
+    rest of the record is left as it is. A film in another language (localize.py) is also given
+    the share's title as its own: it has none (its idea is the original's, in the original's
+    language), so every list that names it by title names it in its language."""
     fields = {"share": share}
+    if film.record().get("localized") and share.get("title"):
+        fields["title"] = share["title"]
     if film.record().get("share_error"):
         fields["share_error"] = None
     film.update(**fields)
@@ -372,6 +379,12 @@ async def run(film, auth=None, log=print, model=MODEL):
         share.update({k: got[k] for k in ("image", "thumb") if got.get(k)})
     except Exception as e:  # noqa: BLE001 -- the words are worth having without the picture
         log("SHARE %s: no picture: %s" % (film.id, e))
+    at = frame_of(film.record().get("share"))
+    if at is not None:  # the owner's frame outlives a remake
+        try:
+            share.update(await frame_thumb(film, at), frame=at)
+        except Exception as e:  # noqa: BLE001 -- the drawn thumbnail stands in
+            log("SHARE %s: no frame at %s s: %s" % (film.id, at, e))
     share.update(at=utc_now(), key=draft["key"])
     await save(film, share)
     log(
@@ -384,6 +397,51 @@ async def run(film, auth=None, log=print, model=MODEL):
             draft.get("cost_usd") or 0,
         )
     )
+    return share
+
+
+def frame_of(share):
+    """The time of the frame a share's thumbnail is, in seconds, or None when it is the drawn one."""
+    at = share.get("frame") if isinstance(share, dict) else None
+    return at if isinstance(at, (int, float)) and not isinstance(at, bool) and at >= 0 else None
+
+
+async def frame_thumb(film, at):
+    """thumb.jpg from the film's frame at `at` seconds, copied online: {"thumb": url}, or {} when
+    copying is off."""
+    await asyncio.to_thread(media.bring_back, film, "film.mp4")
+    await asyncio.to_thread(media.make_frame_thumb, film.path("outputs"), at)
+    urls = await media.publish_share(film, only=("thumb",))
+    return {k: urls[k] for k in ("thumb",) if urls.get(k)}
+
+
+async def set_frame(film, at, log=print):
+    """A film's own frame as its share thumbnail (at seconds), or the drawn one back (None). The
+    words and the link preview stay; nothing is asked of Claude. Raises when the film has no
+    share yet, the time is past its end, or the picture could not be made or copied."""
+    share = dict(film.record().get("share") or {})
+    if not share.get("title"):
+        raise RuntimeError("no share yet: write it first (share.py --film %s)" % film.id)
+    if at is None:
+        share.pop("frame", None)
+        o = pick(thumbs.saved(film, CHANNEL))
+        if o is None:
+            raise RuntimeError("the drawn thumbnail was not kept: remake the share")
+        src = film.path("outputs", o["path"])
+        await asyncio.to_thread(media.make_share, film.path("outputs"), src)
+        got = await media.publish_share(film)
+        share.update({k: got[k] for k in ("image", "thumb") if got.get(k)})
+    else:
+        length = thumbs.length(film)
+        if length and at >= length:
+            raise RuntimeError("the film is %s s long" % length)
+        got = await frame_thumb(film, at)
+        if not got:
+            raise RuntimeError("copying online is off")
+        share.update(got, frame=at)
+    share["at"] = utc_now()
+    await save(film, share)
+    log("SHARE %s: thumbnail %s" % (film.id, "drawn" if at is None else "the frame at %s s" % at))
     return share
 
 
@@ -460,6 +518,23 @@ def estimate(f, model=MODEL):
     return ytdraft.estimate(mat, ask_text(mat), model)[1]
 
 
+def titles(dry_run=False):
+    """Every film in another language whose title is not its share's: given it (no model call).
+    The films translated before save() did so."""
+    n = 0
+    for f in films.Film.all():
+        rec = f.record()
+        title = (rec.get("share") or {}).get("title")
+        if not rec.get("localized") or not title or rec.get("title") == title:
+            continue
+        print("  %s  %r -> %r" % (f.id, rec.get("title"), title), flush=True)
+        n += 1
+        if not dry_run:
+            f.update(title=title)
+            asyncio.run(agent.save(f.id, {"title": title}))
+    print("%d films%s" % (n, " (dry run: nothing written)" if dry_run else ""))
+
+
 async def _main(a):
     if a.film:
         f = films.Film(a.film) if os.path.isdir(a.film) else films.Film.open(a.film)
@@ -469,6 +544,12 @@ async def _main(a):
     else:
         todo = [f for f in films.Film.all() if finished(f) and missing(f)]
         todo = todo[: a.limit] if a.limit else todo
+    at = getattr(a, "frame", None)
+    if at is not None:
+        if not a.film:
+            sys.exit("--frame needs --film")
+        await set_frame(todo[0], None if at == "off" else at)
+        return
     if a.dry_run:
         total = 0.0
         for f in todo:
@@ -491,6 +572,18 @@ async def _main(a):
         sys.exit("%d of %d failed" % (failed, len(todo)))
 
 
+def frame_arg(v):
+    if v == "off":
+        return v
+    try:
+        t = float(v)
+    except ValueError:
+        t = -1
+    if not 0 <= t < 36000:
+        raise argparse.ArgumentTypeError("seconds from the film's start, or off")
+    return t
+
+
 def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -498,11 +591,25 @@ def main():
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--film", help="a film id, or a film's folder")
     g.add_argument("--missing", action="store_true", help="every finished film with no share")
+    g.add_argument(
+        "--titles",
+        action="store_true",
+        help="films in another language: their share's title as their own (no model call)",
+    )
     ap.add_argument("--limit", type=int, help="with --missing: at most this many, newest first")
     ap.add_argument("--dry-run", action="store_true", help="list the films and the cost; no call")
     ap.add_argument("--auth", choices=("login", "api"), help="default: what the film was made on")
+    ap.add_argument(
+        "--frame",
+        type=frame_arg,
+        help="with --film: the film's frame at this many seconds as its thumbnail, or off",
+    )
     ap.add_argument("--model", default=MODEL)
-    asyncio.run(_main(ap.parse_args()))
+    a = ap.parse_args()
+    if a.titles:
+        titles(a.dry_run)
+        return
+    asyncio.run(_main(a))
 
 
 if __name__ == "__main__":

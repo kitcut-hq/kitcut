@@ -30,6 +30,8 @@ look, at the top of your file with a one-line comment above it -- `// a medal on
 `SK.look.medal = (x, y, o = {{}}) => {{...}};` -- and the scenes after yours are shown it here.
 
 Work: write the scene (a long one in parts), `check`, render `stills` inside {START}-{END} and
-look at them, fix, and run `motion` once if the scene moves a lot. Then stop with two sentences:
+look at them, fix, and run `motion` once if the scene moves a lot (Read the `film-NN.jpg` sheets
+it lists, and `strip` any moment somebody goes into, out of or behind something or turns
+round). Then stop with two sentences:
 what the scene shows and how it ends -- the scene after reads them. Working time: about {MINUTES}
 minutes.

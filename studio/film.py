@@ -65,13 +65,19 @@ REPO = os.path.abspath(os.environ.get("STUDIO_REPO") or KIT)
 LEGACY = os.path.join(REPO, "projects")
 
 # seconds a visitor may ask for: the site sells them by the second, and decides who may have
-# what (films over a minute are for its Pro plan, up to 8 minutes)
-LENGTHS = tuple(range(5, 485, 5))
+# what (films over a minute are for its Pro plan, up to 8 minutes; an account the site gives its
+# own longest film, users.film_max, up to 30)
+LENGTHS = tuple(range(5, 1805, 5))
 # drawn: everything drawn in code; painted: an image model paints the scenes, the code animates;
 # collage: an image model paints single objects cut out of paper, the code builds pages round them.
 # The person's choice; each is a recipe of capabilities (RECIPES, below)
 LOOKS = ("drawn", "painted", "collage")
 EDITABLE = ("film.js", "score.json", "sfx.json", "vo.json")
+# Every word a film shows on screen, by name ({"title": "How bees make honey"}), read by film.js as
+# SK.DATA.words.<name>: a new film's words live apart from its code, so a translation (localize.py)
+# changes this file and leaves the code byte for byte, and a typo or a date is a data edit. A film
+# made before 2026-11-01, or from a template (content.json), has none.
+WORDS = "words.json"
 MADE = ("film.js", "score.json", "sfx.json")  # what a finished film must have
 # the film's own copy, in engine\; Claude may extend it. Its capabilities' modules join it
 ENGINE = ("engine.js", "props.js")
@@ -98,15 +104,54 @@ FOR_LINE = re.compile(
     r"^[ \t]*//[ \t]*for:[ \t]*(\S[^\r\n]*?)[ \t]*\r?$", re.MULTILINE | re.IGNORECASE
 )
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
-# (8 up to a minute, more for a longer film: limits()["images"], paint_pins)
+# (8 under a minute, 12 from a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
+# How carefully a picture is painted, where its model has the setting (OpenAI's): every film is
+# painted as a draft, and its person may have a sharper version made later (rounds.py sharpen):
+# each picture repainted at a higher quality from its own draft. The owner's call, 2026-10-29:
+# most films never need more than the draft. The page's words: Draft, Standard, High.
+QUALITIES = ("low", "medium", "high")
+DRAFT = "low"
+QUALITY_MODELS = {"openai/gpt-image-2.5-flare"}
+# A film may also start at Standard or High (POST /api/films "quality", the record's
+# paint_quality, paint_pins), where its painter has the setting: chooses_quality.
 # a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
 CUTOUTS_PINNED = {
     "model": "openai/gpt-image-2.5-flare",
-    "quality": "medium",
+    "quality": DRAFT,
     "border": 12,
     "cut": "scissor",
 }
+# a project's style pictures (stylekit.py): how its episodes' pictures are painted. On a
+# picture route every style picture goes in with every painting (sketch-paint.py style_ref), the
+# style line in front of its prompt, and Claude's prompts say only what to draw. "words" is Muse:
+# once the style line alone, now given the pictures too (Muse takes references, 2026-10-30; the
+# id stays, as projects' cards keep it). Muse paints no transparent ground, so a collage's
+# cut-outs stay GPT Image's on it ("cutouts": False). Claude may change none of it. Gemini is the
+# team's alone (the site says who: X-Team) and costs about seven times Muse a picture; GPT Image
+# about one and a half at medium quality, and its paintings start as drafts (QUALITIES: about a
+# quarter of that).
+STYLE_ROUTES = {
+    "gpt": {
+        "backend": "openrouter",
+        "model": "openai/gpt-image-2.5-flare",
+        "picture": True,
+        "quality": DRAFT,
+    },
+    "words": {"backend": "muse", "model": "meta/muse-image", "picture": True, "cutouts": False},
+    "gemini": {
+        "backend": "openrouter",
+        "model": "google/gemini-3.1-flash-image",
+        "picture": True,
+        "team": True,
+    },
+}
+# the shape a tall film's paintings come back in (sketch-paint.py paints in the film's frame), and
+# how much larger than the frame Claude draws one: Muse, asked for 9:16, paints 2:3 (1280x1920)
+# with rough paper up to about 150 px in at its edges, which a painting drawn 1.12 times the
+# frame's height keeps off screen; a style picture's painter (gpt, gemini) paints 9:16 clean
+# (the painter bake-off of 2026-10-28, scripts/paint-compare.py --aspect 9:16)
+TALL_PAINTING = {"muse": ((2, 3), 1.12), "picture": ((9, 16), 1.08)}
 # the print faces a collage film's pieces use (sketch/collage.js), on top of the template's
 COLLAGE_FONTS = [
     {"file": "fonts/AbrilFatface-Regular.ttf", "family": "Abril Fatface", "weight": "400"},
@@ -196,7 +241,22 @@ CAPS["people"] = {"modules": ("heads",), "direction": ("people",)}
 CAPS["space"] = {"modules": ("space",)}
 CAPS["portraits"] = {}
 CAPS["template"] = {}
-# the frames a film can have ("16:9" unless a template offers another), as the manifest's "frame"
+# routes: a real map and a route on it (the route tool: scripts/route-map.py --film), for a film
+# that replays a ride, a run or a hike on its real roads
+CAPS["routes"] = {}
+# captions: the narration's words drawn into the picture, a card at a time (sketch/captions.js),
+# for a film that goes where a soft subtitle track is not shown (a YouTube Short). Not part of any
+# look's recipe and it brings no reference: a film asked for with them gets it on top of its
+# look's (Film.create), and every prompt stays byte for byte what it was
+CAPS["captions"] = {"modules": ("captions",)}
+# actors: characters an image model drew and scripts/actor-pack.py cut into packs, put into a
+# project's library by hand (studio/actor_put.py) and given to each of its episodes
+# (library._seed_actors, which adds this to the film's caps). sketch/actors.js draws them;
+# heads.js's SK.talk moves their mouths. Like people, on top of the look's recipe: a film with
+# no actors keeps its prompt byte for byte
+CAPS["actors"] = {"modules": ("heads", "actors")}
+# the frames a film can have ("16:9" unless it is asked for in another, or a template offers
+# another), as the manifest's "frame"
 FRAMES = {"16:9": [1920, 1080], "1:1": [1080, 1080], "9:16": [1080, 1920]}
 MAX_PEOPLE = 4
 PERSON_NAME_MAX = 40  # characters of a person's name the studio keeps
@@ -251,6 +311,17 @@ TTS_MODEL = "gemini-3.8-flash-tts"
 # voice, a low or a high one to go with the film's own narration (scripts/sketch-vo.py)
 VO_BACKUP = {"tts": "elevenlabs", "model": "eleven_v3", "voices": {"low": "brian", "high": "sarah"}}
 VO_PINNED = {"tts": "gemini", "takes": 1, "lead": 0.5, "gap": 0.35, "backup": VO_BACKUP}
+# A vertical film (a YouTube Short) speaks at once: a feed shows its first frame and the viewer
+# decides in a second. All 25 high-view news and explainer Shorts measured 2026-10-09 have a voice
+# inside 0.3 s (docs/shorts-guidebook.md); half a second of picture alone is a wide film's breath.
+TALL_LEAD = 0.1
+
+
+def vo_lead(frame):
+    """How long a film in this frame waits before its first word (vo.json "lead")."""
+    return TALL_LEAD if frame == "9:16" else VO_PINNED["lead"]
+
+
 # waiting: paused for its person (their own ElevenLabs account would not speak: tools.voice);
 # nobody is making it, and Continue (server.continue_film) picks it up again
 STATES = ("queued", "claude", "finishing", "done", "error", "cancelled", "interrupted", "waiting")
@@ -258,12 +329,37 @@ ACTIVE = ("queued", "claude", "finishing")
 ID = re.compile(r"^studio-\d{8}-\d{6}(-[a-z2-7]{6})?$")
 # a project on the site (a series, a channel): its id, and how long its brief may be
 PROJECT_ID = re.compile(r"^p-[a-z2-7]{10}$")
-BRIEF_MAX = 2000
+BRIEF_MAX = 10000  # a series bible: its household, places, running gags (docs/series-plan.md)
+# what a project's films can share. A series keeps them all, and that is every project that does
+# not say otherwise; a collection (a news feed, a run of promos) names fewer or none, and its
+# films are asked to differ in the rest (library.keeps, library.note)
+PROJECT_KEEPS = ("cast", "look", "voice", "music")
 _B32 = "abcdefghijklmnopqrstuvwxyz234567"
 
 
 def tts_model():
     return os.environ.get("STUDIO_TTS_MODEL", "").strip() or TTS_MODEL
+
+
+# A film's length is what was asked for, and a target: when its narration needs a little more, the
+# film runs longer instead of losing its last words. Until 2026-10-09 the length was a wall: Leo
+# episode 11 (odoais, 240 s) recorded a last line that ended at 240.58 s, had no recording left to
+# shorten it, and went out with "We're at the car." faded out under its last word. Its owner: "the
+# end is cut too, the phrase is cut ... we need to soften the hard stop. It's okay if we go beyond
+# the 4 min or any other set timer."
+GROW = 0.25  # of the length asked for ...
+GROW_MIN_S = 10  # ... and at least this, so a 15 s film may finish its sentence too
+TAIL_S = 1.5  # what a film keeps after its last word: the word rings, the picture and music close
+SHORT_MAX_S = 180  # YouTube takes a vertical film up to three minutes as a Short
+
+
+def may_run_to(asked, frame=None):
+    """The longest a film asked for at `asked` seconds may run (whole seconds). A vertical film
+    that was asked for inside YouTube's Short limit stays inside it."""
+    top = int(asked + max(GROW_MIN_S, GROW * asked))
+    if frame == "9:16" and asked <= SHORT_MAX_S:
+        top = min(top, SHORT_MAX_S)
+    return max(int(asked), top)
 
 
 def limits(length):
@@ -289,7 +385,10 @@ def limits(length):
         "render_s": int(slow * (300 + 15 * length)),
         "sound_s": int(slow * max(300, 120 + 5 * length)),
         "voice_s": int(slow * max(300, 180 + 5 * length)),
-        "lines": 6 if length <= 15 else max(12, -(-length // 5)),  # narration sentences
+        # narration sentences: one for every 3 s (it was every 5: a film with dialogue, whose lines
+        # are a few words each, had to merge them, and a merged line cannot pause for its gag --
+        # odoais merged 59 lines into 48 and ran with no pause from start to end)
+        "lines": 6 if length <= 15 else max(12, -(-length // 3)),
         "tts_usd": max(0.30, 0.005 * length),  # what the narration may cost, retakes included
         # recordings (voice runs), retakes included: 6 was plenty up to a minute; an 8-minute film
         # has ~96 lines, and a line the voice model refuses costs a run too
@@ -297,8 +396,9 @@ def limits(length):
         # a drums event's bars: 64 covered a short film; 8 minutes at 120 bpm is 240 bars (a bar
         # is at least a second at the 240 bpm the score allows)
         "drum_bars": max(64, length),
-        # paintings, repaints included: 12 up to 4 minutes, then one about every 20 s
-        "images": 8 if length <= 60 else min(24, max(12, length // 20)),
+        # paintings, repaints included: 8 under a minute; 12 from a minute (it was 8 at 60 s too,
+        # which left a minute four to six scenes) up to 4 minutes, then one about every 20 s
+        "images": 8 if length < 60 else min(24, max(12, length // 20)),
         # a collage film's cut-outs, repaints included: pages hold several each (the reference
         # 60 s collage used ~19); ~$0.014 each
         "cutouts": 10 if length <= 15 else min(40, max(14, length // 3)),
@@ -309,8 +409,9 @@ def limits(length):
 
 
 def modules(caps):
-    """The engine modules these capabilities bring (sketch/<name>.js)."""
-    return tuple(m for c in caps for m in CAPS[c].get("modules", ()))
+    """The engine modules these capabilities bring (sketch/<name>.js), each once: people and
+    actors both bring heads.js."""
+    return tuple(dict.fromkeys(m for c in caps for m in CAPS[c].get("modules", ())))
 
 
 def fonts(caps):
@@ -355,6 +456,120 @@ def mark_note(film):
     )
 
 
+# What a phone's own buttons cover of a 9:16 film (a YouTube Short), as fractions of the frame:
+# the title, the channel and the sound along the bottom, and the like/comment/share column down
+# the right of the lower half. The picture runs under them; nothing that must be read does.
+TALL_COVERED = {"bottom": 0.2, "right": 0.16}
+# the pitched cues a film with no music may not play either: scripts/_sketchaudio.py TONAL_FX,
+# which is what drops them (test_shorts holds the two lists together)
+TONAL_FX = ("sample", "chime")
+
+
+def caption_band(w, h):
+    """The band the burned captions stay inside, (x0, y0, x1, y1) in screen pixels: two lines of
+    type and their card. sketch/captions.js GEOMETRY and LOOK, worked out the same way
+    (SK.captionBox) -- change one and change the other; studio/test_shorts.py holds them equal."""
+    if h > w:
+        y, size, width = h * 0.745, w * 0.061, w * 0.74
+    elif h == w:
+        y, size, width = h * 0.86, w * 0.05, w * 0.8
+    else:
+        y, size, width = h * 0.885, h * 0.046, w * 0.7
+    bh, bw = 2 * size * 1.2 + 2 * size * 0.26, width + 2 * size * 0.42
+    return (_round(w / 2 - bw / 2), _round(y - bh / 2), _round(w / 2 + bw / 2), _round(y + bh / 2))
+
+
+def _round(v):
+    """Half up, as JavaScript's Math.round does (Python's rounds half to even)."""
+    return int(v + 0.5)
+
+
+def frame_note(film):
+    """For a film that is not 16:9, or carries burned captions: the frame it is drawn in and what
+    is taken in it. The system prompt and its example films are 16:9 (and stay so, to keep every
+    other film's prompt as it was), so the first message says what replaces that."""
+    rec = film.record()
+    if rec.get("template"):
+        return ""
+    w, h = FRAMES.get(rec.get("frame") or "16:9", FRAMES["16:9"])
+    text = ""
+    if (w, h) != (1920, 1080):
+        shape = "vertical (9:16), made to be watched on a phone" if h > w else "square (1:1)"
+        text += (
+            "\n\nThe frame is %s: the canvas is %dx%d world units at zoom 1 (SK.W x SK.H), origin "
+            "at the centre, so it runs x %d to %d and y %d to %d. This replaces the 1920x1080 in the "
+            "rules below, and the reference films are wide: compose for this frame from the start "
+            "-- never a wide layout shrunk or cropped into it. Keep what matters inside about "
+            "+-%d x +-%d of the camera centre."
+            % (shape, w, h, -w // 2, w // 2, -h // 2, h // 2, w // 2 - 70, h // 2 - 110)
+        )
+        if h > w:
+            by, rx = (
+                h // 2 - int(h * TALL_COVERED["bottom"]),
+                w // 2 - int(w * TALL_COVERED["right"]),
+            )
+            text += (
+                " Stack the picture top to bottom, one idea on screen at a time, and set type for "
+                "a phone held at arm's length: a headline 90 px or more, nothing that must be read "
+                "under 44. The phone's own buttons lie over the film: at zoom 1 with the camera "
+                "at the centre, everything below y %d (the title and channel name) and the strip "
+                "right of x %d from y 0 down (like, comment, share). The picture runs under them; "
+                "nothing that must be read goes there." % (by, rx)
+            )
+        if h > w and "paintings" in (rec.get("caps") or ()):
+            # painted tall: not the wide painting looks/painted.md describes
+            r = STYLE_ROUTES.get((rec.get("paint_route") or {}).get("route")) or {}
+            muse = r.get("backend", "muse") == "muse"  # Muse paints 2:3, with or without pictures
+            (pw, ph), more = TALL_PAINTING["muse" if muse else "picture"]
+            scale = max(w / pw, h / ph)
+            cover = round(pw * scale * more / 10) * 10
+            text += (
+                " Your paintings come back tall, %d:%d, not the 1920x1280 the painted look's "
+                "notes below describe. Drawn with SK.image about %d wide (%d tall), a painting "
+                "covers the whole %dx%d frame at zoom 1 with a little room to move%s. Drawn "
+                "narrower than %d, paper-coloured bands show at the frame's edges. Compose each "
+                "painting's subject for a phone held upright, in the middle of the picture."
+                % (
+                    pw,
+                    ph,
+                    cover,
+                    round(cover * ph / pw),
+                    w,
+                    h,
+                    ", and the rough paper at its edges stays off screen" if muse else "",
+                    round(pw * scale),
+                )
+            )
+        if (
+            h > w
+        ):  # a Short: what its first frame and first word are (vo_lead, the manifest's cover)
+            text += (
+                " The narration's first word comes %g s in and the video's first frame is the "
+                "film's own frame 0 -- a feed shows that frame before the film plays -- so draw "
+                "frame 0 complete: nothing builds in ahead of the first word." % TALL_LEAD
+            )
+    if rec.get("music") == "none":
+        text += (
+            '\n\nThis film has no music. Leave score.json\'s "events" empty (the studio plays '
+            "none of them), and write no pitched sound among the cues: no chime, no sampled note "
+            "(the studio drops %s). Short, quiet, unpitched sounds on the cuts are welcome."
+            % " and ".join('"%s"' % n for n in TONAL_FX)
+        )
+    if "captions" in (rec.get("caps") or ()):
+        x0, y0, x1, y1 = caption_band(w, h)
+        text += (
+            "\n\nThe studio writes the captions into the picture itself: the words being spoken "
+            "appear a few at a time on a dark card inside the band x %d to %d, y %d to %d (zoom 1, "
+            "camera at the centre; the card stays there whatever the camera does), from the "
+            "narration's own word times. Your stills, strips and motion sheets show them. Keep that "
+            "band free of anything that must be read or that matters -- the picture's ground may "
+            "run under it -- and draw no captions or subtitles of your own: on-screen type is for "
+            "names, numbers and labels, never the narration's sentence again."
+            % (x0 - w // 2, x1 - w // 2, y0 - h // 2, y1 - h // 2)
+        )
+    return text
+
+
 def paint_kinds(caps):
     """The kinds of picture these capabilities paint ([] when the film paints nothing)."""
     return [CAPS[c]["paint"] for c in caps if "paint" in CAPS[c]]
@@ -370,7 +585,7 @@ def fills(caps):
     return {k: v for c in caps for k, v in CAPS[c].get("fills", {}).items()}
 
 
-def _own_pins(n):
+def _own_pins(n, frame=None):
     """vo.json for a person's own ElevenLabs narrator: their voice in the model the site chose,
     one take a line (their characters), recorded as many at once as their plan allows. No
     backup voice: a line it refuses pauses the film instead (tools.voice)."""
@@ -380,9 +595,29 @@ def _own_pins(n):
         "voice": n["voice"],
         "takes": 1,
         "jobs": int(n.get("jobs") or 2),
-        "lead": VO_PINNED["lead"],
+        "lead": vo_lead(frame),
         "gap": VO_PINNED["gap"],
     }
+
+
+_HEX = r"#[0-9a-fA-F]{3,8}"
+_HEX_CONST = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*['\"](%s)['\"]" % _HEX)
+
+
+def ground_colours(js):
+    """{"paper", "accent"}: the two colours a film's code set its ground to (SK.setGround's own
+    object), each as it was written or through a constant it names; {} for a film that kept a
+    ground's own colours."""
+    at = js.find("setGround(")
+    if at < 0:
+        return {}
+    part, consts, out = js[at : at + 900], dict(_HEX_CONST.findall(js)), {}
+    for key in ("paper", "accent"):
+        m = re.search(r"\b%s\s*:\s*(?:['\"](%s)['\"]|([A-Za-z_]\w*))" % (key, _HEX), part)
+        colour = (m.group(1) or consts.get(m.group(2))) if m else None
+        if colour:
+            out[key] = colour.lower()
+    return out
 
 
 def direction_fields(caps):
@@ -398,15 +633,55 @@ def paint_words(caps):
     return "painting the pictures", "pictures"
 
 
-def paint_pins(length, caps):
+def paint_pins(length, caps, route=None, quality=None):
     """What the studio sets in the paint.json of a film with these capabilities: the painter,
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
-    added up."""
+    added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
+    the painter it names, the style line, its style pictures (a path, or a list of them) on a
+    picture route, and the route's quality -- the studio's too. `quality`: the one the film was
+    asked for (its record's paint_quality), where the painter has the setting; else a draft. A
+    tall film has the same painter as a wide one; sketch-paint.py paints in the film's frame."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
     for kind in kinds:
         pins |= kind["pins"]
-    return pins | {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
+    pins |= {"max_images": sum(limits(length)[kind["cap"]] for kind in kinds)}
+    quality = quality if quality in QUALITIES else None
+    if quality and "cutouts" in pins and pins["cutouts"].get("model") in QUALITY_MODELS:
+        pins["cutouts"] = dict(pins["cutouts"], quality=quality)
+    r = STYLE_ROUTES.get((route or {}).get("route"))
+    if not r or not kinds:
+        return pins
+    pins |= {"backend": r["backend"], "model": r["model"]}
+    # the written style goes with the pictures: a style picture of people on a plain ground
+    # leaves a place or a garden to the painter's own look, and the line still says flat, no
+    # shading, no depth (a Brella reel, 2026-10-29)
+    pins["style"] = str(route.get("line") or "")[:400]
+    if r["picture"] and route.get("ref"):
+        pins["style_ref"] = route["ref"]
+    if r.get("quality"):
+        pins["quality"] = quality or r["quality"]
+    if "cutouts" in pins and paints_cutouts(r):  # the cut-outs from the same painter
+        pins["cutouts"] = dict(pins["cutouts"], model=r["model"])
+    return pins
+
+
+def paints_cutouts(r):
+    """Whether a style route (STYLE_ROUTES) paints a collage's cut-outs as well as its scenes."""
+    return bool(r.get("picture")) and r.get("cutouts", True)
+
+
+def chooses_quality(look, route=None):
+    """Whether a film of this look -- a project's episode painted on `route` (stylekit.route_of),
+    or None -- is painted by a model with a quality to choose: a collage's cut-outs, and the
+    paintings of a style's GPT route. Muse (a painted film outside a project, a style's words
+    route) and a drawn film have none."""
+    caps = RECIPES.get(look) or ()
+    r = STYLE_ROUTES.get(route) or {}
+    if any("cutouts" in k["pins"] for k in paint_kinds(caps)):
+        # a style's picture route paints the cut-outs too (paint_pins)
+        return (r["model"] if paints_cutouts(r) else CUTOUTS_PINNED["model"]) in QUALITY_MODELS
+    return bool(paint_kinds(caps)) and bool(r.get("quality"))
 
 
 def _release():
@@ -448,6 +723,21 @@ def _write_json(path, data):
 
 def _norm(p):
     return os.path.normcase(os.path.realpath(p))
+
+
+def _read_text(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def home_rel(path):
+    """A path as a record keeps it: relative to STUDIO_HOME when inside it, so a home moved to
+    another machine (or drive) still finds it; else as it is."""
+    rel = os.path.relpath(os.path.abspath(path), HOME)
+    return path if rel.startswith("..") or os.path.isabs(rel) else rel.replace(os.sep, "/")
 
 
 class Film:
@@ -552,6 +842,63 @@ class Film:
         with open(self.manifest, encoding="utf-8") as f:
             return round(float(json.load(f)["duration"]))
 
+    @property
+    def asked(self):
+        """The length it was asked for: what its record says, whatever it has grown to since."""
+        try:
+            return int(self.record().get("length") or 0) or self.length
+        except (OSError, ValueError, TypeError):
+            return self.length
+
+    def run_to(self, seconds):
+        """Make the film this long (whole seconds), in its manifest: what its narration is laid
+        out on, its sound mixed to and its picture rendered to. The record's `length` stays what
+        was asked for; `runs` says what it became when that is longer."""
+        seconds = int(seconds)
+        with open(self.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+        was = float(m["duration"])
+        if seconds == round(was):
+            return
+        # the poster is the film's last picture unless something chose another (a template's own)
+        at = m.get("poster_t")
+        if at is None or at == round(was - 0.4, 2) or at > seconds - 0.2:
+            m["poster_t"] = round(seconds - 0.4, 2)
+        m["duration"] = float(seconds)
+        tmp = self.manifest + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(m, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, self.manifest)
+        asked = self.asked
+        self.update(runs=seconds if seconds != asked else None)
+
+    def relength(self, seconds):
+        """A film whose length Claude picks (its record's auto_length), laid out again at the length
+        picked, before any of it is written: its manifest's duration and poster, its paintings'
+        cap, whether it is made in scenes, and its record's length -- which kitcut.ai reads to give
+        back what it held for the longest. Within LENGTHS, and never past length_max. The length."""
+        rec = self.record()
+        top = int(rec.get("length_max") or rec.get("length") or LENGTHS[-1])
+        seconds = max(LENGTHS[0], min(top, int(seconds) // 5 * 5))
+        with open(self.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+        m["duration"], m["poster_t"] = float(seconds), round(seconds - 0.4, 2)
+        over = scenes_over_s()
+        mode = "scenes" if over and seconds > over else "single"
+        if mode == "scenes":
+            m["scenes"] = "scenes"
+            os.makedirs(self.path("scenes"), exist_ok=True)
+        else:
+            m.pop("scenes", None)
+        _write_json(self.manifest, m)
+        if paint_kinds(self.caps) and os.path.exists(self.path("paint.json")):
+            with open(self.path("paint.json"), encoding="utf-8") as f:
+                p = json.load(f)
+            p["max_images"] = sum(limits(seconds)[k["cap"]] for k in paint_kinds(self.caps))
+            _write_json(self.path("paint.json"), p)
+        self.update(length=seconds, mode=mode, length_picked=True)
+        return seconds
+
     # ---------------------------------------------------------------- what Claude may touch
     def editable(self):
         rec = self.record()
@@ -562,9 +909,17 @@ class Film:
         )
         return (
             base
-            + (("content.json",) if rec.get("template") else ())
+            + (
+                ("content.json",)
+                if rec.get("template")
+                or (rec.get("localized") and os.path.exists(self.path("content.json")))
+                else ()
+            )
+            + ((WORDS,) if os.path.exists(self.path(WORDS)) else ())
             + (("paint.json",) if paint_kinds(self.caps) else ())
             + (("scenes.json",) if self.mode == "scenes" else ())
+            # an episode's named sounds and themes, kept for the series (library.py)
+            + (("sounds.json",) if rec.get("project") else ())
         )
 
     @property
@@ -592,19 +947,55 @@ class Film:
             return bool(CAST_FILE.match(asked)) and os.path.isdir(self.path("cast"))
         if parent == _norm(self.path("scenes")):  # a scene of a film made in scenes
             asked = os.path.basename(os.path.realpath(raw))
+            if self.record().get("localized"):  # a translation: its scenes' words (localize.py)
+                return bool(SCENE_FILE.match(asked)) and os.path.isfile(p)
             return self.mode == "scenes" and bool(SCENE_FILE.match(asked))
+        if parent == _norm(self.path("engine")) and self.record().get("localized"):
+            # a translation may put the words of any of its engine modules into its language (a
+            # film's own scene layer pins labels on things); localize.check_film holds it to words
+            return name.endswith(".js") and os.path.isfile(p)
         return parent == _norm(self.path("engine")) and name in self.engine_files()
 
     # ---------------------------------------------------------------- the engine copy
+    def engine_base(self, name):
+        """The engine file this film started from, as text, or None: the copy its record's
+        engine_from names (a template's frozen engine, or what episode.py carried from its series'
+        last episode), else the sketch/ of the release it was made on -- its folder in
+        releases\\, or that commit in the checkout -- else the code this studio runs. A film made
+        on one release and finished on the next is measured against its own."""
+        rec = self.record()
+        src = rec.get("engine_from")
+        if isinstance(src, str) and src:
+            d = src if os.path.isabs(src) else os.path.join(HOME, src)
+            return _read_text(os.path.join(d, name))
+        made = str(rec.get("release") or "")
+        if made and made != RELEASE and not made.endswith("-dev"):
+            got = _read_text(os.path.join(HOME, "releases", made, "sketch", name))
+            if got is not None:
+                return got
+            try:
+                r = subprocess.run(
+                    ["git", "-C", REPO, "show", "%s:sketch/%s" % (made, name)],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if r.returncode == 0:
+                    return r.stdout.decode("utf-8", "replace")
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+        return _read_text(os.path.join(KIT, "sketch", name))
+
     def engine_diff(self):
-        """What Claude changed in its copy of the engine, as a unified diff against the code this
-        studio runs (the curator's raw material), written to outputs/engine.diff. Returns the
-        number of changed lines."""
+        """What Claude changed in its copy of the engine, as a unified diff against the engine it
+        started from (engine_base: the curator's raw material), written to outputs/engine.diff.
+        Returns the number of changed lines."""
         out, n = [], 0
         for name in self.engine_files():
+            base = self.engine_base(name)
             try:
-                with open(os.path.join(KIT, "sketch", name), encoding="utf-8") as f:
-                    a = f.read().splitlines(keepends=True)
+                if base is None:
+                    raise OSError(name)
+                a = base.splitlines(keepends=True)
                 with open(self.path("engine", name), encoding="utf-8") as f:
                     b = f.read().splitlines(keepends=True)
             except OSError:
@@ -622,10 +1013,14 @@ class Film:
         """What vo.json must hold (guard.pin_vo puts it back after every edit): the studio's
         backend, model and takes -- and, when the person picked the narrator (studio.json
         "narrator"), that voice too. Claude still chooses how it is read."""
+        frozen = (self.record().get("pins") or {}).get("vo")
+        if isinstance(frozen, dict) and frozen:  # a round's copy (rounds.copy_of): the film's own
+            return frozen
         n = self.record().get("narrator") or {}
+        frame = self.record().get("frame")  # a film from an idea's; a template's keeps its own
         if n.get("source") == "elevenlabs":
-            return _own_pins(n)
-        pins = {**VO_PINNED, "model": tts_model()}
+            return _own_pins(n, frame)
+        pins = {**VO_PINNED, "model": tts_model(), "lead": vo_lead(frame)}
         if n.get("source") == "kitcut" and n.get("voice"):
             pins["voice"] = n["voice"]
         return pins
@@ -698,6 +1093,19 @@ class Film:
         cast = sorted({a or b for a, b in CAST_USE.findall(js)})
         if cast:
             d["cast"] = cast
+        # what tells two films apart at a glance and in their first second: the colours it set
+        # its ground to, and how its narration opens and how much of it there is
+        d |= ground_colours(js)
+        lines = vo.get("lines") if isinstance(vo, dict) else None
+        said = [
+            " ".join(str(x.get("text") or "").split())
+            for x in (lines if isinstance(lines, list) else [])
+            if isinstance(x, dict)
+        ]
+        said = [x for x in said if x]
+        if said:
+            d["opening"] = said[0][:90]
+            d["lines"], d["words"] = len(said), sum(len(x.split()) for x in said)
         return d
 
     # ---------------------------------------------------------------- making and finding films
@@ -722,8 +1130,12 @@ class Film:
         character_style="auto",
         member=None,
         narrator=None,
+        quality=None,
         template=None,
         frame=None,
+        captions=False,
+        music=True,
+        auto_length=False,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -733,9 +1145,21 @@ class Film:
         narration; templates.seed() then lays in its code and the person's content. frame: one of
         the template's frames ("16:9", "1:1"...).
 
+        frame, for a film made from an idea: "16:9" unless it is asked for in another of FRAMES
+        ("9:16": a YouTube Short). captions: the narration's words drawn into the picture
+        (CAPS "captions"); the first message says where they sit (frame_note). music: False for
+        a film with no music at all -- the manifest's audio.music, which sketch-audio.py obeys
+        whatever the score holds, and the first message says so.
+
+        A 9:16 film from an idea speaks at once (vo_lead) and keeps its own opening as the
+        video's first frame (the manifest's cover: false): a Shorts feed shows frame 0 before
+        the film plays, and a cover frame there is the film's ending.
+
         attachments: what the visitor attached (uploads.take), each meta with its file as "src",
         copied into inputs/. A picture becomes upload1.jpg... and joins the manifest's images
-        under that name, so film.js can draw it with SK.image('upload1', ...); a voice note
+        under that name, so film.js can draw it with SK.image('upload1', ...) -- with its "role"
+        (show, scene, style) when the person said what it is for, also in inputs/roles.json,
+        where the painter looks before taking one as a reference; a voice note
         becomes voice1..., with its words in the record; a document becomes doc1.txt (or .md),
         with the name it came with.
 
@@ -751,7 +1175,11 @@ class Film:
         caller): {"source": "kitcut", "voice": <a Gemini voice>}, or {"source": "elevenlabs",
         "voice", "model", "jobs", "chars", "grant"} -- their own voice, spoken through the
         site's relay; the grant is kept apart (temp/voice.json, own_voice), never in the
-        record. None, and Claude picks."""
+        record. None, and Claude picks.
+
+        auto_length: Claude picks the film's length, `seconds` the longest it may be (kitcut.ai's
+        "Let Claude choose the length"). It is laid out at that until agent.pick_length has
+        picked, then again at the length picked (relength); never for a template."""
         if template:  # its own length (26 s is no multiple of 5), look and capabilities
             seconds = int(template["seconds"])
             look = template.get("look") if template.get("look") in LOOKS else LOOKS[0]
@@ -767,6 +1195,9 @@ class Film:
             # has no kit.js there, and its code never calls one
             if not os.path.exists(os.path.join(template["_dir"], "engine", "kit.js")):
                 caps = tuple(c for c in caps if c != "kit")
+        elif captions:
+            caps += ("captions",)
+        frame = frame if frame in FRAMES else None
         style = people_style(character_style, look) if people else None
         projects = os.path.join(HOME, "projects")
         os.makedirs(projects, exist_ok=True)
@@ -791,14 +1222,29 @@ class Film:
             shutil.copyfile(os.path.join(src, name), film.path("engine", name))
         with open(os.path.join(HERE, "template", "sketch.json"), encoding="utf-8") as f:
             m = json.load(f)
-        if template:  # its own look: fonts, player, the mix; no narration, no captions
-            for k in ("fonts", "player", "audio", "render"):
+        if template:  # its own look: fonts, player, the mix; narration and captions if it has one
+            for k in ("fonts", "player", "audio", "render") + (
+                ("captions",) if template.get("narration") else ()
+            ):
                 if k in template.get("manifest", {}):
                     m[k] = template["manifest"][k]
-            m.pop("vo", None)
-            m.pop("captions", None)
+            if template.get("narration"):  # the film records its own: not the sample's word times
+                m["audio"] = {k: v for k, v in m["audio"].items() if k != "vo_timeline"}
+            else:
+                m.pop("vo", None)
+                m.pop("captions", None)
             m["data"] = {"content": "content.json"}
             m["frame"] = FRAMES.get(frame) or FRAMES[template["frames"][0]]
+        elif frame and frame != "16:9":  # a film from an idea, in its own frame (frame_note)
+            m["frame"] = FRAMES[frame]
+            if frame == "9:16":
+                m["cover"] = False
+        if not template:  # its words on screen, apart from its code (prompt.md "Your folder")
+            m["data"] = {**(m.get("data") or {}), "words": WORDS}
+        tall = frame if not template else None  # whose first word comes at once (vo_lead)
+        quiet = music is False and not template
+        if quiet:
+            m["audio"] = {**(m.get("audio") or {}), "music": False}
         words = re.sub(r"\s+", " ", prompt).strip()
         m["title"] = (words[:60] + "...") if len(words) > 60 else words
         attached = []
@@ -815,6 +1261,8 @@ class Film:
                 if a["kind"] == "image":
                     m.setdefault("images", {})[stem] = rel
                     item.update(name=stem, w=a.get("w"), h=a.get("h"))
+                    if a.get("role"):
+                        item["role"] = a["role"]
                 elif a["kind"] == "text":
                     item.update(name=a.get("name") or "", chars=a.get("chars"))
                     item.update(words=a.get("words"))
@@ -822,6 +1270,9 @@ class Film:
                     item.update(secs=a.get("secs"), transcript=a.get("transcript") or "")
                     item.update(lang=a.get("lang"))
                 attached.append(item)
+            roles = {a["name"]: a["role"] for a in attached if a.get("role")}
+            if roles:  # the studio's file: Claude never writes inputs/
+                _write_json(film.path("inputs", "roles.json"), roles)
         cast_people = []
         for i, a in enumerate(people, 1):
             os.makedirs(film.path("inputs"), exist_ok=True)
@@ -840,7 +1291,10 @@ class Film:
         m["cast"] = "cast"  # every cast/*.js loads before film.js (sketch-render)
         # a long film is made a scene at a time (studio/scenes.py): scenes/*.js load after film.js
         over = scenes_over_s()
-        mode = mode or ("scenes" if over and seconds > over and not template else "single")
+        auto = bool(auto_length) and not template
+        # a film whose length Claude picks is made in scenes only if the length picked asks for it
+        long = over and seconds > over and not template and not auto
+        mode = mode or ("scenes" if long else "single")
         if mode == "scenes":
             m["scenes"] = "scenes"
             os.makedirs(film.path("scenes"))
@@ -848,25 +1302,28 @@ class Film:
             m["modules"] = list(modules(caps))
         if paint_kinds(caps):
             m["paint"] = "paint.json"
-            pins = paint_pins(seconds, caps)
+            pins = paint_pins(seconds, caps, quality=quality)
             _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
         _write_json(film.manifest, m)
+        if not template and not os.path.exists(film.path(WORDS)):
+            _write_json(film.path(WORDS), {})
         picked = (
             (narrator or {}).get("voice") if (narrator or {}).get("source") == "kitcut" else None
         )
         vo = {
             **VO_PINNED,
+            "lead": vo_lead(tall),
             "model": tts_model(),
             "voice": picked or "Kore",
             "style": "",
             "language": "en",
         }
         if (narrator or {}).get("source") == "elevenlabs":
-            vo = {**_own_pins(narrator), "language": "en"}
-        if not template:  # a template's film has no narration: the music carries it
-            _write_json(film.path("vo.json"), vo | {"lines": []})
+            vo = {**_own_pins(narrator, tall), "language": "en"}
+        if not template or template.get("narration"):  # else the music carries it
+            _write_json(film.path("vo.json"), vo | {"lines": []})  # a template's: seed() fills it
         if (narrator or {}).get("grant"):  # the film's pass to the relay: for the voice step only
             p = film.path("temp", "voice.json")
             with open(
@@ -881,6 +1338,8 @@ class Film:
                 "look": look,
                 "caps": list(caps),  # what its look was made of when it was made (CAPS)
                 "length": seconds,  # the film's; "seconds" is later how long making it took
+                # Claude picks the length, up to length_max (agent.pick_length, relength)
+                **({"auto_length": True, "length_max": seconds} if auto else {}),
                 "client": client,
                 # who asked: a member of the client's workspace (clients.py; the site's X-Member)
                 **({"member": member} if member else {}),
@@ -911,22 +1370,36 @@ class Film:
                 "listed": bool(listed),
                 # the assistant it was asked for through (source "mcp"), e.g. "Claude"
                 **({"app": str(app)[:40]} if app else {}),
+                # asked for with no music at all (frame_note; the manifest's audio.music)
+                **({"music": "none"} if quiet else {}),
+                # its pictures asked for above a draft (paint_pins; the caller checked the
+                # painter has the setting: chooses_quality)
+                **({"paint_quality": quality} if quality in QUALITIES else {}),
                 "release": RELEASE,
+                # the engine it started from, when it is not this release's sketch/ (engine_base)
+                **(
+                    {"engine_from": home_rel(os.path.join(template["_dir"], "engine"))}
+                    if template
+                    else {}
+                ),
                 "state": "queued",
                 "created": datetime.now().isoformat(timespec="seconds"),
-                # a remake of a template (templates.py): which one, in which frame; no narration
+                # a remake of a template (templates.py): which one, in which frame; narrated or
+                # music only, and whether its sound is files (moved with the narration) or code
                 **(
                     {
                         "template": {
                             "id": template["id"],
                             "version": template["version"],
                             "title": template.get("title"),
+                            "sound": template.get("sound") or "code",
                         },
                         "frame": frame if frame in FRAMES else template["frames"][0],
-                        "narration": False,
+                        **({} if template.get("narration") else {"narration": False}),
                     }
                     if template
-                    else {}
+                    # a film from an idea in a frame of its own (a Short); none is 16:9, as ever
+                    else ({"frame": frame} if frame and frame != "16:9" else {})
                 ),
             },
         )

@@ -1,0 +1,73 @@
+{
+  "_comment": "Word-by-word captions for a vertical Short cut from a crayon sketch-film episode (scripts/episode-short.py): the film's own rounded hand type, white with a thick ink outline so it reads over any part of the picture, the spoken word in warm yellow, centred near 75% of the 1920 height (Shorts guidebook rule 25), two to four words a card (rule 24).",
+  "canvas": {
+    "play_res_x": 1080,
+    "play_res_y": 1920
+  },
+  "font": {
+    "family": "Balsamiq Sans",
+    "file": "fonts/BalsamiqSans-Bold.ttf",
+    "spacing": 0,
+    "fudge": 1.0,
+    "bold": 1,
+    "fontsdir": "fonts",
+    "cap_height_px": 50
+  },
+  "text": {
+    "uppercase": false,
+    "apostrophe": "’",
+    "strip_trailing": ",",
+    "word_gap_ratio": 1.6,
+    "outline_px": 7,
+    "outline_colour": "#2a2521",
+    "shadow_px": 3,
+    "shadow_colour": "#2a2521"
+  },
+  "card": {
+    "colour": "#000000",
+    "alpha": 255,
+    "corner_radius_px": 0,
+    "pad_x_px": 0,
+    "pad_y_px": 0,
+    "collision_gap_px": 16,
+    "enabled": false
+  },
+  "layout": {
+    "anchor_x": 540,
+    "bottom_margin_px": 420,
+    "max_line_width_px": 900,
+    "max_lines": 2,
+    "line_height_px": 84
+  },
+  "states": {
+    "base": {
+      "colour": "#FFFFFF"
+    },
+    "active": {
+      "colour": "#FFD84D"
+    },
+    "spoken": {
+      "colour": "#FFFFFF"
+    }
+  },
+  "grouping": {
+    "max_words": 4,
+    "gap_break_s": 0.4,
+    "break_on_sentence_end": true,
+    "max_group_duration_s": 3.0
+  },
+  "timing": {
+    "lead_in_ms": 60,
+    "hold_out_ms": 250,
+    "min_active_ms": 80,
+    "min_gap_between_groups_ms": 40,
+    "active_extends_to_next_word": true,
+    "fade_ms": 80
+  },
+  "pop": {
+    "enabled": true,
+    "scale": 110,
+    "rise_ms": 70,
+    "settle_ms": 110
+  }
+}

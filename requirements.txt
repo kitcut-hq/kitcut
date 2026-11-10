@@ -72,3 +72,9 @@ rapidocr-onnxruntime==1.2.3   # OCR for scan-pii.py and render-gate.py; CPU, no 
 # is how a video ends up claiming a number nobody measured. bpo-realtor's
 # "534 fields" came from here.
 pypdf
+
+# --- brand books (studio/brandkit.py) -------------------------------------
+# A project's brand book arrives as anything: PDFs are drawn page by page (pdfium, BSD/Apache;
+# not PyMuPDF, which is AGPL), woff2 fonts need brotli for fontTools to open them.
+pypdfium2==5.13.0
+brotli==1.2.0

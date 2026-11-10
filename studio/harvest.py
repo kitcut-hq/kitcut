@@ -596,7 +596,9 @@ def report(args):
                 claude_s += float(m.group(1)) if m else 0
             else:
                 claude_s += float(stages.get("claude") or 0)
-        if studio.get("source") != "import":  # an imported film was written elsewhere
+        # an imported film was written elsewhere; a film made under its project's style
+        # (stylekit.py, paint_route) draws to that style, and nothing of it may reach the kit
+        if studio.get("source") != "import" and not studio.get("paint_route"):
             defs += helpers(fdir, studio)
         src = "\n".join(s for _, s in code_of(fdir))
         used = {".".join(x for x in m.groups() if x) for m in LIB_CALL.finditer(src)}

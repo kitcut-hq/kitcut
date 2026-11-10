@@ -1,0 +1,14 @@
+# Every 15 minutes after the last look ended, GitHub's main is looked at and shipped when it
+# moved (kitcut-autoship.service): the catch for a push whose hook did not arrive (the studio was
+# switching, the tunnel was down; GitHub does not send a hook again by itself). The hook itself
+# starts a look at once (kitcut-autoship.path). Enabled by `ops.sh autoship on`, stopped by `ops.sh autoship off`:
+#   sudo systemctl enable --now kitcut-autoship.timer
+[Unit]
+Description=KitCut studio: look at GitHub's main every 15 minutes, in case a hook was missed
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=15min
+
+[Install]
+WantedBy=timers.target

@@ -95,7 +95,17 @@ def hold_own():
     return SERVER_ID
 
 
-def heartbeat(mode, leader=False, jobs=(), slots=None, sends=(), drafts=(), transcribing=()):
+def heartbeat(
+    mode,
+    leader=False,
+    jobs=(),
+    slots=None,
+    sends=(),
+    drafts=(),
+    transcribing=(),
+    unbrands=(),
+    rounds=(),
+):
     """Tell the other servers what this one is doing, in <id>.json:
 
     id, instance, pid, release, started, updated (epoch s),
@@ -109,6 +119,8 @@ def heartbeat(mode, leader=False, jobs=(), slots=None, sends=(), drafts=(), tran
                   waiting step wants (0: none waiting) -- sched.Pool counts both (peer capacity)
     sends         YouTube sends in flight (youtube.SENDS keys); drafts: ytdraft.JOBS keys;
     transcribing  upload ids whose voice note is being transcribed (uploads.TASKS)
+    unbrands      the films it is drawing again without their branding (unbrand.JOBS)
+    rounds        the films whose next version it is making from their maker's notes (rounds.JOBS)
     """
     assert mode in MODES, mode
     hold_own()
@@ -128,6 +140,8 @@ def heartbeat(mode, leader=False, jobs=(), slots=None, sends=(), drafts=(), tran
             "sends": list(sends),
             "drafts": list(drafts),
             "transcribing": list(transcribing),
+            "unbrands": list(unbrands),
+            "rounds": list(rounds),
         },
     )
 

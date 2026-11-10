@@ -109,6 +109,27 @@ def finish(film, names=None):
     return library.keep(film, items, pictures)
 
 
+def finish_merging(film):
+    """What agent.keep_cast does: a member another episode changed meanwhile merged first
+    (library.merges), drawn as merged, and put back when it draws nothing."""
+    own = library.changes(film)
+    items, _ = library.merges(film, own)
+    pictures = {}
+    if items:
+        names = [it["name"] for it in items]
+        man, times = library.sheet(film, names, items)
+        r = render(man, times, "stills")
+        if r.returncode:
+            raise RuntimeError(r.stdout[-800:] + r.stderr[-800:])
+        pictures = library.thumbs(film, names)
+    items = [
+        mine if it.get("merged_from") and it["name"] not in pictures else it
+        for it, mine in zip(items, own, strict=True)
+    ]
+    film.update(state="done")
+    return library.keep(film, items, pictures)
+
+
 def main():
     bad = []
 
@@ -274,6 +295,9 @@ def main():
             not e.get("deleted") and "green" in e["about"], "a film that changed it brings it back"
         )
 
+        clashes(check)
+        places(check)
+
         # ------------------------------------------------ films from before libraries
         old = Film.create("carol's old film", 5, "drawn", client="u:carol")
         old.update(state="done")
@@ -285,11 +309,124 @@ def main():
         check(len(got["films"]) == 1 and got["cast"] == [], "and are remembered")
 
         projects(check)
+        merged(check)
         workspaces(check)
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d failed" % len(bad))
     sys.exit(1 if bad else 0)
+
+
+def clashes(check):
+    """Two films change one member: the first to finish saves; the other is not saved over it.
+    An old film finished again does not take the library back to its copy (Leo, 2026-10-01)."""
+
+    CL = "u:fred"
+    K0 = Film.create("the first kite", 5, "drawn", client=CL)
+    library.seed(K0)
+    write(K0, "cast/kite.js", KITE)
+    write(K0, "film.js", scene(""))
+    finish(K0)
+
+    def kite(f):
+        e = library.load(CL)["cast"]["kite"]
+        p = os.path.join(library.dir_of(CL), "cast", "kite", "v%d.js" % e["version"])
+        return e, open(p, encoding="utf-8").read()
+
+    H1 = Film.create("kite race one", 5, "drawn", client=CL)
+    H2 = Film.create("kite race two", 5, "drawn", client=CL)
+    library.seed(H1)
+    library.seed(H2)
+    v = kite(H1)[0]["version"]
+    for f, col in ((H1, "#a1a"), (H2, "#b2b")):
+        write(f, "cast/kite.js", KITE.replace("#d33", col))
+        write(f, "film.js", scene(""))
+    k1, k2 = finish(H1), finish(H2)
+    e, code = kite(H1)
+    check(
+        k1["saved"] == ["kite"] and e["version"] == v + 1 and "#a1a" in code,
+        "two films change one member: the first to finish saves its version",
+    )
+    check(
+        k2["saved"] == [] and k2.get("clashed") == ["kite"] and "#a1a" in kite(H2)[1],
+        "the other is not saved over it, and says so (%s)" % k2,
+    )
+    check("#b2b" in open(H2.path("cast", "kite.js"), encoding="utf-8").read(), "it keeps its copy")
+    # a later film adds to the kite; then the first is finished again (resume --finish)
+    H3 = Film.create("kite with a tail", 5, "drawn", client=CL)
+    library.seed(H3)
+    write(H3, "cast/kite.js", KITE.replace("#d33", "#a1a").replace("} };", "/* tail */ } };"))
+    write(H3, "film.js", scene(""))
+    finish(H3)
+    again = finish(H1)
+    e, code = kite(H1)
+    check(
+        again.get("clashed") == ["kite"] and e["version"] == v + 2 and "tail" in code,
+        "an old film finished again leaves the newer version (%s)" % again,
+    )
+    # the same new name made by two films at once
+    M1 = Film.create("a moon", 5, "drawn", client=CL)
+    M2 = Film.create("another moon", 5, "drawn", client=CL)
+    library.seed(M1)
+    library.seed(M2)
+    moon = (
+        "SK.cast.moon = { about: 'the moon', draw(x, y) {\n"
+        "  SK.wash(SK.S.ellC(x, y, 60, 60), '%s');\n} };\n"
+    )
+    for f, col in ((M1, "#eed"), (M2, "#dde")):
+        write(f, "cast/moon.js", moon % col)
+        write(f, "film.js", scene(""))
+    m1, m2 = finish(M1), finish(M2)
+    check(
+        m1["saved"] == ["moon"] and m2.get("clashed") == ["moon"],
+        "a new name another film made first is not saved over it",
+    )
+
+
+HOUSE = """/* home: the family's living room. Floor at y = 300; made for the camera [0, 0, 1]. */
+SK.cast.home = { kind: 'place', camera: [0, 0, 1], about: 'the living room',
+  draw(x, y, o = {}) {
+    SK.wash(SK.S.poly([[x - 900, y - 500], [x + 900, y - 500], [x + 900, y + 300],
+      [x - 900, y + 300]]), '#9bc');
+} };
+"""
+# a place whose set is far from the origin: only its own camera finds it
+AWAY = """SK.cast.away = { kind: "place", camera: [3000, 0, 1], about: 'a yard far off',
+  draw(x, y, o = {}) {
+    SK.wash(SK.S.poly([[x + 2400, y - 300], [x + 3600, y - 300], [x + 3600, y + 300],
+      [x + 2400, y + 300]]), '#7a5');
+} };
+"""
+
+
+def places(check):
+    """A place is a member like the rest: kept, drawn for the sheet through its own camera, and
+    named as a place in the next film's note."""
+    P = Film.create("the living room", 5, "drawn", client="u:dora")
+    library.seed(P)
+    write(P, "cast/home.js", HOUSE)
+    write(P, "cast/away.js", AWAY)
+    write(P, "film.js", scene("SK.cast.home.draw(0, 0); SK.cast.away.draw(0, 0);"))
+    kept = finish(P)
+    idx = library.load("u:dora")
+    check(
+        kept["saved"] == ["away", "home"]
+        and idx["cast"]["home"]["kind"] == "place"
+        and idx["cast"]["away"]["kind"] == "place",
+        "a place is kept, as a place (%s)" % kept,
+    )
+    check(
+        idx["cast"]["home"]["thumb"] and idx["cast"]["away"]["thumb"],
+        "each drawn for the sheet, through the camera it names",
+    )
+    Q = Film.create("back in the living room", 5, "drawn", client="u:dora")
+    library.seed(Q)
+    note = library.note(Q)
+    check("- home (a place): the living room" in note, "the next film's note names it a place")
+    check(
+        [c["kind"] for c in library.listing("u:dora")["cast"]] == ["place", "place"],
+        "and so does the listing",
+    )
 
 
 P1, P2 = "p-aaaaaaaaaa", "p-bbbbbbbbbb"
@@ -328,6 +465,8 @@ def projects(check):
     check(e["w"] == 800 and e["h"] == 400, "a picture joins the project")
     check(library.picture_thumb("u:alice", P1, "logo"), "with a thumbnail")
     check(library.picture_thumb("u:bob", P1, "logo") is None, "which only its person sees")
+    once = library.add_picture("u:alice", P1, "flash", logo, "png", once=True)
+    check(once.get("once") is True, "a picture added for this episode only is marked once")
     for bad, status in (("Logo", 400), ("1x", 400)):
         try:
             library.add_picture("u:alice", P1, bad, logo, "png")
@@ -350,9 +489,31 @@ def projects(check):
         "and gone",
     )
     check(
-        [p["name"] for p in library.listing("u:alice", P1)["pictures"]] == ["logo"]
+        {p["name"]: p["once"] for p in library.listing("u:alice", P1)["pictures"]}
+        == {"logo": False, "flash": True}
         and "pictures" not in library.listing("u:alice"),
-        "a project's listing has its pictures; the person's own has none",
+        "a project's listing has its pictures, each saying whether it is once-only",
+    )
+    # what a picture is for: none until its person says, then one of three
+    try:
+        library.add_picture("u:alice", P2, "p1", logo, "png", role="paint")
+        check(False, "a role that is not one is refused")
+    except library.PictureError as err:
+        check(err.status == 400, "a role that is not one is refused")
+    check(
+        library.add_picture("u:alice", P2, "p1", logo, "png", role="scene")["role"] == "scene",
+        "a picture added with a role keeps it",
+    )
+    check(
+        library.set_picture_role("u:alice", P1, "logo", "style")["role"] == "style"
+        and library.set_picture_role("u:alice", P1, "nobody", "style") is None
+        and library.set_picture_role("u:bob", P1, "logo", "show") is None,
+        "a picture's role changes; no picture, or another's, is not changed",
+    )
+    check(
+        {p["name"]: p.get("role") for p in library.listing("u:alice", P1)["pictures"]}
+        == {"logo": "style", "flash": None},
+        "the listing says each picture's role",
     )
 
     # ------------------------------------------------ the first episode, bringing the person's cast
@@ -364,26 +525,51 @@ def projects(check):
     )
     check(
         os.path.exists(E1.path("inputs", "pic_logo.png"))
+        and os.path.exists(E1.path("inputs", "pic_flash.png"))
         and got["pictures"]
-        == [{"name": "pic_logo", "file": "inputs/pic_logo.png", "w": 800, "h": 400}],
-        "and its pictures, in inputs/",
+        == [
+            {"name": "pic_flash", "file": "inputs/pic_flash.png", "w": 800, "h": 400},
+            {
+                "name": "pic_logo",
+                "file": "inputs/pic_logo.png",
+                "w": 800,
+                "h": 400,
+                "role": "style",
+            },
+        ],
+        "and its pictures, in inputs/, including the once-only one for this episode",
     )
+    with open(E1.path("inputs", "roles.json"), encoding="utf-8") as f:
+        check(json.load(f) == {"pic_logo": "style"}, "their roles, in inputs/roles.json")
     with open(E1.manifest, encoding="utf-8") as f:
         check(json.load(f)["images"].get("pic_logo") == "inputs/pic_logo.png", "in the manifest")
+    check(
+        [p["name"] for p in library.listing("u:alice", P1)["pictures"]] == ["logo"],
+        "the once-only picture left the project the moment it seeded its episode",
+    )
     note = library.note(E1)
     check(
         'episode of the project "Olga\'s Forest"' in note
         and "Calm narrator, soft piano." in note
-        and "- pic_logo (800x400): inputs/pic_logo.png" in note
-        and "project's cast" in note
+        and "- pic_logo (800x400): inputs/pic_logo.png -- style: how we draw this" in note
+        and "- pic_flash (800x400): inputs/pic_flash.png\n" in note
+        and "Brought in from the person's films outside projects" in note
         and "first episode" in note,
         "the note names the project, its brief, pictures and cast",
+    )
+    check(
+        "project's cast, from its earlier episodes" not in note
+        and all(c.get("brought") for c in got["cast"]),
+        "a member brought in and not drawn by an episode yet is not called the series' own",
     )
     text = agent.ask(E1, [{"look": "drawn", "ground": "paper", "voice": "Kore"}])
     check(note in text and "the project's brief" in text, "and is in ask()")
     write(E1, "cast/owl.js", OWL)
     write(E1, "film.js", scene("SK.cast.owl.draw(0, 0); SK.image('pic_logo', 0, 0, 200);"))
-    check(agent.drop_unused_uploads(E1) == [], "a picture film.js draws stays")
+    check(
+        agent.drop_unused_uploads(E1) == ["pic_flash"],
+        "a picture film.js draws stays; the once-only one it never drew leaves the manifest",
+    )
     kept = finish(E1)
     check(kept["saved"] == ["owl"], "the episode's new member is kept (%s)" % kept)
     pidx = library.load(("u:alice", P1))
@@ -533,6 +719,137 @@ def projects(check):
         library.load("u:dave")["films"] == [dave.id], "a person's earlier films leave out episodes"
     )
     check(library.load(("u:dave", P1))["films"] == [], "and a project starts from nothing")
+
+
+OLGA = """// Olga the owl
+SK.cast.owl = {
+  about: 'Olga, a wise grey owl',
+  draw(x, y, o = {}) {
+    SK.wash(SK.S.ellC(x, y - 60, 50, 60), '#888');
+    SK.ink(SK.S.ellC(x, y - 60, 50, 60), { w: 4 });
+  },
+};
+"""
+HAT = OLGA.replace("a wise grey owl", "a wise grey owl in a hat")
+WAVE = OLGA.replace(
+    "{ w: 4 });\n  },",
+    "{ w: 4 });\n    if (o.wave) SK.ink(SK.S.ellC(x + 60, y - 90, 10, 10), { w: 4 });\n  },",
+)
+
+
+def merged(check):
+    """Two episodes of one project change one member at once (two at once on Pro): changes that
+    do not touch the same lines are merged; ones that do are kept beside the series' version,
+    the next episodes are told, and the copy goes once one of them saves the member. A merge
+    that draws nothing is a clash too; a kept sound two episodes changed is reported."""
+    P3, who = "p-dddddddddd", "u:gina"
+    lib = (who, P3)
+
+    def owl():
+        e = library.load(lib)["cast"]["owl"]
+        p = os.path.join(library.dir_of(lib), "cast", "owl", "v%d.js" % e["version"])
+        return e, open(p, encoding="utf-8").read()
+
+    def two(a, b):
+        f1, f2 = episode("one", project=P3, client=who), episode("two", project=P3, client=who)
+        library.seed(f1)
+        library.seed(f2)
+        for f, code in ((f1, a), (f2, b)):
+            write(f, "cast/owl.js", code)
+            write(f, "film.js", scene("SK.cast.owl.draw(0, 0);"))
+        return f1, f2
+
+    first = episode("Olga", project=P3, client=who)
+    library.seed(first)
+    write(first, "cast/owl.js", OLGA)
+    write(first, "film.js", scene("SK.cast.owl.draw(0, 0);"))
+    finish(first)
+    v = owl()[0]["version"]
+
+    a1, a2 = two(HAT, WAVE)
+    k1, k2 = finish_merging(a1), finish_merging(a2)
+    e, code = owl()
+    check(
+        k1["saved"] == ["owl"] and k2.get("merged") == ["owl"],
+        "changes to different lines of one member merge (%s)" % k2,
+    )
+    check(
+        e["version"] == v + 2 and "in a hat" in code and "o.wave" in code and e.get("thumb"),
+        "the library's next version has both, and a picture of it",
+    )
+    again = finish_merging(a1)  # finished again: what it changed is in the library already
+    check(
+        not again["saved"] and not again.get("clashed") and owl()[0]["version"] == v + 2,
+        "an episode finished again whose change is in already: no new version, no clash (%s)"
+        % again,
+    )
+
+    b1, b2 = two(HAT.replace("#888", "#a00"), HAT.replace("#888", "#00a"))
+    finish_merging(b1)
+    k = finish_merging(b2)
+    clash = os.path.join(library.dir_of(lib), library.CLASHED, "owl", b2.id + ".js")
+    check(
+        k.get("clashed") == ["owl"] and "#a00" in owl()[1],
+        "changes to the same line do not: the first to finish leads",
+    )
+    check(
+        os.path.exists(clash) and "#00a" in open(clash, encoding="utf-8").read(),
+        "the other's copy is kept beside it",
+    )
+    check(
+        library.listing(who, P3)["clashed"] == [{"name": "owl", "film": b2.id}],
+        "and listed for the Cast tab",
+    )
+    c = episode("three", project=P3, client=who)
+    got = library.seed(c)
+    rel = "library/clashed/owl-%s.js" % b2.id
+    check(
+        got["clashed"] == [{"name": "owl", "film": b2.id, "file": rel}]
+        and os.path.exists(c.path(*rel.split("/"))),
+        "the next episode gets it to read",
+    )
+    check(
+        rel in library.note(c) and "did not merge" in library.note(c), "and is told to fold it in"
+    )
+    write(c, "cast/owl.js", owl()[1].replace("{ w: 4 });\n  },", "{ w: 4 });\n    // folded\n  },"))
+    write(c, "film.js", scene("SK.cast.owl.draw(0, 0);"))
+    finish_merging(c)
+    check(
+        not os.path.exists(clash) and library.listing(who, P3)["clashed"] == [],
+        "once it saves the owl, the copy goes",
+    )
+
+    d1, d2 = two(
+        owl()[1].replace("a wise", "a very wise"),
+        owl()[1].replace("draw(x, y, o = {}) {\n", "draw(x, y, o = {}) {\n    nowhere(x);\n"),
+    )
+    finish_merging(d1)
+    k = finish_merging(d2)
+    check(
+        k.get("clashed") == ["owl"] and "nowhere" not in owl()[1],
+        "a merge that draws nothing is a clash, not a version",
+    )
+
+    s1, s2 = (episode("bells %d" % i, project=P3, client=who) for i in (1, 2))
+    for f, vol in ((s1, 0.5), (s2, 0.9)):
+        library.seed(f)
+        write(
+            f,
+            "sounds.json",
+            json.dumps(
+                {
+                    "sounds": {"bell": {"about": "the bell", "cue": {"sound": "bell", "vol": vol}}},
+                    "themes": {},
+                }
+            ),
+        )
+        write(f, "film.js", scene(""))
+    finish(s1)
+    k = finish(s2)
+    check(
+        k.get("sounds_clashed") == ["bell"],
+        "a kept sound two episodes changed at once is reported (%s)" % k,
+    )
 
 
 def workspaces(check):

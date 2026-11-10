@@ -1,0 +1,9 @@
+{
+  "name": "hn-ideas",
+  "private": true,
+  "type": "module",
+  "description": "The owner's page of video ideas from the HN routine: pick an angle, and the maker routine researches, makes and publishes it.",
+  "dependencies": {
+    "@vercel/blob": "2.8.2"
+  }
+}

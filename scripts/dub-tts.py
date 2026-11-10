@@ -129,6 +129,9 @@ async def _stream(text, voice, rate_pct, pitch_hz):
         # the default is SentenceBoundary, which for our
         # purposes reports nothing useful
         boundary="WordBoundary",
+        # aiohttp ignores HTTPS_PROXY unless told: behind a proxy (a cloud container) the name of
+        # the speech service does not even resolve without it
+        proxy=os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy") or None,
     )
     audio, marks = bytearray(), []
     async for ch in c.stream():

@@ -8,16 +8,18 @@ laptop, through the scripts in this folder.
 |---|---|
 | VM | `kitcut-studio-1`, Standard_D4ads_v5 (4 vCPU AMD EPYC, 16 GB) since 2026-09-28 16:05 (D8ads_v5 before), Ubuntu 24.04 |
 | where | resource group `kitcut-PROD`, southcentralus -- beside the films' blob account `kitcutst` |
-| disks | 128 GB OS + 512 GB data at `/srv/kitcut`, both Standard HDD (disk speed is not the bottleneck) |
+| disks | 32 GB OS + 512 GB data at `/srv/kitcut`, both Standard HDD (disk speed is not the bottleneck). The OS disk goes with the machine; the data disk is kept, and carries a delete-lock |
+| copies | Azure Backup nightly (the whole machine, 30 days), the home mirrored to R2 every 15 minutes, the database exported nightly: "Where the copies are". The machine gone: "If the machine is gone" |
 | code | `/srv/kitcut/repo`, pushed from the laptop (`push.sh`); the VM holds no GitHub credentials |
 | films | `/srv/kitcut/studio` (`STUDIO_HOME`) |
-| reach | SSH from the VPN only (no public IP); the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai`; `vm.sh network` also denies outbound to the VNet (`no-network-outbound`: films fetch from the web) |
+| copies online | Cloudflare R2 bucket `kitcut-media`, public at `https://media.kitcut.ai/films/<id>/<file>`, since 2026-10-07 (downloads are free there; Azure billed them per GB). The `.env` holds `STUDIO_MEDIA_BASE` and the three `STUDIO_R2_` settings; `.env.bak-before-r2` is the file from before. Azure's `kitcutst/films` still holds the films copied before the move (`STUDIO_MEDIA_OLD_BASE`: a deleted film goes from there too); take that setting out when the container is removed |
+| reach | SSH from the VPN only (no public IP), plus one locked address for Claude cloud sessions, `ssh.kitcut.ai` ("SSH for Claude cloud sessions"); the studio leaves through the Cloudflare named tunnel (outbound), `studio.kitcut.ai`; `vm.sh network` also denies outbound to the VNet (`no-network-outbound`: films fetch from the web) |
 | cost | ~$180/month for the VM on D4ads_v5 ($361 on D8) + ~$22 the data disk (list prices, 2026-09-28) |
 
 ```bash
 bash studio/deploy/ops.sh status          # health, the servers and their films, disks, errors
 bash studio/deploy/ops.sh logs studio -f  # every server unit; or tunnel | login
-bash studio/deploy/ops.sh ship            # origin/studio-poc -> tagged, built, its server leading
+bash studio/deploy/ops.sh ship            # origin/main -> tagged, built, its server leading
 bash studio/deploy/ops.sh film "<idea>"   # a film made on the VM itself, followed to the end
                                           # (--no-watch: print its id; `watch <id>...` follows several)
 bash studio/deploy/ops.sh forward         # the VM's studio on this laptop's 127.0.0.1:8765
@@ -37,13 +39,13 @@ takes the new films; the old one finishes the films it is making, then exits by 
 
 ```bash
 bash studio/deploy/ops.sh --dry-run ship      # what it would do
-bash studio/deploy/ops.sh ship [<commit>]     # default origin/studio-poc's head
+bash studio/deploy/ops.sh ship [<commit>]     # default origin/main's head
 bash studio/deploy/ops.sh rollback <sha12>    # any release still built (ops.sh releases)
 ```
 
 What a ship does:
 
-1. **On the laptop** (`ops.sh`): refuses a commit that is not on origin/studio-poc, tags it
+1. **On the laptop** (`ops.sh`): refuses a commit that is not on origin/main, tags it
    `studio-stable`, and `push.sh` pushes that commit into a bare repo on the VM
    (`/srv/kitcut/git`) and moves the checkout to it. Code reaches the VM only from the laptop:
    kitcut-hq/kitcut has deploy keys disabled, and a VM with no GitHub credentials cannot leak any.
@@ -108,6 +110,99 @@ restart killed it -- recorded *cancelled* -- and, the release having been built 
 `STUDIO_HOME`, the studio came back on its old code. The lock, the `STUDIO_HOME` check and the
 *interrupted* record came that night; one server per release is the end of it: a ship no longer
 waits on a film or stops one.
+
+### A push to GitHub ships itself (autoship)
+
+```bash
+bash studio/deploy/ops.sh autoship on        # install and start the hook's path unit and the poll (lifts a pause)
+bash studio/deploy/ops.sh autoship           # its last decision, and the last ship's log
+bash studio/deploy/ops.sh autoship --plan    # what a look would do now; changes nothing
+bash studio/deploy/ops.sh autoship now [--retry]   # one look now, followed (--retry: a failed head)
+bash studio/deploy/ops.sh autoship off       # stop it; ops.sh ship still works as before
+bash studio/deploy/ops.sh autoship hook      # the hook's secret (machine .env) and GitHub's webhook
+bash studio/deploy/ops.sh autoship hook --check   # the webhook's last deliveries, and the lock probed
+node --env-file=<CLOUDFLARE_API_TOKEN file> studio/deploy/hook-lock.mjs [--check]   # the Cloudflare lock
+```
+
+**The studio follows `main` since 2026-11-02.** Until then it followed `studio-poc`, which had
+drifted 320 commits apart from `main`; the two were merged and both pointed at the same commit,
+and the old ship shipped the change that moved it. `studio-poc` stays on GitHub only so a session
+that still pushes there is caught: a look that finds commits on it that `main` lacks puts autoship
+on **hold** with their names (the owner is emailed), and they ship once merged into `main`.
+
+When GitHub's `main` moves past the release that leads, the machine ships it
+(`studio/deploy/autoship.py`), and a push needs nobody at a laptop. **GitHub's push hook starts a
+look at once**; a poll every 15 minutes (`kitcut-autoship.timer`) catches a push whose hook did
+not arrive, since GitHub does not send one again by itself. **The machine still pulls the code**:
+kitcut-hq/kitcut is public, so `git ls-remote https://github.com/...` needs no key, and the
+machine holds no GitHub credentials. The hook carries no code and decides nothing -- it says
+"look now".
+
+**Only GitHub can call the hook**, `https://studio.kitcut.ai/hooks/github`, and it is locked
+twice:
+
+1. **At Cloudflare** (`hook-lock.mjs`): one firewall rule blocks any path of studio.kitcut.ai
+   containing `/hooks`, in any case, from every address outside GitHub's published webhook ranges
+   (`api.github.com/meta`, `hooks`). Nothing else reaches the machine; `ops.sh autoship hook
+   --check` POSTs from the laptop and expects 403. GitHub says it changes the ranges rarely;
+   `hook-lock.mjs --check` says STALE when it has, and until the rule is made again a hook is
+   blocked and the poll ships the push.
+2. **On the machine** (`server.py github_hook`): GitHub signs every delivery with
+   `X-Hub-Signature-256`, an HMAC-SHA256 of the body under a secret only GitHub and the machine's
+   `.env` hold (`AUTOSHIP_HOOK_SECRET`, made on the machine by `ops.sh autoship hook` and piped
+   straight into GitHub's API, never printed or saved on a laptop). Checked in constant time over
+   the whole body (at most 4 MB, read past the app's 64 KB cap); unsigned, wrongly signed or too
+   large is refused (401/413) and logged with the caller's address. No secret, no hook (404). It
+   sits outside `/api/`, so the studio token does not guard it: GitHub cannot send that token.
+
+A signed request does one thing: for a `push` to `refs/heads/main` (or `studio-poc`, below) it writes
+`STUDIO_HOME/autoship.poke`, and `kitcut-autoship.path` starts a look. A ping is answered; any
+other branch, tag or event is acknowledged and ignored. `studio/test_hook.py` holds each of these
+to the real handler. A replayed delivery can only ask for a look that finds nothing new.
+
+A look ships exactly what step 1 above would put there, and the same way: GitHub's head, a
+fast-forward of the bare repo's branch (`update-ref` with the old value), the `studio-stable` tag
+there, the checkout moved as `push.sh` moves it, then `serve.sh release --no-test` -- built, a
+server of its own -- and `/api/health` asked which release leads.
+
+**Live first, tested after** (the owner's choice, 2026-10-16). A push is live about 30 s after
+GitHub has it; the release's own tests (`release.py --test`, about 6 minutes: `test_rounds` 79 s,
+`test_thumbs` 42 s, `test_library` 30 s, `test_bluegreen` 26 s and the template redraws lead,
+each printed in the ship's log) then run against the release that serves. When they fail, it
+switches back to the release that led before (`serve.sh use`), and the commit is **failed** and
+emailed. Films that started on the bad release in those minutes finish on it. `ops.sh ship` from
+a laptop still tests first.
+
+The decisions, each tested by
+`studio/test_autoship.py` against local repositories and a stub studio. Each wait is looked at
+again every 30 s by the same run (for at most 45 minutes, then the poll), and a hook that arrived
+while a look was shipping gets one more look before it stops:
+
+| it finds | it does |
+|---|---|
+| the head leads already, or `autoship.paused` exists | nothing |
+| a head under 30 s old | waits: pushes in a row are one ship |
+| the `cpu` pool busy (a voice being recorded, a film's sound) | waits, at most 40 min from the head's first look, then ships: a ship's tests take the cores those steps time words on (KI-043), and a ship slows a film but never stops one |
+| `deploy.lock` held (a ship from the laptop), or the studio not answering | waits |
+| only `docs/`, `projects/`, `market/`, `.github/`, `.claude/` (the skills) or the root's `*.md` changed | skips; the next real commit takes them. The studio's own prompts (`studio/*.md`) do ship |
+| a `requirements*.txt` changed | **holds**: the venv is shared (above), so a person ships it at a quiet moment with `ops.sh ship` |
+| GitHub's branch rewritten (not a fast-forward) | **refuses** |
+| a release that fails its tests (after going live) | switched back to the release before; **failed**, once per commit: the next commit is tried, or `now --retry` |
+
+The three in bold are written into the machine's note at once (`machine_note.py`, field
+`autoship`), and the site's watch emails the owner from it (sketch-studio `lib/studiowatch.js`), so
+a push that did not go live is not found days later. `ops.sh status` prints the last decision on
+its own line. Each ship's log is `STUDIO_HOME/autoship/<sha12>-<time>.log` (the last 30).
+
+- **`ops.sh rollback` pauses it** (`STUDIO_HOME/autoship.paused`): otherwise the next look would
+  ship GitHub's head straight back. `ops.sh autoship on` lifts the pause once the fix is pushed.
+- **`ops.sh ship` from a laptop still works**, and both take the same `deploy.lock`. A hand ship
+  is also how a requirements change goes out.
+- **GitHub's `studio-stable` tag** moves only when a laptop ships; the machine's own tag is the
+  truth. `provision.sh` reads GitHub's tag when building a machine again, so a new machine may
+  start one release behind -- and its first look ships the head.
+- **The script is Python on the system `python3`**, not bash in the venv: it moves the checkout
+  it was started from, and bash goes on reading a script as it changes (ops.sh, 2026-10-12).
 
 ### The migration, once per machine
 
@@ -268,20 +363,496 @@ VM.
 kitcut.ai finds the studio) does nothing unless the `.env` has `STUDIO_ANNOUNCE=1`, and only the
 VM's does. Before the move the laptop's does.
 
+## Who uses the machine
+
+```bash
+bash studio/deploy/ops.sh usage                    # the last 24 h: by hour, memory's low points,
+                                                   # by film and by step
+bash studio/deploy/ops.sh usage --hours 6 --top 20
+bash studio/deploy/ops.sh usage --at "20:40"       # one moment in full: every group, the top processes
+bash studio/deploy/ops.sh usage --film 3mx2e4      # one film's steps
+bash studio/deploy/ops.sh usage install            # install and (re)start the sampler
+```
+
+Two records, because neither is enough alone (`studio/deploy/usage.py`):
+
+- **The timeline**: `kitcut-usage.service` samples every 15 s into `STUDIO_HOME/usage/<day>.jsonl`
+  (14 days kept, ~1.4 KB a sample, ~8 MB a day): CPU busy, memory available, the pressure-stall
+  averages (`/proc/pressure`: how long work waited for a CPU or for memory), and every cgroup that
+  matters with its cores, its memory and the part of it that is **held** (anonymous: the kernel
+  cannot take it back the way it takes file cache) -- each film's step, each server's own leaf
+  (the server and its films' Claude Code), each `ops.sh` job, the ssh sessions -- plus the twelve
+  biggest processes by CPU and by memory, each tied to its film off its command line. It runs on
+  the system python3 with the stdlib only (a release's venv cannot break it), niced, `MemoryMax=128M`.
+- **The bill**: every step a server (or a `resume`) runs leaves a line in
+  `STUDIO_HOME/usage/steps-<day>.jsonl` (`procs.record_step`): its film, what it was
+  (`sketch-render --stills`), its time, its exact CPU seconds and memory peak read off its own
+  cgroup just before it is removed, how often the cap killed something in it, its exit code. Exact
+  even for a step shorter than a sample.
+
+Each step's cgroup is named after its film and step (`step-<pid>-<n>-3mx2e4-sketch-render`), so a
+sample needs no lookup; a step started by an older server (`step-<pid>-<n>`) is named off its first
+process instead. sar (sysstat, every 10 minutes) stays for the machine as a whole, but a
+10-minute average hid the 14.8 GB moment at 2026-09-30 20:40 that this was built to explain.
+
+First reading, 2026-10-01 12:40: two films rendering at once (one a `resume`, which has pools of
+its own -- KI-043) ran 4 browsers each on the 4 cores, CPU pressure 90 %: each waited for a CPU
+almost all the time.
+
+## The machine's watch: the page, the logs, the emails
+
+The watch is its own repository since 2026-10-26: **github.com/Instafill/machine-monitor**
+(private), checked out at `/opt/machine-monitor` on kc-local and run as `machine-monitor.service`.
+Its README is the manual; kc-local's settings are its `machines/kc-local.json`.
+
+```bash
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor            # what it sees now, what stands wrong
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor update     # push the laptop's checkout to it
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor link       # the page with its key
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor tunnel     # publish the page (machine.kitcut.ai)
+KITCUT_VM=kc-local bash studio/deploy/ops.sh monitor tidy       # clear failed hand-job units (run-u*)
+```
+
+The machine holds no GitHub key, so `update` pushes `C:\instafill\machine-monitor` (or
+`MACHINE_MONITOR_REPO`) to it over ssh, as `push.sh` does the studio, and the service restarts
+itself on the new code. It does not ship with autoship.
+
+What ties it to the studio:
+
+- **Its state lives in `STUDIO_HOME/monitor`** (history, journal cursor, `health.json`, and
+  `secret.env` with the page key and its Elasticsearch password). The mirror leaves that folder
+  out (`backup-filter.txt`).
+- **Its alerts reach the owner through the studio.** Its `notify_cmd` is `studio/machine_note.py`,
+  which puts `health.json` in the machine note (`kitcut.studio_hosts`); the site's watch
+  (sketch-studio `lib/studiowatch.js`) emails each alert when it starts, gets worse or still stands a
+  day later, and "All clear" when it ends. The site already tells when the studio stops answering
+  or the note stops coming, which a machine cannot say about itself, so the watch does not repeat
+  those.
+- **Its "who holds the memory" panel** reads the usage sampler above (`STUDIO_HOME/usage`).
+- Elasticsearch on kc-local (the org's cluster) gets `machine-metrics-*`, `machine-logs-*` (the
+  whole journal) and `machine-events-*` through the file-realm user `machine-monitor`, which can
+  touch nothing else.
+
+## The data disk, and what fills it
+
+```bash
+bash studio/deploy/ops.sh prune --plan             # what would go, by kind; removes nothing
+bash studio/deploy/ops.sh prune                    # the plan, then the removal (capped, idle I/O)
+bash studio/deploy/ops.sh prune --older-than 0 --film <id>   # one film's, however new
+bash studio/deploy/ops.sh prune install            # install and start the hourly timer
+```
+
+A film is read a frame or two a second before it is called done, and its thumbnails are cut from
+stills of it. Those frames are full-size PNGs of about 3 MB and nothing removed them: on
+2026-10-12 they were 222 GB of the 399 on the disk, in 61,659 files, and had grown 48 GB a day
+since the review went live on 2026-10-07 -- two days from a full disk, and a full disk stops every
+film (KI-063). `studio/prune.py` removes them from films that are over, every hour
+(`kitcut-prune.timer`), once nothing has written to them for six hours:
+
+| in the film's `temp/` | what it is | when it is needed again |
+|---|---|---|
+| `motion/` | the film a few times a second, and the probe's report | `ops.sh review` and a resumed film render it again |
+| `motion-before/`, `motion-after/` | the review's fix: the frames before and after | never: read only inside that one fix |
+| `strip/` | a close look's frames | never: every call renders its own |
+| `thumbs/**/*.png` | the thumbnail stills | the missing ones are rendered when options are made (~0.1 s each) |
+| `*_silent.mp4`, `*_silent_segments/` | the render before its sound | never: the film is `outputs/film.mp4` |
+
+Never touched: `temp/brand/` (the Free plan's closing, which the film's manifest loads),
+`temp/record.lock`, `temp/lines/`, the thumbnails' moments sheet and recorded look
+(`style.json`, `boxes.json`), and a film that is being made, waiting for its voice, changed by a
+round or drawn again. A round never takes `temp/` into a version (`rounds.OWN`), so nothing a
+later version needs can go. `ops.sh status` warns when the data disk passes 80 %.
+
+What still grows after this: each film's master, web copy and narration takes (about 0.3-0.8 GB
+a film). At 30 films a day that is weeks, not months, on 512 GB.
+
+## Where the copies are
+
+Until 2026-10-12 everything needed to work on a film again -- its code, its narration takes, its
+maker's uploads, the project's cast and voice lines, the templates -- was on the data disk and
+nowhere else, with one snapshot fourteen days old (KI-064). Finished films as they play were
+already on R2, and records in MongoDB. Now there are three copies, each for a different failure:
+
+| copy | what | how often | kept | survives |
+|---|---|---|---|---|
+| **Azure Backup** (vault `kitcut-backup-rsv`, resource group `kitcut-backup`, policy `kitcut-daily-30`) | the whole machine, both disks | nightly, 03:00 Pacific | 30 days | a lost or spoiled disk, a wrong delete, a bad release, a break-in on the machine (it holds no Azure identity and cannot touch the vault) |
+| **The mirror** (R2 bucket `kitcut-backup`, private) | the studio's home by `deploy/backup-filter.txt`, `models/`, the usage logs | every 15 minutes; by checksum nightly | what a pass replaced or removed: 30 days, under `_history/<day>/` | the Azure account, region or resource group going |
+| **The database export** (same bucket, `db/<day>/`) | every collection of `kitcut`, as mongodump writes them | nightly, 02:10 Pacific | 30 days | Atlas losing or spoiling the database |
+
+```bash
+bash studio/deploy/ops.sh status                   # "azure backup:" its last job; "mirror:" the
+                                                   # last pass, and STALE when it is behind
+bash studio/deploy/ops.sh backup --plan            # what a pass would send and remove; sends nothing
+bash studio/deploy/ops.sh backup                   # a pass now (capped, beside the films)
+bash studio/deploy/ops.sh backup --full            # the nightly pass now: every file by checksum
+bash studio/deploy/ops.sh backup verify            # every mirrored file against the bucket
+bash studio/deploy/ops.sh backup db --plan         # the database's collections and sizes
+bash studio/deploy/ops.sh backup install           # install and start the two timers
+bash studio/deploy/ops.sh secrets check            # the machine's sealed keys: do they open through
+                                                   # the key vault, and are they the .env as it is now
+bash studio/deploy/ops.sh secrets seal | names     # seal now | what the sealed file holds
+bash studio/deploy/ops.sh snapshot                 # before a risky change: the data disk, now
+```
+
+**What is mirrored is one file**, `studio/deploy/backup-filter.txt`: the first rule that matches
+a path decides, and a path no rule matches is mirrored, so a folder nobody thought about is kept.
+`studio/test_backup.py` fails a release when the code makes a folder in the home that no rule
+decides. Left out: a film's `temp/` (but not `temp/brand/`), `releases/`, `servers/`, `cache/`,
+`tmp/`, locks. Not in the mirror at all: the machine's `.env` in the clear.
+
+**The machine's keys are in the mirror sealed.** The `.env` is the one file that holds every key
+the studio uses, and with the tunnel's credential it was on one disk. `studio/sealenv.py` packs
+the `.env`, `~/.cloudflared/<uuid>.json` and `cert.pem`, encrypts them under a key made for that
+one sealing (AES-256-GCM), and wraps that key with the public half of an RSA key that lives in
+Azure Key Vault (`kitcut-kv-prod`, `studio-env-kek`, wrap and unwrap only; its public half and
+its name are `deploy/studio-env-kek.pub.pem` and `.json`). The result,
+`STUDIO_HOME/sealed/studio-secrets.json`, is written before every pass of the mirror when one of
+the files changed, so the copy is never older than the last pass and nobody has to remember to
+push it. Nothing on the machine, in this repository or in the bucket can open it: opening asks
+the vault to unwrap the key (`deploy/unseal.sh`), which takes an Azure sign-in allowed to use
+that key. `ops.sh secrets check` does exactly that and compares what opens with the machine's
+`.env`, setting by setting, as checksums -- a value never crosses the wire or the screen. First
+sealed and checked 2026-10-12: 30 settings, the same; and the copy fetched from the bucket with
+the laptop's Cloudflare sign-in (`wrangler r2 object get`) opened the same way.
+
+Why sealed and not stored as key vault secrets: that needs a role on the vault given by hand in
+the portal, a copy somebody must remember to refresh after every change of the `.env`, and it
+would sit beside the machine in Azure. Sealing needs only the right to use one key, is always
+current, and puts the copy on Cloudflare while the key that opens it stays in Azure.
+
+**How a pass compares.** S3 keeps a file's own time in metadata that only a request per object
+returns: 85,000 requests a pass, 96 passes a day. So a pass compares names and sizes from one
+listing (new, resized, removed), then asks about the files changed in the last six hours one by
+one; the nightly pass compares checksums, which a listing also gives because nothing is uploaded
+in parts (`--s3-upload-cutoff 4G`). Only the nightly pass sees a file put back with an old time
+and the very same size.
+
+**Three guards**, because a mirror that follows the disk faithfully also follows a mistake: what
+a pass replaces or removes moves to `_history/<day>/` in the bucket instead of going; a pass
+refuses a home with no `projects/` or no film in it (a data disk that did not mount would read as
+"everything was deleted"); and it stops at 5,000 removals (`backup.MAX_DELETE`).
+
+The key is the films' own R2 key until `STUDIO_BACKUP_R2_KEY_ID` / `_SECRET` are in the VM's
+`.env`: a key allowed to write `kitcut-backup` and nothing else. Delete-locks (`kitcut-keep`) sit
+on the data disk, the key vault and the backup vault: removing one of those is two deliberate
+steps. The locks are on the resources, not the resource group, or `ops.sh snapshot` could not
+prune its old snapshots.
+
+## Films' code in git
+
+```bash
+bash studio/deploy/ops.sh filmgit --plan           # what a sync would commit and forget; writes nothing
+bash studio/deploy/ops.sh filmgit                  # the sync now (hourly by kitcut-filmgit.timer)
+bash studio/deploy/ops.sh filmgit --log <film-id>  # a film's versions, as commits
+bash studio/deploy/ops.sh filmgit install          # install and start the hourly timer
+bash studio/deploy/ops.sh filmgit publish          # the repositories GitHub does not have yet:
+                                                   # made there, each with a key of its own
+```
+
+A film is code, and `studio/filmgit.py` keeps each project's films in one bare git repository,
+`STUDIO_HOME/git/<project>.git` (a film outside a project: its workspace's, `w-<name>.git`; one
+with no signed-in maker: `w-other.git`). On `main`, `films/<film id>/` holds the film's code
+(`film.js`, `cast/`, `scenes/`, `engine/`, the `*.json` it is made of), `film.json` (what it is)
+and `assets.json` (every file of the film that is not code, with its size: what a checkout
+fetches from the mirror); `library/` holds the project's cast and episode log. A version is a
+commit, tagged `<film id>/v<n>`. Measured 2026-10-12: all 490 films' code is 110 MB, 80 MB of it
+32 engine files copied 1,440 times, which git stores once; the pictures, takes, uploads and
+masters (136 GB) are not in git and never will be.
+
+It is kept by looking, not by being told: a sync compares every finished film with what its
+repository holds and commits the difference, so nothing in the making of a film can fail on it,
+and the first sync is the back-fill (versions still on disk go in first, in order). Two
+versions made within the hour are one commit. A film that was deleted is rewritten out of its
+repository by the next sync -- its folder, its tags, the bytes -- and that is refused on a home
+that is not whole and past 20 films at once.
+
+The repositories ride the mirror with the rest of the home, and each has a copy on GitHub:
+private, in an organisation of its own, `github.com/kitcut-films` (never `kitcut-hq`: the
+machine runs people's prompts and must hold no key that reaches the product's code). The
+machine holds no key to that organisation either. Every repository is pushed with a key made
+for it alone (`~/.ssh/filmgit/<name>` on the VM), registered on GitHub as a deploy key that may
+write that one repository and nothing else. Making a repository there and registering its key
+takes a GitHub sign-in that may do so, which is this laptop's: `ops.sh filmgit publish` does it
+for every repository GitHub does not have yet (a new project waits for the next time it is
+run). From then on each hourly sync pushes with `--mirror`, so a film forgotten here goes from
+there too, and GitHub being down is tried again an hour later. A machine built again has new
+keys: `filmgit publish` registers them (the old ones stay on GitHub until removed there).
+
+As a film finishes, the server also runs `filmgit.py --sync --film <id> --and-push` for that film
+alone (`filmgit.on_finish`, where the studio's `.env` says `STUDIO_FILMGIT_ON_FINISH=1`, read
+each time: `machine.env` sets it), so its repository and GitHub are minutes behind it rather than
+up to an hour; it never waits, never fails a film, and the hourly sync stays the backstop. A push
+that hangs past `PUSH_S` (600 s) is that repository's failure, and the others still go. Each
+`film.json` names the `release` that made it, and an episode that started from an earlier one's
+code (`studio/episode.py`) names that one by tag (`carried_from`, and `Started-from: <film>/v<n>`
+in its commit) -- by tag, never by commit, because forgetting a film rewrites a repository's
+history. Nothing that makes a film reads these repositories: an episode starts from the last
+one's folder on this machine, so GitHub being away never stops one.
+
+Working on a film by hand through git (clone, change, push a branch, the studio renders it as
+the next version) is the step after that; until then it is `ops.sh take` / `put`.
+
+## SSH for Claude cloud sessions
+
+A Claude cloud session (claude.ai/code) cannot join the VPN, so it has one address of its own,
+`ssh.kitcut.ai`. In a session whose environment carries the setup script below,
+`ssh kitcut-studio-1 '<command>'` works, and with it `vm.sh ssh`, `push.sh` and everything in
+`ops.sh` that is not an `az` call (`vm.sh` returns the VM's name as its address when
+`CLAUDE_CODE_REMOTE=true`, and says so when the session has no route).
+
+What a cloud session's network lets out, measured 2026-10-12 in a session with Full access:
+
+| tried | result |
+|---|---|
+| SSH on port 22 | the connection never opens |
+| SSH on port 443 | intercepted: the server's reply never comes back |
+| SSH through the session's proxy (`CONNECT`) | `200`, then reset. The proxy decrypts TLS and drops anything else |
+| UDP | DNS to 1.1.1.1 passes; no other port was tried, so a VPN client is unproven |
+| a WebSocket over HTTPS | works: 64 KB binary frames intact, one connection held 180 s |
+| `cloudflared` | downloads from GitHub's releases; its request reaches Cloudflare |
+| an `ssh` client | not in the image (`apt-get install openssh-client` in the setup script) |
+
+So SSH rides inside a WebSocket: `cloudflared access ssh` on the session's side, a second
+Cloudflare tunnel on the VM's. Four pieces, each with its script:
+
+| piece | what it is | made by |
+|---|---|---|
+| the lock | a firewall rule on the `kitcut.ai` zone, first in the list: a request for `ssh.kitcut.ai` without the header `x-kitcut-gate: <secret>` is blocked at Cloudflare (403) and never reaches the VM | `ssh-lock.mjs` |
+| the tunnel | the unit `kitcut-ssh-tunnel` (256 MB cap), tunnel `kitcut-ssh`, everything it owns in `/srv/kitcut/ssh-tunnel/`: `ssh.kitcut.ai` -> `ssh://127.0.0.1:22` | `ssh-tunnel.sh` |
+| the key | the cloud's own ed25519 key, in `authorized_keys` with `from="127.0.0.1,::1"`: it works only for a connection that arrives through the tunnel, never from the VPN | `cloud-env.sh`, `ssh-tunnel.sh key` |
+| the session's side | a setup script for the environment's dialog: the ssh client, `cloudflared`, the key, the VM's host key pinned, the host alias `kitcut-studio-1` | `cloud-env.sh` |
+
+The order is the safety: **lock, closed, probe, key, up.** An address with a tunnel and no lock
+is the VM's SSH port on the internet.
+
+```bash
+P=~/Documents/kitcut-access-cloud       # the private folder: the secret, the key pair, the script
+node --env-file=<file with CLOUDFLARE_API_TOKEN> studio/deploy/ssh-lock.mjs --out $P     # the lock
+bash studio/deploy/vm.sh ssh kitcut-studio-1 'bash -s -- closed' < studio/deploy/ssh-tunnel.sh
+node --env-file=<...> studio/deploy/ssh-lock.mjs --probe --out $P    # 403 without, 404 with: go on
+bash studio/deploy/vm.sh ssh kitcut-studio-1 "bash -s -- key \"$(bash studio/deploy/cloud-env.sh $P --pub)\"" < studio/deploy/ssh-tunnel.sh
+bash studio/deploy/vm.sh ssh kitcut-studio-1 'bash -s -- up' < studio/deploy/ssh-tunnel.sh
+bash studio/deploy/cloud-env.sh $P --test    # a real connection through Cloudflare, from here
+bash studio/deploy/cloud-env.sh $P           # $P/setup-script.sh: paste into the environment
+```
+
+The setup script goes into the environment's **Setup script** field at claude.ai/code (the
+environment's network access on Full, or Custom with `ssh.kitcut.ai` and GitHub's release hosts).
+It runs once as root, the result is kept as a snapshot, and every later session starts from it;
+Anthropic rebuilds the snapshot when the script changes and about every seven days. A setup
+script that fails stops the session from starting, so this one always exits 0 and leaves
+`/var/log/kitcut-setup.log`.
+
+Checked on 2026-10-12, from the laptop through Cloudflare (not the VPN):
+
+| | |
+|---|---|
+| the address without the header, and with a wrong value | 403 |
+| the address with the header, tunnel closed | 404 |
+| the cloud's key through the tunnel | in, as `kitcut`, from 127.0.0.1 |
+| the cloud's key over the VPN | refused |
+| through Cloudflare without the header | refused before sshd (`websocket: bad handshake`) |
+| through Cloudflare with the header and another key | refused by sshd |
+| `vm.sh ssh`, `ops.sh status`, `git ls-remote` on the VM's repo as a cloud session runs them | work |
+
+What that does not cover is the session's own proxy carrying `cloudflared`'s WebSocket all the
+way: the table of measurements says it should, and the first thing to ask a new session is
+`ssh kitcut-studio-1 hostname`.
+
+Things to know:
+
+- **It is the `kitcut` login**: a session that has it can ship, restart and read the `.env`.
+  Anyone who can use the environment can read its setup script, key and secret included, so the
+  environment stays personal, never shared.
+- **`ops.sh status` watches the lock**: it asks the address without the header and prints
+  `NOT LOCKED` on anything but a refusal. The rule lives in Cloudflare's dashboard (Security,
+  WAF, Custom rules), where somebody can delete it.
+- **Taking the access away**: `ssh-tunnel.sh down` closes the address at once; deleting the
+  `claude-cloud@kitcut-studio` line from `~/.ssh/authorized_keys` ends the key. A new secret:
+  delete `gate.env`, `ssh-lock.mjs --out`, `cloud-env.sh`, paste the new script.
+- **After a rebuild of the VM** the tunnel's credentials are still on the data disk, but the unit,
+  the key's line and the machine's host key are new: `ssh-tunnel.sh up`, `ssh-tunnel.sh key`,
+  delete `host-key.pub`, `cloud-env.sh`, paste the new script.
+- **Another machine behind the address** (Azure -> kc-local, 2026-10-13) has another host key, and
+  a pasted script that pins the old one stops every session at "host key changed". Delete
+  `host-key.pub`, run `KITCUT_VM=<machine> cloud-env.sh` (it reads the key over the VPN), paste.
+  The script answers to `kitcut-studio-1` (what `ops.sh` asks for by default) and to the machine's
+  own name, and pins the key under the fixed alias `kitcut-studio`. `cloud-env.sh` makes the
+  session's connection with the pinned key before it writes anything, so a stale key fails there.
+- **Never a `config.yml` in `~/.cloudflared`**: the studio's own tunnel (`run-tunnel.sh`) would
+  read it at its next start. This tunnel's config is passed with `--config`.
+- **Why a firewall rule and not Cloudflare Access**: Access with a service token is the stronger
+  lock (it expires, and it keeps a log), but it needs an API token with Zero Trust permissions;
+  ours answered `403` on creating the application. The rule needs "Zone WAF: Edit", which it has.
+
+## Remote Control
+
+`claude rc` on the machine lists it at claude.ai/code, so a Claude session can be started on it
+from a phone or a browser. It is a service, `kitcut-claude-rc.service`: `claude rc` in a tmux
+session (`tmux -L claude-rc`, session `rc`, folder `/srv/kitcut/repo`), started with the machine
+and again a minute after it ends. `install.sh` installs it; nothing enables it but the command
+below -- a machine is given Remote Control on purpose.
+
+```bash
+bash studio/deploy/ops.sh rc                  # at boot or not, who is signed in, its screen
+bash studio/deploy/ops.sh rc login            # starts the sign-in and prints its link
+bash studio/deploy/ops.sh rc code <code>      # the code the page shows after Authorize
+bash studio/deploy/ops.sh rc install          # start it now and with the machine
+bash studio/deploy/ops.sh rc stop             # take it off
+```
+
+- **The sign-in is a person's, once per machine.** The films' `CLAUDE_CODE_OAUTH_TOKEN` is an
+  inference-only token and Remote Control refuses it, so the machine's user gets a full
+  `claude auth login`. The account is whichever one the browser that opens the link is signed in
+  to, and the machine shows only under that account: on 2026-10-12 a first sign-in on the VM
+  landed on the films' account, where the owner could not see it. Films keep their own token
+  (the unit unsets it and any API key), so nothing a film costs moves to that account.
+- **Its cap is a share of the machine** (`MemoryMax=20%`: 3.2 GB of the VM's 16, 6.4 of 32),
+  on every session started through it together. Heavy work still goes through `ops.sh`, whose
+  jobs are units of their own.
+- `claude rc --help` over ssh without a terminal hangs; run `claude rc` only inside tmux.
+- Until 2026-10-12 it was started by hand in a scope on the VM and did not survive a reboot.
+
 ## Building it again
 
 ```bash
-bash studio/deploy/provision.sh kitcut-studio-1 Standard_D8ads_v5 --dry-run   # what it would do
-bash studio/deploy/provision.sh kitcut-studio-1 Standard_D8ads_v5              # idempotent
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5 --dry-run   # what it would do
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5              # idempotent
 ```
 
 The VM, the data disk, the timezone (America/Los_Angeles: the studio's daily caps count local
-days, as on the laptop), the checkout, `scripts/setup-linux.sh --studio`, a `.env` holding only
-the keys the studio reads plus `machine.env`, the tunnel's credentials, and the systemd units --
-the server template, the boot unit, the tunnel, the login check (and `tcp_migrate_req`) --
-installed, not enabled. The units are enabled at the move, never before: the tunnel may run on
-one machine only, and a studio that came up at boot would announce itself. On a rebuild the data
-disk still holds `servers/current`, so `serve.sh start` brings back the instance that served.
+days, as on the laptop), the checkout, `scripts/setup-linux.sh --studio`, the `.env`, the
+tunnel's credentials and the systemd units. Three rules it follows since 2026-10-12 (KI-065):
+
+- **The machine's own `.env` is kept.** It is the one file that holds every key the studio uses,
+  and writing it again from a laptop would have dropped the films' storage keys. Only a machine
+  with none gets one: from the sealed file of the machine's keys -- the mirror's, fetched with
+  this laptop's Cloudflare sign-in, or `--sealed <file>` -- opened by the key vault
+  (`deploy/unseal.sh`); or `--env-file <path>`, or `--env-from-vm <another studio VM>`.
+- **The tunnel's credentials** come from the VM itself when it has them, else the same sealed
+  file, else this laptop's copy wherever under
+  `~/.cloudflared` it sits (since the move: `backup-20260928-moved-to-vm/`).
+- **What is safe on any machine is enabled** (the usage sampler, the cleanup, the login check).
+  The tunnel, the boot unit and the mirror's timers are the cutover's, never before: the tunnel
+  may run on one machine only, a studio that came up at boot would announce itself, and a
+  machine whose home is not whole yet would mirror its gaps.
+
+`--attach <disk>` takes a data disk restored from Azure Backup. With neither that nor a disk
+named `<vm>-data`, the machine gets a new empty one and its home comes from the mirror.
+
+**A machine of our own** (the PC at home, `kc-local`, 2026-10-12: i7-12700, 32 GB,
+RTX 3070, Ubuntu Server 24.04) is built by the same command. `vm.sh` takes its address from
+`~/.ssh/kitcut-hosts` on the laptop -- `<name> <address>` a line, never committed -- and from
+there on `vm.sh ssh`, `push.sh`, `serve.sh` and `ops.sh` treat it as they treat a VM: same key,
+same `kitcut` user (with passwordless sudo), same `/srv/kitcut`, which on such a machine is a
+folder on its one disk and not a data disk.
+
+```bash
+printf 'kc-local 192.168.5.45\n' > ~/.ssh/kitcut-hosts
+bash studio/deploy/provision.sh kc-local own --dry-run    # <size> is not read
+```
+
+What az does to a VM -- create, resize, stop, start, delete -- is refused for it, and nothing
+of Azure's stands behind it: no Azure Backup, no boot diagnostics, no forced restart of a frozen
+guest. A home address changes with the router and is reachable from the home network only.
+
+## If the machine is gone
+
+What is where is in "Where the copies are". Finished films play throughout: they are on R2 and
+the site answers a film's page from its record (`lib/films.js`). The site emails the owner after
+five minutes without an answer and puts down the films the studio left after fifteen
+(sketch-studio `lib/studiowatch.js`), so nobody's credits wait on the rebuild.
+
+| what happened | what is lost | do |
+|---|---|---|
+| The machine is gone or will not boot; the data disk is whole | nothing | **A** |
+| The data disk is lost, spoiled, or something was deleted from it | at most the last 15 minutes | **B** |
+| One film was deleted or spoiled | nothing | `ops.sh restore --film <id>`; or `--from-history <day>` for what a pass replaced that day |
+| Azure itself is gone (account, region, resource group) | at most 15 minutes; YouTube and ElevenLabs connections must be made again by their owners (their key is in the vault) | **C** |
+| The laptop is gone | nothing | any machine with `az`, the repo and a VPN peer; a new SSH key goes in with `az vm user update -g kitcut-PROD -n kitcut-studio-1 -u kitcut --ssh-key-value "$(cat new.pub)"` |
+| The VPN machine (`wg-vm`, `tarta-wireguard`) is gone | nothing; the studio keeps working, only SSH is cut | `az vm run-command invoke -g kitcut-PROD -n kitcut-studio-1 --command-id RunShellScript --scripts "<command>"` runs anything without the VPN |
+| The disk is filling | nothing yet | `ops.sh prune --plan`, "The data disk, and what fills it" |
+
+**A. The machine, with its disk.** About 45 minutes, most of it the toolchain.
+
+```bash
+bash studio/deploy/vm.sh delete kitcut-studio-1          # only if a broken one is still there; the data disk is kept
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5
+bash studio/deploy/vm.sh ssh kitcut-studio-1 "cd /srv/kitcut/repo && STUDIO_HOME=/srv/kitcut/studio bash studio/serve.sh start"
+bash studio/deploy/ops.sh status                         # the studio answers, studio.kitcut.ai the same release
+bash studio/deploy/ops.sh backup --plan                  # little to send, nothing to remove
+bash studio/deploy/ops.sh backup install                 # the mirror's timers again
+```
+
+The data disk still holds `servers/current`, so `serve.sh start` brings back the server that
+served; the films it was making are adopted by it (queued ones start again, one Claude was writing
+is marked interrupted -- the site has already put those down). Then make one short film and
+check it has a voice (`ops.sh film "..." --seconds 10`), and give it Remote Control again if it is
+wanted (`ops.sh rc login`, `rc install`: the sign-in lives in the machine's user folder, which a
+rebuilt machine does not have).
+
+**B. The disk.** Two sources, used together: last night's Azure Backup brings the whole disk
+back fast, the mirror brings what was made since.
+
+```bash
+C="iaasvmcontainerv2;kitcut-prod;kitcut-studio-1"
+MSYS_NO_PATHCONV=1 az backup recoverypoint list -g kitcut-backup -v kitcut-backup-rsv -c "$C" -i kitcut-studio-1 \
+  --query "[].{name:name, at:properties.recoveryPointTime, kind:properties.recoveryPointType}" -o table
+MSYS_NO_PATHCONV=1 az backup restore restore-disks -g kitcut-backup -v kitcut-backup-rsv -c "$C" -i kitcut-studio-1 \
+  --rp-name <name> --storage-account kitcutst --target-resource-group kitcut-PROD   # managed disks, named by Azure
+az disk list -g kitcut-PROD --query "[?diskSizeGb>=\`500\`].{name:name, state:diskState}" -o table
+bash studio/deploy/vm.sh delete kitcut-studio-1                         # if it is still there
+bash studio/deploy/provision.sh kitcut-studio-1 Standard_D4ads_v5 --attach <the restored 512 GB disk>
+bash studio/deploy/ops.sh restore --all                  # what the mirror has that is newer: minutes
+```
+
+then `serve.sh start`, `status`, `backup --plan`, `backup install` as in A. The old disk
+`kitcut-studio-1-data` carries a delete-lock (`kitcut-keep`): keep it until the new one has
+served for a day. `provision.sh` looks for a disk named `<vm>-data` first, so from then on either
+pass `--attach` again or copy the restored disk into one of that name (`az disk create --source`).
+
+With no Azure Backup to restore from, leave `--attach` out: the machine gets an empty disk and
+`ops.sh restore --all` brings the whole home (about 165 GB) and `models/` from the mirror. The
+`.env` and the tunnel's credential then come from the sealed file in the mirror, opened by the
+key vault. **Restore before `serve.sh release`**: a release's tests
+refuse to go current without every ensemble's instrument samples, and only the mirror (or the old
+disk) has them all -- `provision.sh` copies the laptop's cache, which held 11 of the 24 on the
+first rehearsal (2026-10-12), and that release stopped at `test_direction`.
+
+**C. Azure itself.** The mirror and the database export are on Cloudflare; the code is on
+GitHub. Any Ubuntu 24.04 machine with 4 cores, 16 GB and 500 GB will do:
+`scripts/setup-linux.sh --studio`, `studio/deploy/install.sh`, a `.env`, `studio/restore.py
+--all`, `studio/serve.sh release` and `start`. What Azure held and must be made again: the
+`.env` (each key from the service that issued it -- the names are `procs.py`'s; the Claude
+login with `claude setup-token`), and the vault key that seals the site's YouTube grants and
+ElevenLabs keys, without which each owner connects again. The site's own settings live in Vercel
+and are not affected. The database, if Atlas lost it too: `studio/dbdump.py --restore`.
+
+**What the first rehearsal measured** (2026-10-12, `kitcut-studio-2`, D4ads_v5, built with
+`provision.sh --drill` and the mirror alone, about a fifth of the home in it at the time):
+
+| step | took | note |
+|---|---|---|
+| the machine from nothing: VM, disk, checkout, toolchain, `.env`, units | 12 min | `provision.sh`, one command |
+| the home back from the mirror | 579 s for 9,163 files, 20.5 GB: 35 MB/s | so about 80 minutes for the whole home (165 GB) |
+| one film restored and compared with production's | 48 files, one checksum over all of them, equal; file times kept | `ops.sh restore --film` |
+| the release built and its 29 tests | 10.5 min | `serve.sh release`, after the restore |
+| a new film on it, 10 s, narrated | 631 s; video, a voice take with its word times, subtitles | on the Claude login; nothing left the machine |
+| a restart of the machine | serving again by itself 80 s later | the boot unit, the data disk by its label |
+
+It found three faults before they were needed, all fixed: the instrument samples came from the
+laptop's cache (11 of 29; a release's tests refuse), the machine was built from the branch's head
+while the release was the older tag (its tests could not start), and the rebuild would have
+pushed this clone's stale branch. Production's own restart the same afternoon (KI-066) then took
+26 seconds from boot to a studio that answered.
+
+**Never build a second machine from the mirror and start it as it is.** A server on a restored
+home adopts every film that was being made when the home was mirrored, and writes that into the
+live database: their makers are refunded and emailed. A machine made only to prove the mirror is
+a rehearsal: `provision.sh <vm> <size> --drill --env-from-vm kitcut-studio-1`, then
+`KITCUT_VM=<vm> ops.sh restore --all --drill` and `restore --settle`. Its `.env` has no
+database, no announcement, no tunnel and no key to the films' bucket (`restore.py
+--check-drill` names what is still there), and `backup.py` refuses to write the mirror from it.
 
 ## The move (cutover), and back
 
@@ -307,6 +878,64 @@ credentials were moved to `~/.cloudflared/backup-20260928-moved-to-vm`, so a lap
 
 Back: `serve.sh stop` on the VM, restore those three lines on the laptop, `serve.ps1`, and copy
 back what the VM made.
+
+### From one Linux machine to another (the VM to a machine of our own)
+
+The steps above are from before the machine had anything that writes somewhere else. Since
+2026-10-12 it has four: the mirror (`kitcut-backup.timer`, `kitcut-backup-full.timer`), the
+films' code (`kitcut-filmgit.timer`, a `git push --mirror` to GitHub), the cleanup
+(`kitcut-prune.timer`) and the boot unit. Two machines running them is worse than two tunnel
+connectors: every mirror pass of one moves what the other made into `_history/`, and every push
+of one rewinds GitHub to its own repositories. And `serve.sh stop` stops the servers and the
+tunnel but leaves both **enabled**, so the old machine's next boot would bring a second studio
+back. So the old machine is silenced before the new one writes anything, in this order:
+
+1. **The new machine, privately.** `provision.sh`, then the home from the mirror
+   (`KITCUT_VM=<new> ops.sh restore --all`; the mirror must have a completed pass first --
+   `ops.sh status` says STALE when it has not), then `serve.sh release` **on that machine**: its
+   tests draw every template, and a machine with a graphics card has not been shown to draw them
+   as the VM does. A film made there before the move is a rehearsal's (`--drill`, see "Never
+   build a second machine from the mirror and start it as it is" above): its server must not see
+   the database or the tunnel.
+2. **A quiet window**: `ops.sh status` on the old machine shows no film and nothing queued.
+3. **Old machine**: `serve.sh stop` (drains, stops the servers and the tunnel, says offline).
+4. **Old machine, its last copies**: `ops.sh backup` (one pass, followed to its end) and
+   `ops.sh filmgit` (commits and pushes what is left).
+5. **Old machine, for good**: `sudo systemctl disable --now kitcut-backup.timer
+   kitcut-backup-full.timer kitcut-filmgit.timer kitcut-prune.timer kitcut-login-check.timer
+   kitcut-studio-boot.service kitcut-tunnel.service` -- or `vm.sh stop <old>`, which is the same
+   and surer: a deallocated VM runs nothing, costs its disks only, keeps its Azure Backup points
+   for their 30 days, and is the way back for as long as it is kept.
+6. **New machine**: `KITCUT_VM=<new> ops.sh restore --all` again (what step 4 sent: minutes), the
+   real `.env` and the tunnel's credential (the sealed file, `ops.sh secrets check`).
+7. **New machine**: `serve.sh start` (the tunnel, the server, and both at every boot). It adopts
+   what the old one left, which is wanted now.
+8. **New machine, its own copies**: `ops.sh backup --plan` -- little to send and nothing to
+   remove; thousands to remove means its home is not whole: stop and find out why -- then
+   `ops.sh backup install`. `ops.sh filmgit publish`, then `ops.sh filmgit install`: a
+   repository's GitHub key never leaves the machine it was made on (`~/.ssh/filmgit/`, not in the
+   mirror), so the new machine makes its own and `publish` registers them; until then its sync
+   says "N not there yet". The old machine's keys stay on GitHub under its name until removed.
+9. One short narrated film (`ops.sh film "..." --seconds 10`), one old film opened and changed.
+
+What came over in the `.env` that is the old machine's measurement, not the new one's:
+`STUDIO_FILM_MEM_GB`, `STUDIO_RENDER_JOBS`, `STUDIO_MACHINE_SLOWDOWN`, `VIDEDIT_WEBCODECS`
+(`deploy/machine.env` says how each was measured). They are safe to start with and wrong to keep.
+
+**What a machine at home does not have**, each of which the VM was relied on for:
+
+- **No second whole copy.** Azure Backup covered the VM's disks nightly; at home the mirror is
+  the only one, so a STALE mirror there is an emergency, not a warning.
+- **Nobody to force a restart.** The freeze of 2026-10-12 (KI-066) was ended by Azure restarting
+  a guest that answered nothing. At home that is a hand on the power button, unless the machine
+  restarts itself (a hardware watchdog) and comes back after a power cut (a firmware setting).
+- **No way in from outside the house.** The VM was reached over the VPN from anywhere; a home
+  address answers on the home network only. `ssh.kitcut.ai` ("SSH for Claude cloud sessions",
+  above) is the one route that would work from elsewhere, and it has to be moved with the studio.
+- **No network of its own.** The VM sat alone in a subnet that let in SSH from the VPN and
+  nothing else. The studio runs what people's prompts and uploads lead Claude to run; at home it
+  shares a network with the household's devices unless the machine's firewall, or the router,
+  keeps it apart.
 
 ## Known differences
 

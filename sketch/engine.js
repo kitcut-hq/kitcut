@@ -321,6 +321,9 @@
         else if (mode === 'type') { sc = 1; al = 1; }
         ctx.save(); ctx.translate(cx + ws[i] / 2, y + dy); ctx.rotate(rot); ctx.scale(sc, sc);
         ctx.globalAlpha = base * al;
+        // each letter is placed from its own left edge: a film that left the canvas right-to-left
+        // (or right-aligned) would otherwise draw every letter one width off, in a jumble
+        ctx.direction = 'ltr'; ctx.textAlign = 'left';
         if (o.stroke) { ctx.lineWidth = o.stroke; ctx.strokeStyle = o.strokeCol ?? SK.C.ink; ctx.lineJoin = 'round'; ctx.strokeText(chars[i], -ws[i] / 2 + ls / 2, 0); }
         ctx.fillText(chars[i], -ws[i] / 2 + ls / 2, 0);
         ctx.restore();
@@ -662,6 +665,10 @@
    * film that goes from day to night); otherwise the one SK.setGround chose holds throughout.
    */
   SK.film = function (def) {
+    // A film is as long as its manifest says (SK.LENGTH, set by the page before the film's code).
+    // Sketch Studio lengthens a film whose narration needs a little more than was asked for, after
+    // film.js wrote its own figure: the fade-out and the last scene follow the real end.
+    if (typeof SK.LENGTH === 'number' && SK.LENGTH > 0) def.duration = SK.LENGTH;
     // a film made in scenes (below) has no draw() of its own: it draws the scene covering t, with
     // that scene's camera when it has one. Set here, not in render, so anything that wraps the
     // film (Sketch Studio's closing, studio/outro.js) wraps this too.

@@ -557,7 +557,13 @@
     const hy = top - 64;
     ctx.save(); ctx.translate(0, hy); ctx.rotate(o.headTilt ?? 0);
     const hc = o.hairCol ?? C().hairA, ha = pp(.45, .65), hair = o.hair ?? 'pigtails';
-    if (hair === 'long' && ha > 0) { const bk = S.path([['M', -70, -10], ['Q', -86, 70, -64, 96], ['L', 64, 96], ['Q', 86, 70, 70, -10], ['Z']]); wash(bk, hc, { seed: sd + 750, alpha: ha }); ink(bk, { w: 4.5, seed: sd + 751, p: ha }); }
+    // long hair falls as two locks with strand tips, the neck showing between them: one solid
+    // panel wider than the head with a straight hem, under a cap with no parting, framed the
+    // whole face and read as a headscarf (a film shipped a hijab nobody asked for, 2026-10-03)
+    if (hair === 'long' && ha > 0) for (const sd2 of [-1, 1]) {
+      const lk = S.path([['M', sd2 * 20, -40], ['Q', sd2 * 80, -40, sd2 * 76, 20], ['Q', sd2 * 78, 70, sd2 * 70, 104], ['L', sd2 * 58, 90], ['L', sd2 * 48, 108], ['L', sd2 * 40, 86], ['Q', sd2 * 54, 50, sd2 * 46, 10], ['Z']]);
+      wash(lk, hc, { seed: sd + 750 + sd2, alpha: ha }); ink(lk, { w: 4.5, seed: sd + 752 + sd2, p: ha });
+    }
     if (hair === 'pigtails' && ha > 0) for (const side of [-1, 1]) {
       const tail = S.ellC(side * 86, 18, 22, 34, side * .5);
       wash(tail, hc, { seed: sd + 752 + side, alpha: ha }); ink(S.ell(side * 86, 18, 22, 34, -2, .2, side * .5), { w: 4.5, seed: sd + 754 + side, p: ha });
@@ -572,6 +578,7 @@
       else cap = S.path([['M', -70, 6], ['Q', -82, -70, 0, -70], ['Q', 82, -70, 70, 6], ['Q', 56, -34, 0, -38], ['Q', -56, -34, -70, 6]]);
       wash(cap, hc, { seed: sd + 762, alpha: ha, texCol: 'rgba(255,255,255,.14)' }); ink(cap, { w: 4.5, seed: sd + 763, p: ha });
       if (hair === 'bun') { wash(S.ellC(0, -84, 28, 24), hc, { seed: sd + 764, alpha: ha }); ink(S.ell(0, -84, 28, 24), { w: 4.5, seed: sd + 765, p: ha }); }
+      if (hair === 'long') ink(S.path([['M', 4, -68], ['Q', 10, -54, 6, -38]]), { w: 4, seed: sd + 766, p: ha, dbl: false }); // a parting: hair, not a cloth
     }
     const fa = pp(.55, .8);
     if (fa > 0) {

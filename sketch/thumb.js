@@ -1,7 +1,7 @@
 /* sketch/thumb.js -- a YouTube thumbnail drawn by the film itself (scripts/_thumb.py).
 
    Run before the film's code (the manifest's `head`) for thumbnail stills only -- never in a
-   film's own render. Three jobs:
+   film's own render. Four jobs:
 
    - The probe. Every SK.txt, SK.card and SK.image the film draws is noted -- and, on a collage
      film, every SK.headline, SK.tape and SK.cutout (collage.js sets its titles and labels with
@@ -28,6 +28,13 @@
          2000 + t   its letters, white on black (what the legibility and contrast checks read)
          3000 + t   everything it added, white on black (what may not cover the film's own words)
          4000 + t   the film with its own words left out, nothing added (what the layout reads)
+         5000 + t   the stage: the film's ground and pages, nothing on them
+   - The poster. A film that shows pictures is not given a frame of itself but a poster composed
+     from them. With `stage` on an option the film draws only its stage (its ground, a sheet of
+     paper as large as the frame's better part, the dots printed on it); on that, the option's
+     `scene` -- pieces back to front, each drawn the way the film draws its own: a cut-out with
+     the shadow paper casts, a print with a paper border, a starburst or a disc of paper -- then
+     the words and the logo as above. Which pieces, where and how large is _thumb.py's template.
 
    Every frame stays a pure function of t: nothing here keeps state between stills but the probe's
    tally and the boxes, which only describe what was drawn.
@@ -37,6 +44,7 @@
   const T = (SK.THUMB = SK.THUMB || { options: {} });
   T.options = T.options || {};
   T.minWords = T.minWords ?? 34; // px: film text this size and up is a word a viewer reads
+  T.pageMin = T.pageMin ?? .45; // of the frame: a sheet of paper this large is a page, the film's stage
   const seen = { txt: {}, card: {}, img: {}, strip: {} };
   const boxes = {};
   let own = false; // the overlay's own drawing is not the film's
@@ -45,25 +53,56 @@
   // ------------------------------------------------------------------ the pass and the option
   const cur = () => (T.mode && T.mode < 4 ? T.options[T.key] : null);
   const clean = () => !own && (T.mode === 4 || !!(cur() && cur().declutter));
+  const staged = () => !own && hushed > 0 && (T.mode === 5 || !!(cur() && cur().stage));
 
   // Everything drawn on the frame's canvas inside fn is dropped; what fn works out (a width it
   // returns, the caches it fills) is not. Its own offscreen canvases are other contexts, so a
   // cached title still gets made -- it just never reaches the frame.
   const HUSH = ['fillText', 'strokeText', 'drawImage', 'fill', 'stroke', 'fillRect', 'strokeRect', 'putImageData'];
-  let hushed = 0;
+  let hushed = 0, had = null;
+  const mute = (c) => { had = HUSH.map((k) => Object.getOwnPropertyDescriptor(c, k)); for (const k of HUSH) c[k] = () => {}; };
+  const unmute = (c) => { HUSH.forEach((k, i) => { if (had[i]) Object.defineProperty(c, k, had[i]); else delete c[k]; }); };
   function hush(fn) {
     if (hushed) return fn();
-    const c = SK.ctx(), had = HUSH.map((k) => Object.getOwnPropertyDescriptor(c, k));
-    for (const k of HUSH) c[k] = () => {};
-    hushed++;
-    try { return fn(); } finally {
-      hushed--;
-      HUSH.forEach((k, i) => { if (had[i]) Object.defineProperty(c, k, had[i]); else delete c[k]; });
-    }
+    const c = SK.ctx();
+    mute(c); hushed++;
+    try { return fn(); } finally { hushed--; unmute(c); }
+  }
+  // inside a hush, fn draws after all: the stage under a poster (a page of paper, its printed dots)
+  function loud(fn) {
+    if (!hushed) return fn();
+    const c = SK.ctx(), n = hushed;
+    unmute(c); hushed = 0;
+    try { return fn(); } finally { mute(c); hushed = n; }
+  }
+  // A film may draw one of its pictures itself (a print it frames by hand: c.drawImage(SK.IMG.x)),
+  // past SK.image and SK.cutout: on the 4000 pass every picture of the film's that reaches the
+  // frame's canvas outside those two is noted as well -- the probe's tally and where it landed.
+  let inBoxed = 0;
+  function rawImages() {
+    const c = SK.ctx(), was = Object.getOwnPropertyDescriptor(c, 'drawImage'), d0 = c.drawImage;
+    const names = new Map(Object.entries(SK.IMG || {}).map(([n, im]) => [im, n]));
+    c.drawImage = function (im, ...a) {
+      const name = inBoxed || own ? null : names.get(im);
+      if (name) {
+        let x, y, w, h;
+        if (a.length >= 8) [, , , , x, y, w, h] = a;
+        else if (a.length >= 4) [x, y, w, h] = a;
+        else { [x, y] = a; w = im.width; h = im.height; }
+        sawImage(name, w);
+        note4({ name, box: onScreen(x, y, x + w, y + h) });
+      }
+      return d0.apply(c, [im, ...a]);
+    };
+    return () => { if (was) Object.defineProperty(c, 'drawImage', was); else delete c.drawImage; };
   }
   // where fn's drawImage calls land on the frame, as one box in canvas pixels (the 4000 pass)
   function boxed(name, fn) {
     if (T.mode !== 4 || own || hushed) return fn();
+    inBoxed++;
+    try { return boxed0(name, fn); } finally { inBoxed--; }
+  }
+  function boxed0(name, fn) {
     const c = SK.ctx(), had = Object.getOwnPropertyDescriptor(c, 'drawImage'), d0 = c.drawImage;
     let b = null;
     c.drawImage = function (im, ...a) {
@@ -199,6 +238,26 @@
       return burst0.apply(this, arguments);
     };
   }
+  // The stage: what a poster is set on. With `stage` on an option (and on the 5000 pass) the film
+  // draws nothing but its ground and what lies flat on it -- a sheet of paper as large as the
+  // frame's better part (a collage film's page), the dots printed on it, a newspaper under it all.
+  // The 5000 pass notes each page: where it landed and its colour.
+  for (const name of ['halftone', 'newsprint']) {
+    if (typeof SK[name] !== 'function') continue;
+    const f0 = SK[name];
+    SK[name] = function () { return staged() ? loud(() => f0.apply(this, arguments)) : f0.apply(this, arguments); };
+  }
+  if (typeof SK.sheet === 'function') {
+    const sheet0 = SK.sheet;
+    SK.sheet = function (x, y, w, h, o = {}) {
+      if (!staged()) return sheet0.apply(this, arguments);
+      const b = onScreen(x - w / 2, y - h / 2, x + w / 2, y + h / 2);
+      const seen = Math.max(0, Math.min(SK.W, b[2]) - Math.max(0, b[0])) * Math.max(0, Math.min(SK.H, b[3]) - Math.max(0, b[1]));
+      if (seen < T.pageMin * SK.W * SK.H) return sheet0.apply(this, arguments);
+      if (T.mode === 5) (boxes['P' + T.key] = boxes['P' + T.key] || []).push({ name: '#page', box: b, col: o.col ?? '#e8dcc2' });
+      return loud(() => sheet0.apply(this, arguments));
+    };
+  }
   if (typeof SK.cutout === 'function') {
     const cut0 = SK.cutout;
     SK.cutout = function (name, x, y, w, o = {}) {
@@ -226,10 +285,12 @@
     const mode = Math.floor(t / 1000), real = t - mode * 1000;
     T.mode = mode; T.key = real.toFixed(2);
     if (mode === 4) boxes[T.key] = [];
+    if (mode === 5) boxes['P' + T.key] = [];
     // the masks are exact white on black: no grain or vignette over them
     const st = SK.style, keep = { grain: st.grain, vignette: st.vignette };
     if (mode === 2 || mode === 3) { st.grain = 0; st.vignette = 0; }
-    try { return render0.call(this, real); } finally { Object.assign(st, keep); T.mode = 0; }
+    const unhook = mode === 4 ? rawImages() : null;
+    try { return render0.call(this, real); } finally { if (unhook) unhook(); Object.assign(st, keep); T.mode = 0; }
   };
   const film0 = SK.film;
   SK.film = function (def) {
@@ -247,16 +308,22 @@
         return [x + (cx - SK.W / 2) / z * k - (o.camera.shift || 0) / zz, y + (cy - SK.H / 2) / z * k, zz];
       },
     };
+    const draw0 = F.draw;
+    F.draw = function (t, vis) {
+      const o = cur();
+      return T.mode === 5 || (o && o.stage) ? hush(() => draw0.call(this, t, vis)) : draw0.call(this, t, vis);
+    };
     const over0 = F.overlay;
     F.overlay = function (t) {
-      if (over0) over0(t);
       const o = cur();
+      if (over0 && T.mode !== 5 && !(o && o.stage)) over0(t);
       if (o) { own = true; try { draw(o, T.mode); } finally { own = false; } }
     };
   };
 
   // ------------------------------------------------------------------ the overlay
   const ctx = () => SK.ctx();
+  const RTL = /[֐-ࣿיִ-﷿ﹰ-ﻼ]/;
   function lines(o, mode) {
     const c = ctx();
     for (const L of o.lines || []) {
@@ -267,21 +334,33 @@
       // held to the width _thumb.py planned with the same font file: a page that draws it wider
       // (its own kerning, a weight it synthesises) is trimmed to fit, so the words stay in their box
       const all = (L.runs || []).map((r) => r.text).join('');
-      const drawn = c.measureText(all).width;
-      if (L.w && drawn > L.w * 1.005) c.font = `${L.wt} ${(L.size * L.w) / drawn}px "${L.family}"`;
+      // a line in a script written right to left: its first word stands at the right, each run
+      // to the left of the one before (a run's own letters the browser sets in their order)
+      const rtl = RTL.test(all);
+      c.direction = rtl ? 'rtl' : 'ltr';
+      let drawn = c.measureText(all).width;
+      if (L.w && drawn > L.w * 1.005) { c.font = `${L.wt} ${(L.size * L.w) / drawn}px "${L.family}"`; drawn = L.w; }
       c.textBaseline = 'alphabetic';
       c.textAlign = 'left';
-      if (mode === 1 && L.stroke) { // the outline under every run first, so no run's edge cuts the next
-        let x = L.x;
-        c.lineJoin = 'round'; c.lineWidth = L.stroke.w; c.strokeStyle = L.stroke.col;
-        for (const r of L.runs) { c.strokeText(r.text, x, L.y); x += c.measureText(r.text).width; }
-      }
-      let x = L.x;
+      // drawn narrower than planned (letters that join, a kern): kept where its anchor put it
+      const slack = Math.max(0, (L.w || drawn) - drawn);
+      const x0 = L.x + (L.anchor === 'middle' ? slack / 2 : L.anchor === 'end' ? slack : 0);
+      const at = [];
+      let x = rtl ? x0 + drawn : x0;
       for (const r of L.runs) {
-        c.fillStyle = mode === 1 ? r.col : '#ffffff';
-        c.fillText(r.text, x, L.y);
-        x += c.measureText(r.text).width;
+        const w = c.measureText(r.text).width;
+        if (rtl) x -= w;
+        at.push(x);
+        if (!rtl) x += w;
       }
+      if (mode === 1 && L.stroke) { // the outline under every run first, so no run's edge cuts the next
+        c.lineJoin = 'round'; c.lineWidth = L.stroke.w; c.strokeStyle = L.stroke.col;
+        L.runs.forEach((r, i) => c.strokeText(r.text, at[i], L.y));
+      }
+      L.runs.forEach((r, i) => {
+        c.fillStyle = mode === 1 ? r.col : '#ffffff';
+        c.fillText(r.text, at[i], L.y);
+      });
       c.restore();
     }
   }
@@ -314,9 +393,14 @@
   function card(k, mode) {
     const c = ctx();
     c.save();
+    // a poster's strips lean as one stack: each turns about the stack's middle (k.cx, k.cy)
+    const px = k.cx ?? k.x + k.w / 2, py = k.cy ?? k.y + k.h / 2;
     if (mode === 3) {
-      if (k.rot) { c.translate(k.x + k.w / 2, k.y + k.h / 2); c.rotate(k.rot); c.translate(-(k.x + k.w / 2), -(k.y + k.h / 2)); }
+      if (k.rot) { c.translate(px, py); c.rotate(k.rot); c.translate(-px, -py); }
       SK.rrPath(k.x, k.y, k.w, k.h, k.r || 0); c.fillStyle = '#ffffff'; c.fill();
+    } else if (k.strip && k.cx !== undefined) {
+      if (k.rot) { c.translate(px, py); c.rotate(k.rot); c.translate(-px, -py); }
+      strip({ ...k, rot: 0 });
     } else if (k.strip) strip(k);
     else {
       if (k.rot) { c.translate(k.x + k.w / 2, k.y + k.h / 2); c.rotate(k.rot); c.translate(-(k.x + k.w / 2), -(k.y + k.h / 2)); }
@@ -347,6 +431,51 @@
     c.drawImage(im, cx - im.width * s / 2, cy - im.height * s / 2, im.width * s, im.height * s);
     c.restore();
   }
+  // A poster's pieces, back to front, each drawn the way the film draws its own: a cut-out with
+  // the shadow paper casts (SK.cutout), a starburst or a disc of paper behind it (SK.burst), dots.
+  function star(L, col, r, shadow) {
+    if (typeof SK.burst === 'function') {
+      SK.burst(L.x, L.y, r, { col, spikes: L.spikes ?? 24, inner: L.inner ?? .8, seed: L.seed ?? 3, rot: L.rot || 0, nudge: 0, shadow: shadow ? undefined : false });
+      return;
+    }
+    const c = ctx(), n = L.spikes ?? 24, inner = L.inner ?? .8;
+    c.save(); c.translate(L.x, L.y); c.rotate(L.rot || 0); c.beginPath();
+    for (let i = 0; i < 2 * n; i++) { const a = i / (2 * n) * Math.PI * 2, k = i % 2 ? inner : 1; c.lineTo(Math.cos(a) * r * k, Math.sin(a) * r * k); }
+    c.closePath();
+    if (shadow) { c.shadowColor = 'rgba(40,20,10,.3)'; c.shadowBlur = 16; c.shadowOffsetY = 7; }
+    c.fillStyle = col; c.fill(); c.restore();
+  }
+  function piece(L) {
+    const c = ctx();
+    if (L.k === 'cut') {
+      const im = SK.IMG[L.name];
+      if (!im) return;
+      if (typeof SK.cutout === 'function') { SK.cutout(L.name, L.x, L.y, L.w, { rot: L.rot || 0, flip: !!L.flip, nudge: 0 }); return; }
+      const h = L.w * im.height / im.width, big = Math.max(L.w, h);
+      c.save(); c.translate(L.x, L.y); c.rotate(L.rot || 0); if (L.flip) c.scale(-1, 1);
+      c.shadowColor = 'rgba(28,18,8,.42)'; c.shadowBlur = big * .028; c.shadowOffsetX = big * .004; c.shadowOffsetY = big * .014;
+      c.drawImage(im, -L.w / 2, -h / 2, L.w, h);
+      c.restore();
+    } else if (L.k === 'print') { // a picture with a ground of its own: a print with a paper border
+      const im = SK.IMG[L.name];
+      if (!im) return;
+      const h = L.w * im.height / im.width, b = L.border || 0, big = Math.max(L.w, h);
+      c.save(); c.translate(L.x, L.y); c.rotate(L.rot || 0);
+      c.save();
+      c.shadowColor = 'rgba(28,18,8,.42)'; c.shadowBlur = big * .028; c.shadowOffsetX = big * .004; c.shadowOffsetY = big * .014;
+      c.fillStyle = L.col || '#ffffff'; c.fillRect(-L.w / 2 - b, -h / 2 - b, L.w + 2 * b, h + 2 * b);
+      c.restore();
+      // its middle, a little enlarged: a painted picture's edges are where it fades or frays
+      const z = L.zoom || 1, sw = im.width / z, sh = im.height / z;
+      c.drawImage(im, (im.width - sw) / 2, (im.height - sh) / 2, sw, sh, -L.w / 2, -h / 2, L.w, h);
+      c.restore();
+    } else if (L.k === 'burst') {
+      if (L.rim) star(L, L.rim, L.r, true);
+      star(L, L.col, L.rim ? L.r * (L.rimIn ?? .92) : L.r, !L.rim);
+    } else if (L.k === 'dots' && typeof SK.halftone === 'function') {
+      SK.halftone(L.x, L.y, L.w, L.h, { col: L.col, from: L.from || 'c', step: L.step || 20, nudge: 0 });
+    }
+  }
   function draw(o, mode) {
     const c = ctx();
     c.save();
@@ -357,6 +486,7 @@
       if (mode !== 2) { c.fillStyle = mode === 3 ? '#ffffff' : o.panel.fill; c.fillRect(o.panel.x, 0, o.panel.w, SK.H); }
       if (mode === 1 && o.panel.rule) { c.fillStyle = o.panel.rule.col; c.fillRect(o.panel.rule.x, 0, o.panel.rule.w, SK.H); }
     }
+    if (mode === 1) for (const L of o.scene || []) piece(L);
     if (o.glow && mode === 1) glow(o.glow);
     if (o.glow && mode === 3) { SK.rrPath(o.glow.x, o.glow.y, o.glow.w, o.glow.h, o.glow.r); c.fillStyle = '#ffffff'; c.fill(); }
     for (const k of o.cards || []) if (mode !== 2) card(k, mode);

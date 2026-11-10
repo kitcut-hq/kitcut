@@ -21,6 +21,7 @@ asks for them together. What a tool returns is short: the problem to fix, or wha
 
 import os
 import json
+import math
 import time
 import shutil
 import asyncio
@@ -32,7 +33,17 @@ from claude_agent_sdk import create_sdk_mcp_server, tool
 import motion
 import procs
 import validate
-from film import HOME, KIT, REPO, _write_json, limits, paint_kinds, paint_words
+from film import (
+    HOME,
+    KIT,
+    REPO,
+    TAIL_S,
+    _write_json,
+    limits,
+    may_run_to,
+    paint_kinds,
+    paint_words,
+)
 from guard import pin_paint, pin_vo
 from sched import waiting_text
 
@@ -41,12 +52,45 @@ SCRIPTS = os.path.join(KIT, "scripts")
 # same card as a developer's (scripts/_gpulock.py)
 LOCKS = os.path.join(REPO, "temp", "locks")
 # seconds a step may run; the voice, the mix and the render get longer for a longer film
-TIMEOUT = {"check": 30, "stills": 120, "paint": 300, "automation": 180, "web": 150}
+# route: tiles, OSM's answer (a busy Overpass is retried for minutes) and a ~30 MP map drawn on a
+# core -- 90 s on the laptop with a warm cache
+TIMEOUT = {
+    "check": 30,
+    "stills": 120,
+    "paint": 300,
+    "automation": 180,
+    "web": 150,
+    "route": 900,
+    "map": 600,
+}
 MAX_STILLS = 12
+# a close look at a moment (the strip tool): what happens inside one second. A cat went through
+# her carrier's wall in 0.4 s and was flipped through a sliver in 0.3 s; neither was on any of the
+# twelve review stills of its two-minute film (docs/known-issues.md, KI-059)
+STRIP_MAX, STRIP_N, STRIP_STEP = 6, 8, 0.1
+# the film played once more without painting, in the motion check's own browser run
+# (sketch/probe.js): every PROBE_STEP seconds, and what it may add to that step's time
+PROBE_STEP, PROBE_S = 0.1, 60
+# which of its moments the author is told (a thing that pops up is nearly always meant), and how many
+EVENTS_TOLD, EVENTS_MAX = (
+    (
+        "double",
+        "cut",
+        "apart",
+        "into",
+        "sliver",
+        "wash",
+        "jump",
+        "squash",
+        "small",
+    ),
+    12,
+)
 PEOPLE_WAIT_S = 420  # the longest a picture tool waits for the people to be drawn (agent.py)
 # what one film may bring in from the web (web-grab.py): pictures and page photographs together,
 # and font families -- each is inlined into the film's page, which a phone downloads whole
 MAX_WEB_PICTURES, MAX_WEB_FONTS = 12, 3
+MAX_WEB_PICTURES_LONG = 30  # the most a long film may take (web_limit)
 # portrait-cutout's time a photo, with room: 10.5 s on the laptop with every core, 54 s with two
 # threads (the first template film: 7 photos took 6 minutes before Claude could start)
 CUT_S_PER_PHOTO = 90
@@ -101,6 +145,64 @@ def approved_line(film, i):
         return False
 
 
+def fit_length(film):
+    """After a recording: make the film as long as its narration needs, up to what a film may
+    run to (film.may_run_to), and never shorter than it was asked for. A narration that would end
+    under the film's closing fade lengthens the film to TAIL_S past its last word; one recorded
+    shorter again brings the film back. -> None when nothing changed, else {"was", "now",
+    "asked", "ends", "top"}. A template's remake keeps its template's length: its picture is
+    timed to it."""
+    p = film.path("audio", "vo", "timeline.json")
+    try:
+        with open(p, encoding="utf-8") as f:
+            tl = json.load(f)
+    except (OSError, ValueError):
+        return None
+    lines = tl.get("lines") or []
+    rec = film.record()
+    if not lines or rec.get("template") or rec.get("localized"):
+        return None  # a translation keeps its original's length: its picture is timed to it
+    asked, now = film.asked, film.length
+    ends = max(float(L.get("end") or 0) for L in lines)
+    top = may_run_to(asked, rec.get("frame"))
+    # under the fade: the mix's own (0.6 s) and the picture's take the last word with them
+    need = asked if ends <= asked - FADE_S else math.ceil(ends + TAIL_S)
+    to = min(max(asked, need), top)
+    if to == now and float(tl.get("duration") or now) == float(now):
+        return None
+    film.run_to(to)
+    tl["duration"] = float(to)
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(tl, f, ensure_ascii=False)
+    os.replace(tmp, p)
+    if to == now:
+        return None
+    return {"was": now, "now": to, "asked": asked, "ends": ends, "top": top}
+
+
+FADE_S = 0.8  # a last word that ends this near the end is under the closing fade
+
+
+def grown_note(got):
+    """What Claude is told when a recording changed the film's length."""
+    if not got:
+        return ""
+    if got["now"] > got["was"]:
+        return (
+            "\n\nThe narration ends at %.2f s, so the film is now %d s long (it was asked for at"
+            " %d s; a film runs a little longer rather than lose its last words, up to %d s). The"
+            " picture, the music and the cues run to %d s: SK.film plays to the film's real"
+            " length whatever `duration` film.js names, so look at the last seconds (`stills`)"
+            " and let the ending end there."
+            % (got["ends"], got["now"], got["asked"], got["top"], got["now"])
+        )
+    return (
+        "\n\nThe narration now ends at %.2f s, so the film is %d s long again (it had grown to"
+        " %d s)." % (got["ends"], got["now"], got["was"])
+    )
+
+
 # Recordings past a film's limit, allowed only while its narration runs past the film's end. The
 # mix cannot place a line that starts after the end, so such a film fails at its finish; with no
 # recording left Claude could only watch it fail (ewwd6b, 2026-09-30: all 6 recordings spent, 4 on
@@ -135,7 +237,7 @@ def recording_refused(film, done):
     if over:
         return (
             "That is %d recordings, the limit for one film, and the narration still ends at"
-            " %.2f s, after the film's %g s." % (done, over["ends"], over["length"])
+            " %.2f s, after the %g s this film may run to." % (done, over["ends"], over["length"])
         )
     return "That is %d recordings, the limit for one film: keep the narration you have." % done
 
@@ -145,9 +247,10 @@ def fit_advice(film, done):
     it (the film's limit plus FIT_RUNS)."""
     left = max(0, limits(film.length)["voice_runs"] + FIT_RUNS - done)
     return (
-        "Cut words or whole lines in vo.json and record the narration again (%d recording%s left,"
+        "The film has already been lengthened as far as a film asked for at %d s may run. Cut"
+        " words or whole lines in vo.json and record the narration again (%d recording%s left,"
         " retakes included); retaking a line makes it shorter only when it has fewer words."
-        % (left, "" if left == 1 else "s")
+        % (film.asked, left, "" if left == 1 else "s")
     )
 
 
@@ -188,6 +291,30 @@ def voice_blocked(text):
     return None
 
 
+def strip_times(t, lo, hi):
+    """The STRIP_N times of a close look at t: STRIP_STEP apart, t among the first of them (a
+    glitch is usually just after the cue that starts it), kept inside lo..hi."""
+    a = max(lo, min(t - 3 * STRIP_STEP, hi - (STRIP_N - 1) * STRIP_STEP))
+    return [round(a + i * STRIP_STEP, 2) for i in range(STRIP_N) if a + i * STRIP_STEP <= hi + 1e-6]
+
+
+def strips_of(frames_dir, out_dir, moments, groups, said, name="strip"):
+    """Tile each moment's frames (rendered into frames_dir as <t>.png) into out_dir/<name>-<n>.jpg.
+    -> [paths], one per moment."""
+    by_t = {round(t, 2): p for t, p in motion._frames(frames_dir)}
+    for old in os.listdir(out_dir) if os.path.isdir(out_dir) else []:
+        if old.startswith(name + "-") and old.endswith(".jpg"):
+            os.remove(os.path.join(out_dir, old))
+    out = []
+    for n, (t, g) in enumerate(zip(moments, groups), 1):
+        cells = [(x, by_t[x]) for x in g if x in by_t]
+        if cells:
+            out.append(
+                motion.strip(cells, os.path.join(out_dir, "%s-%d.jpg" % (name, n)), said=said, at=t)
+            )
+    return out
+
+
 def timeline_text(film, retake=None):
     """The narration's timing as Claude needs it for cues: each line's span, and its words (all of
     them for a short narration; for a long one only the line just re-recorded)."""
@@ -204,9 +331,9 @@ def timeline_text(film, retake=None):
     end, over = tl.get("duration"), max((L["end"] for L in lines), default=0)
     if end and over > end:
         out.append(
-            "NOTE: the narration ends at %.2f s, after the film's %g s: every word after %g s is"
-            " cut and never heard. Shorten or drop lines, or close the gaps, and record again."
-            % (over, end, end)
+            "NOTE: the narration ends at %.2f s, after the %g s this film may run to: every word"
+            " after %g s is cut and never heard. Shorten or drop lines, or close the gaps, and"
+            " record again." % (over, end, end)
         )
     for L in lines:
         if every or L["i"] == retake:
@@ -219,6 +346,12 @@ def timeline_text(film, retake=None):
             out.append(
                 "line %d  %.2f-%.2f s  acc %.2f  %r"
                 % (L["i"], L["start"], L["end"], L.get("acc", 0), L["text"][:60])
+            )
+        if L.get("stray"):
+            out.append(
+                "  NOTE: the voice said words that are not in the script here (%r), and recording"
+                " it again did not help. They are IN the film as it stands: reword the line, or"
+                " take what they echo out of `style`, and record it again." % L["stray"]
             )
         if L.get("backup_voice"):
             out.append(
@@ -240,8 +373,11 @@ class Tools:
         # a pass of a film made in scenes (scenes.py): its name, the stretch of the film it looks
         # at, the files it may write, and its Claude session
         self.pass_name, self.span, self.allow, self.session = None, None, None, None
+        self.only = None  # a turn that may use only these of the studio's tools (review.py's fix)
         self.priority = film.record().get("priority", 0)
         self.people_told = False  # whether Claude has been told how the people were drawn
+        # a round of changes to a finished film (rounds.Round): its two tools, its verdicts
+        self.round = None
 
     # ---------------------------------------------------------------- plumbing
     def _on_wait(self, pool, ahead):
@@ -384,9 +520,31 @@ class Tools:
                     out.append("%s:\n%s" % (rel, "\n".join(tail[-12:])))
         if out:
             raise ToolError("\n\n".join(out))
-        return (
+        said = (
             "film.js, the engine and the cast parse." if cast else "film.js and the engine parse."
         )
+        rec = self.film.record()
+        if (
+            os.path.exists(self.film.path("words.json"))
+            and not rec.get("localized")
+            and self.film.mode != "scenes"  # a scene pass writes its own file only
+        ):
+            import localize  # noqa: PLC0415
+
+            inline = localize.words_in_code(self.film)
+            if inline:  # never a failure: a word left in the code is still a working film
+                said += (
+                    " These words on screen are written in film.js: put each in words.json under "
+                    "a name and draw SK.DATA.words.<name> instead: %s."
+                    % "; ".join('"%s"' % w for w in inline)
+                )
+        misses = validate.cue_misses(self.film)
+        if misses:  # they parse, and would happen at 0 s
+            said += (
+                " These SK.w cues name a word their narration line does not say, so they fall "
+                "back to 0 s: %s. Hang each on a word its line says." % "; ".join(misses)
+            )
+        return said
 
     async def voice(self, retake_line=None):
         refused = recording_refused(self.film, self.voice_runs)
@@ -406,8 +564,10 @@ class Tools:
             )
         if retake_line is not None:
             args += ["--only", str(int(retake_line)), "--retake"]
+        moved = ""
         async with self.lock:
             self.gate()
+            before = await asyncio.to_thread(self._timeline_before)
             try:
                 await self._script("voice", "sketch-vo.py", args, pools=[("cpu", 1)])
             except ToolError as e:
@@ -423,6 +583,16 @@ class Tools:
             # only recordings that worked count: a TTS that gave no audio cost nothing (and the
             # narration's budget above caps what a film may spend on its voice either way)
             self.voice_runs += 1
+            if before:  # a template's cues, placed on the narration before: moved with its lines
+                # (a round's by the lines' words: its film's own cues, on its own recording)
+                by_line = [] if self.round is not None else ["--by-line"]
+                tail = await self._script(
+                    "sound", "vo-retime.py", ["--before", before, *by_line, "--write"]
+                )
+                moved = next((x for x in reversed(tail) if " cues move" in x), "")
+            # the film is as long as its narration needs (within what it may run to), before
+            # anything reads its length: the timeline text, the mix, the stills
+            grown = await asyncio.to_thread(fit_length, self.film)
         if not self.sheet_v and self.wants_preview():
             self._bg = asyncio.ensure_future(self._narration_preview())
         text = timeline_text(self.film, retake_line)
@@ -431,9 +601,13 @@ class Tools:
                 "\n\n(A line's words and their times are in audio/vo/timeline.json: Read it for "
                 "the lines you place cues on -- SK.w(line, 'word') finds them by itself.)"
             )
+        if moved:
+            text += "\n\nsfx.json moved with the narration: %s." % moved.split(",")[0]
+        text += validate.verbatim_note(self.film)
         return (
             "Recorded. The timeline (also in audio/vo/timeline.json), times on the film clock:\n"
             + text
+            + grown_note(grown)
             + (
                 "\n\nThe narration does not fit the film yet. "
                 + fit_advice(self.film, self.voice_runs)
@@ -442,7 +616,24 @@ class Tools:
             )
         )
 
-    async def paint(self, retake=None):
+    def _timeline_before(self):
+        """A copy of the timeline a template film's sfx.json is placed on, taken before the voice
+        records over it (templates.sample_timeline); None for any other film."""
+        import templates  # noqa: PLC0415
+
+        if self.round is not None:  # a round: the film's own recording, as it was before this one
+            src = self.film.path("audio", "vo", "timeline.json")
+            src = src if os.path.isfile(src) else None
+        else:
+            src = templates.sample_timeline(self.film)
+        if not src:
+            return None
+        dst = self.film.path("temp", "timeline.before.json")
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(src, dst)
+        return dst
+
+    async def paint(self, retake=None, timeout=None):
         if not paint_kinds(self.film.caps):
             raise ToolError("This film is drawn, not painted: there is nothing to paint.")
         args = []
@@ -451,7 +642,7 @@ class Tools:
             args = ["--only", ",".join(names), "--retake"]
         async with self.lock:
             self.gate()
-            tail = await self._script("paint", "sketch-paint.py", args)
+            tail = await self._script("paint", "sketch-paint.py", args, timeout=timeout)
         noun = paint_words(self.film.caps)[1]
         return "\n".join(tail[-8:]) + "\n\nRead images/sheet.jpg to look at the %s." % noun
 
@@ -491,7 +682,8 @@ class Tools:
         line-up of speakers), else MAX_WEB_PICTURES."""
         t = self.film.record().get("template")
         if not t:
-            return MAX_WEB_PICTURES
+            # a long film that shows its sources (a research film) photographs one every 30 s or so
+            return max(MAX_WEB_PICTURES, min(MAX_WEB_PICTURES_LONG, self.film.length // 30))
         import templates  # noqa: PLC0415
 
         got = templates.load(t["id"], t["version"], ("live", "draft", "retired")) or {}
@@ -512,8 +704,9 @@ class Tools:
             tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
         return tail[-1] if tail else "saved"
 
-    async def page(self, url, name, width=None, height=None):
-        """A photograph of a web page into web/, as SK.image('web_<name>')."""
+    async def page(self, url, name, width=None, height=None, keep=None):
+        """A photograph of a web page into web/, as SK.image('web_<name>'); keep crops it to
+        those parts (CSS selectors, or text=<words on the page>)."""
         have = [k for k in self._manifest().get("images") or {} if k.startswith("web_")]
         if len(have) >= self.web_limit() and "web_%s" % name not in have:
             raise ToolError(
@@ -523,6 +716,8 @@ class Tools:
         args = ["--page", str(url or ""), "--name", str(name or "")]
         if width or height:
             args += ["--size", "%dx%d" % (int(width or 1920), int(height or 1080))]
+        for k in (keep if isinstance(keep, list) else [keep] if keep else [])[:8]:
+            args += ["--keep", str(k)[:200]]
         async with self.lock:
             tail = await self._script("web", "web-grab.py", args, pools=[("browser", 1)])
         # the photograph's line and what the page is made of, below it
@@ -586,11 +781,12 @@ class Tools:
             shutil.copyfile(got, hit)
         return len(todo)
 
-    async def template_pictures(self, logo=None, people=()):
+    async def template_pictures(self, logo=None, people=(), qr=None, logos=()):
         """A template film's pictures -- the person's (upload1...) or ones Claude brought in with
         the picture tool (web_...) -- become the film's own: the logo on dark and light grounds
-        (templates.logo_variants), each person cut out of their photo as sp-1, sp-2... in the
-        order given. Answers with the keys for content.json."""
+        (templates.logo_variants), and each of several logos (co-hosts, sponsors) as logo-1,
+        logo-2...; each person cut out of their photo as sp-1, sp-2... in the order given, and a
+        QR code of a link (templates.qr_picture). Answers with the keys for content.json."""
         import templates  # noqa: PLC0415
 
         f = self.film
@@ -614,11 +810,24 @@ class Tools:
             )
 
         said = []
+        if qr:
+            try:
+                await asyncio.to_thread(templates.qr_picture, qr, f.path("images", "qr.png"))
+            except templates.TemplateError as e:
+                raise ToolError(str(e)) from None
+            images["qr"] = "images/qr.png"
+            said.append('the QR code of %s: "qr"' % qr)
         if logo:
             p1, p2 = await asyncio.to_thread(templates.logo_variants, web(logo), f.path("images"))
             images["logo"] = os.path.relpath(p1, f.dir).replace("\\", "/")
             images["logo-light"] = os.path.relpath(p2, f.dir).replace("\\", "/")
             said.append('the logo: {"image": "logo", "light": "logo-light"}')
+        for i, name in enumerate(logos or (), 1):  # several: a folder each, the same two files
+            out = f.path("images", "logos", str(i))
+            p1, p2 = await asyncio.to_thread(templates.logo_variants, web(name), out)
+            images["logo-%d" % i] = os.path.relpath(p1, f.dir).replace("\\", "/")
+            images["logo-%d-light" % i] = os.path.relpath(p2, f.dir).replace("\\", "/")
+            said.append('%s: {"image": "logo-%d", "light": "logo-%d-light"}' % (name, i, i))
         rows = list(f.record().get("people_cutouts") or [])
         start = len(rows)
         os.makedirs(f.path("inputs", "people"), exist_ok=True)
@@ -640,6 +849,166 @@ class Tools:
             )
         return "Ready. In content.json use " + "; ".join(said) + "."
 
+    async def map(self, at=None, radius_m=None, tone=None, tint=None, colors=None):
+        """The real street map of the place a film shows (scripts/place-map.py --film): the picture
+        as images/place_map.jpg (SK.image key place_map) and place.json, SK.DATA.place -- where the
+        address is on it, its own street, the real street names with a spot each. A place that is
+        not on the map leaves the film with none (place.json says why), never with a made-up one
+        or a template's sample."""
+        f = self.film
+        if not at:
+            raise ToolError(
+                "Give at: the address as written (street, town, state or country), a place's "
+                "name with its town, or [lat, lon]."
+            )
+        spec = {"at": at, "image": "place_map"}
+        for k, v in (("radius_m", radius_m), ("tone", tone), ("tint", tint), ("colors", colors)):
+            if v:
+                spec[k] = v
+        os.makedirs(f.path("temp"), exist_ok=True)
+        _write_json(f.path("temp", "place-spec.json"), spec)
+        args = ["--film", f.path("temp", "place-spec.json")]
+        args += ["--out-image", f.path("images", "place_map.jpg")]
+        args += ["--out-data", f.path("place.json")]
+        args += ["--cache", os.path.join(HOME, "cache")]
+        m = self._manifest()
+        try:
+            async with self.lock:
+                tail = await self._script("map", "place-map.py", args, pools=[("cpu", 1)])
+        except ToolError as e:
+            why = str(e).strip().splitlines()[-1] if str(e).strip() else ""
+            if not why.startswith("no map:"):
+                raise
+            # no truthful map can be made: the film keeps none -- not the template's sample either
+            why = why[len("no map:") :].strip()
+            _write_json(f.path("place.json"), {"none": why})
+            (m.get("images") or {}).pop("place_map", None)
+            m.setdefault("data", {})["place"] = "place.json"
+            _write_json(f.manifest, m)
+            return (
+                "No map: %s The film has no map now (SK.DATA.place.none says why; SK.map draws "
+                "nothing and returns null): show the address in type instead." % why
+            )
+        got = json.loads(tail[-1])
+        m.setdefault("images", {})["place_map"] = "images/place_map.jpg"
+        m.setdefault("data", {})["place"] = "place.json"
+        _write_json(f.manifest, m)
+        return (
+            "The map is made: %s (SK.image key place_map; its data is SK.DATA.place). Found: %s. "
+            "How exactly: %s. The pin is at u %.4f, v %.4f%s. Street names it can letter: %s.%s "
+            "Draw it with SK.map(x, y, {s, own, names}) and SK.mapPin (the kit): the picture has "
+            "no lettering and no pin of its own, and '\u00a9 OpenStreetMap' must show on it "
+            "(SK.map letters it). Look at a still of it before you finish."
+            % (
+                got["map"],
+                got["found"],
+                got["how"],
+                got["pin"][0],
+                got["pin"][1],
+                ", on %s" % got["street"] if got["street"] else "",
+                ", ".join(got["streets"]) or "none",
+                " Parks and water with names: %s." % ", ".join(got["areas"])
+                if got["areas"]
+                else "",
+            )
+        )
+
+    async def route(
+        self,
+        gpx=None,
+        points=None,
+        mode=None,
+        start_at=None,
+        finish_at=None,
+        places=None,
+        units=None,
+    ):
+        """A film's real route on its real map (scripts/route-map.py --film): the map picture as
+        images/route_map.jpg (SK.image key route_map) and the route as route.json, SK.DATA.route
+        -- rows of [u, v, elevation, distance, seconds], its marks, places and numbers. From a GPX
+        the person attached (a document), or places routed along real roads and trails."""
+        f = self.film
+        spec = {"mode": mode or "bike", "image": "route_map"}
+        if gpx:
+            docs = [a for a in f.record().get("attachments") or [] if a.get("kind") == "text"]
+            want = str(gpx).strip().lower()
+            hit = next(
+                (
+                    a
+                    for i, a in enumerate(docs, 1)
+                    if want
+                    in {
+                        str(a.get("name") or "").lower(),
+                        a["file"].lower(),
+                        os.path.basename(a["file"]).lower(),
+                        "document %d" % i,
+                        "doc%d" % i,
+                    }
+                ),
+                None,
+            )
+            if hit is None:
+                raise ToolError(
+                    "No document %r: name one the person attached (its name, or 'Document 1')."
+                    % gpx
+                )
+            spec["gpx"] = f.path(*hit["file"].split("/"))
+        elif points:
+            spec["points"] = list(points)
+        else:
+            raise ToolError(
+                "Give the route: gpx (an attached document) or points (two places at least)."
+            )
+        for k, v in (("start_at", start_at), ("finish_at", finish_at), ("units", units)):
+            if v:
+                spec[k] = v
+        if places:
+            spec["places"] = list(places)
+        os.makedirs(f.path("temp"), exist_ok=True)
+        _write_json(f.path("temp", "route-spec.json"), spec)
+        args = ["--film", f.path("temp", "route-spec.json")]
+        args += [
+            "--out-image",
+            f.path("images", "route_map.jpg"),
+            "--out-data",
+            f.path("route.json"),
+        ]
+        args += ["--cache", os.path.join(HOME, "cache")]
+        async with self.lock:
+            tail = await self._script("route", "route-map.py", args, pools=[("cpu", 1)])
+        got = json.loads(tail[-1])
+        m = self._manifest()
+        m.setdefault("images", {})["route_map"] = "images/route_map.jpg"
+        m.setdefault("data", {})["route"] = "route.json"
+        _write_json(f.manifest, m)
+        st, u = got["stats"], got["units"]
+        placed = "; ".join(
+            "%s at u %.4f v %.4f" % (p["name"], p["u"], p["v"]) for p in got["places"]
+        )
+        return (
+            "The route is drawn: %s, %d rows in route.json (SK.DATA.route; its map is "
+            "SK.image('route_map')). %s %s, climbs %s %s, highest %s %s; the main climb %s %s "
+            "for %s %s; %s, %s clock. Marks (row numbers): %s. Placed: %s."
+            % (
+                got["map"],
+                got["rows"],
+                st["distance"],
+                u["dist"],
+                st["gain"],
+                u["ele"],
+                st["top"],
+                u["ele"],
+                st["climb_gain"],
+                u["ele"],
+                st["climb_distance"],
+                u["dist"],
+                "a loop" if got["loop"] else "point to point",
+                "the ride's own" if got["timed"] else "an estimated",
+                ", ".join("%s %d" % kv for kv in got["marks"].items()),
+                placed or "nothing named",
+            )
+        )
+
     async def name_film(self, title):
         """The film's title, when the visitor typed nothing (voice notes or pictures only): the
         record's title (the page and the film's own page show it) and the manifest's."""
@@ -653,15 +1022,142 @@ class Tools:
         _write_json(self.film.manifest, m)
         return "The film is called %r." % title
 
-    async def motion(self):
-        """The film a few times a second, for what a sheet of stills cannot show: its cuts, and
-        any stretch where nothing moves (studio/motion.py)."""
+    def _motion_fresh(self, ts):
+        """Whether temp/motion already holds these frames and the probe's report, rendered after
+        the last change to anything the picture is made of. A frame is a pure function of the
+        film's code and its time, so such frames are the film as it stands (the author's own
+        motion check, a minute before the studio reads the film: about 60-90 s of rendering)."""
+        d = self.film.path("temp", "motion")
+        try:
+            have = {round(t, 3) for t, _ in motion._frames(d)}
+            if not have >= {round(t, 3) for t in ts} or not os.path.isfile(
+                os.path.join(d, "report.json")
+            ):
+                return False
+            oldest = min(os.path.getmtime(os.path.join(d, n)) for n in os.listdir(d))
+            made_of = [
+                self.film.path(n) for n in ("film.js", "sketch.json", "content.json", "paint.json")
+            ]
+            made_of.append(self.film.path("audio", "vo", "timeline.json"))
+            for sub in ("cast", "scenes", "engine", "images", "web", "rigs"):
+                for base, _, names in os.walk(self.film.path(sub)):
+                    made_of += [os.path.join(base, n) for n in names]
+            return all(not os.path.exists(p) or os.path.getmtime(p) < oldest for p in made_of)
+        except (OSError, ValueError):
+            return False
+
+    async def film_sheets(self, reuse=False):
+        """The film a few times a second (the whole of it, or a scene's own stretch), read by
+        studio/motion.py: (what it says in words, whether it wrote motion.png, the whole-film
+        sheets' paths as Claude names them, what the drawing code shows -- motion.events). The
+        same browser run plays the film once more without painting it (sketch/probe.js). Claude's
+        motion tool and the studio's own review (review.py) both look at a film through this."""
         ts = motion.times(self.film.length)
         if self.span:  # a scene's pass: only its stretch
             ts = [t for t in ts if self.span[0] <= t <= self.span[1]]
-        shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
-        args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
+        if reuse and await asyncio.to_thread(self._motion_fresh, ts):
+            self.emit(
+                {
+                    "type": "log",
+                    "text": "the frames of the last motion check are the film as it stands",
+                }
+            )
+        else:
+            shutil.rmtree(self.film.path("temp", "motion"), ignore_errors=True)
+            args = ["--stills", ",".join("%g" % t for t in ts), "--into", "temp/motion"]
+            args += ["--probe", "%g" % PROBE_STEP]
+            async with self.lock:
+                self.gate()
+                await self._script(
+                    "stills",
+                    "sketch-render.py",
+                    args,
+                    pools=[("browser", 1)],
+                    timeout=120 + 2 * len(ts) + PROBE_S,
+                )
+        events = await asyncio.to_thread(self._events)
+        text, sheet = await asyncio.to_thread(
+            motion.analyse,
+            self.film.path("temp", "motion"),
+            self.film.path("outputs", "review", "motion.png"),
+        )
+        said = motion.spoken(self.film.path("audio", "vo", "timeline.json"))
+        made = await asyncio.to_thread(
+            motion.sheets,
+            self.film.path("temp", "motion"),
+            self.film.path("outputs", "review"),
+            said,
+            span=self.span,
+        )
+        return text, sheet, ["outputs/review/" + os.path.basename(p) for p in made], events
+
+    def _events(self):
+        """motion.events() over the probe's report of the last motion run, within a scene's own
+        stretch; [] when the page gave none (a film with no cast draws nothing it can name)."""
+        try:
+            with open(self.film.path("temp", "motion", "report.json"), encoding="utf-8") as f:
+                rep = json.load(f).get("probe") or {}
+            ev = motion.shown(motion.events(rep), self.film.path("temp", "motion"))
+        except Exception as e:  # noqa: BLE001 -- a pointer the film can do without, never a failure
+            self.emit({"type": "log", "text": "the drawing code could not be read: %s" % e})
+            return []
+        if self.span:
+            ev = [e for e in ev if e["t1"] >= self.span[0] and e["t0"] <= self.span[1]]
+        return ev
+
+    async def motion(self):
+        """The film a few times a second, for what a sheet of stills cannot show: the whole of it
+        a frame a second, its cuts, and any stretch where nothing moves (studio/motion.py)."""
         told = await self.people_ready()
+        text, sheet, sheets, events = await self.film_sheets()
+        if sheet:
+            self.sheet_v += 1
+            self.emit({"type": "image", "path": "review/motion.png", "v": self.sheet_v})
+        if sheets:
+            text += (
+                "\n\nThe whole film, a frame a second, each with its time and the words being said"
+                " under it: Read %s. Read every one: what a film gets wrong between two review "
+                "stills is on these. Then `strip` the moments that need a closer look."
+                % ", ".join(sheets)
+            )
+        told_ev = [e for e in events if e["kind"] in EVENTS_TOLD][:EVENTS_MAX]
+        if told_ev:
+            text += (
+                "\n\nWhat the drawing code shows for a moment only (it cannot see the picture: "
+                "`strip` each and look -- a door or a card may turn through flat, a body may not; "
+                "a character may be half hidden on purpose):\n"
+                + "\n".join("- " + e["text"] for e in told_ev)
+            )
+        return text + told
+
+    async def strip(self, times):
+        """A close look at up to STRIP_MAX moments: STRIP_N frames, STRIP_STEP s apart, round each
+        (an entrance, an exit, a turn: what happens inside one second)."""
+        try:
+            ts = [round(float(t), 2) for t in times]
+        except (TypeError, ValueError):
+            raise ToolError("times is a list of seconds, e.g. [12.4, 80.5]") from None
+        n = self.film.length
+        lo, hi = self.span or (0, n)
+        if not ts or len(ts) > STRIP_MAX or any(t < lo or t > hi for t in ts):
+            raise ToolError("give 1-%d moments between %g and %g seconds" % (STRIP_MAX, lo, hi))
+        await self.people_ready()
+        made = await self.strips(ts)
+        return "Read %s: %d frames %g s apart round each moment, with the words being said." % (
+            ", ".join("outputs/review/" + os.path.basename(p) for p in made),
+            STRIP_N,
+            STRIP_STEP,
+        )
+
+    async def strips(self, ts, name="strip"):
+        """Close-ups of the moments ts as outputs/review/<name>-<n>.jpg, in that order (the strip
+        tool's, and under another name the studio's own review's). -> their paths."""
+        n = self.film.length
+        lo, hi = self.span or (0, n)
+        groups = [strip_times(t, lo, min(hi, n - 0.02)) for t in ts]
+        every = sorted({x for g in groups for x in g})
+        shutil.rmtree(self.film.path("temp", "strip"), ignore_errors=True)
+        args = ["--stills", ",".join("%g" % t for t in every), "--into", "temp/strip"]
         async with self.lock:
             self.gate()
             await self._script(
@@ -669,17 +1165,18 @@ class Tools:
                 "sketch-render.py",
                 args,
                 pools=[("browser", 1)],
-                timeout=120 + 2 * len(ts),
+                timeout=TIMEOUT["stills"] + 2 * len(every),
             )
-        text, sheet = await asyncio.to_thread(
-            motion.analyse,
-            self.film.path("temp", "motion"),
-            self.film.path("outputs", "review", "motion.png"),
+        said = motion.spoken(self.film.path("audio", "vo", "timeline.json"))
+        return await asyncio.to_thread(
+            strips_of,
+            self.film.path("temp", "strip"),
+            self.film.path("outputs", "review"),
+            ts,
+            groups,
+            said,
+            name,
         )
-        if sheet:
-            self.sheet_v += 1
-            self.emit({"type": "image", "path": "review/motion.png", "v": self.sheet_v})
-        return text + told
 
     async def _automation_if_needed(self):
         """The air cues follow the picture's motion, traced by a render pass."""
@@ -698,7 +1195,8 @@ class Tools:
         """A template's film writes its own score and cues (SK.film({sound})): worked out again
         from its code and content whenever either changed since, before the mix hears them."""
         f = self.film
-        if not f.record().get("template"):
+        t = f.record().get("template")
+        if not t or t.get("sound") == "files":  # a template whose cues are files keeps them
             return
         if _newer(f.path("sfx.json"), f.path("film.js"), f.path("content.json")) and _newer(
             f.path("score.json"), f.path("film.js"), f.path("content.json")
@@ -826,10 +1324,17 @@ class Tools:
                 "Open a web page in a real browser (it also reads pages WebFetch is refused) and "
                 "photograph it (width x height px, 1920x1080 unless given; a taller one takes "
                 "more of the page) into web/<name>.jpg, shown with SK.image('web_<name>', x, y, "
-                "w). Reports what the page is made of, measured in it: the fonts that set its "
-                "headings, text and buttons, the web fonts it loaded, its text and painted "
-                "colours, its logo and icon files; a logo it draws inline is saved as "
-                "web/<name>_logo1.png. Its words go to web/<name>.txt.",
+                "w). keep crops the photograph to those parts, sharp (photographed at up to 2x): "
+                "CSS selectors or text=<words on the page> (the paragraph or heading holding "
+                "them), the box round all of them -- e.g. ['header', 'h1'] for a masthead down "
+                "to its headline. A filing or a long document reads better in a narrower window "
+                "(width 1000). A cookie dialog is accepted; a post on X (x.com/<who>/status/<id>) "
+                "is photographed whole through its embed page. Reports what the page is made of, "
+                "measured in it: the fonts that set its headings, text and buttons, the web fonts "
+                "it loaded, its text and painted colours, its logo and icon files; a logo it "
+                "draws inline is saved as web/<name>_logo1.png. Its words go to web/<name>.txt, "
+                "and where its headings and paragraphs are in the photograph to web/<name>.json "
+                "(blocks: SK.read's focus boxes).",
                 {
                     "type": "object",
                     "properties": {
@@ -837,13 +1342,19 @@ class Tools:
                         "name": {"type": "string", "description": "lowercase, e.g. site"},
                         "width": {"type": "integer"},
                         "height": {"type": "integer"},
+                        "keep": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "the parts to crop to, e.g. ['header', 'h1'] or "
+                            "['text=Revenue rose to']",
+                        },
                     },
                     "required": ["url", "name"],
                 },
             )(
                 wrap(
                     lambda a: self.page(
-                        a.get("url"), a.get("name"), a.get("width"), a.get("height")
+                        a.get("url"), a.get("name"), a.get("width"), a.get("height"), a.get("keep")
                     )
                 )
             ),
@@ -876,27 +1387,124 @@ class Tools:
             )(wrap(lambda a: self.stills(a.get("times"), a.get("sheet", True)))),
             tool(
                 "motion",
-                "Render the film a few times a second and report its cuts and any stretch where "
-                "nothing moves for 4 s or more, with a sheet of the frames around each "
-                "(outputs/review/motion.png).",
+                "Render the film a few times a second: the whole film a frame a second on sheets "
+                "(outputs/review/film-01.jpg ...), each frame with its time and the words being "
+                "said; its cuts and any stretch where nothing moves for 4 s or more, with a sheet "
+                "of the frames around each (outputs/review/motion.png).",
                 {"type": "object", "properties": {}},
             )(wrap(lambda a: self.motion())),
+            tool(
+                "strip",
+                "A close look at up to %d moments (seconds): %d frames %g s apart round each, into "
+                "outputs/review/strip-1.jpg ... For what happens inside a second: an entrance, an "
+                "exit, a turn, a character going into, out of or behind something."
+                % (STRIP_MAX, STRIP_N, STRIP_STEP),
+                {
+                    "type": "object",
+                    "properties": {"times": {"type": "array", "items": {"type": "number"}}},
+                    "required": ["times"],
+                },
+            )(wrap(lambda a: self.strip(a.get("times")))),
             tool(
                 "template_pictures",
                 "A film made from a template: make a logo and people's photos the film's own -- the "
                 "person's (upload1...) or ones brought in with the picture tool (web_...). logo: the "
                 "logo picture's name; people: the photos' names, in the order the people should take "
-                "(the first are the featured). Cuts each person out of their photo and makes the "
-                "logo readable on dark and light grounds; answers with the image keys for "
-                "content.json.",
+                "(the first are the featured); qr: a link to make a QR code of (it is read back "
+                "before it is kept). Cuts each person out of their photo and makes the logo "
+                "readable on dark and light grounds; logos: several logos (co-hosts, sponsors), "
+                "each made readable the same way as logo-1, logo-2... in the order given; answers "
+                "with the image keys for content.json.",
                 {
                     "type": "object",
                     "properties": {
                         "logo": {"type": "string"},
+                        "logos": {"type": "array", "items": {"type": "string"}},
                         "people": {"type": "array", "items": {"type": "string"}},
+                        "qr": {"type": "string", "description": "a link, e.g. https://..."},
                     },
                 },
-            )(wrap(lambda a: self.template_pictures(a.get("logo"), a.get("people") or []))),
+            )(
+                wrap(
+                    lambda a: self.template_pictures(
+                        a.get("logo"), a.get("people") or [], a.get("qr"), a.get("logos") or []
+                    )
+                )
+            ),
+            tool(
+                "route",
+                "Draw the film's real route on a real map (OpenStreetMap streets and trails over real "
+                "terrain, made of paper sheets): images/route_map.jpg (SK.image key route_map) and "
+                "route.json (SK.DATA.route: rows [u, v, elevation, distance, seconds] -- u, v "
+                "fractions of the map -- marks start/climb/top/finish, places, stats). gpx: the name "
+                "of a GPX document the person attached. Or points: the route's places in order, each "
+                "a place name or [lat, lon], routed by mode along real roads and trails (a loop ends "
+                "where it starts). start_at / finish_at: cut a recording to where the event starts "
+                "and ends. places: names or [lat, lon] to locate for labels. units: imperial or "
+                "metric. Takes one to three minutes.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "gpx": {"type": "string"},
+                        "points": {"type": "array", "items": {}},
+                        "mode": {"type": "string", "enum": ["bike", "foot"]},
+                        "start_at": {},
+                        "finish_at": {},
+                        "places": {"type": "array", "items": {}},
+                        "units": {"type": "string", "enum": ["imperial", "metric"]},
+                    },
+                },
+            )(
+                wrap(
+                    lambda a: self.route(
+                        a.get("gpx"),
+                        a.get("points"),
+                        a.get("mode"),
+                        a.get("start_at"),
+                        a.get("finish_at"),
+                        a.get("places"),
+                        a.get("units"),
+                    )
+                )
+            ),
+            tool(
+                "map",
+                "Make the real street map of a real address or place (OpenStreetMap: its streets, "
+                "buildings, parks and water for a few blocks round it) -- for any film that shows "
+                "where something is: a pin, an address, 'find us here'. at: the address as written "
+                "('2601 NE 29th St, Fort Lauderdale, FL 33306'), a place's name with its town, or "
+                "[lat, lon]. Writes images/place_map.jpg (SK.image key place_map) and place.json "
+                "(SK.DATA.place: the pin's u, v on the picture, its own street as lines, real "
+                "street names with a spot and an angle each, named parks and water). The picture "
+                "has no lettering and no pin: SK.map and SK.mapPin (the kit) draw both. radius_m: "
+                "metres from the pin to each edge (800; less is closer in). tone: light or dark. "
+                "tint: the film's own colour (#rrggbb), which every surface leans toward; colors: "
+                "any of land, road, road_major, building, green, water, sand, casing set outright. "
+                "It says how exactly the address was found (when only the street is known, letter "
+                "the street and point at no house) and, when the place is not on the map, that "
+                "there is no map: then show the address in type. Takes under a minute.",
+                {
+                    "type": "object",
+                    "properties": {
+                        "at": {},
+                        "radius_m": {"type": "number"},
+                        "tone": {"type": "string", "enum": ["light", "dark"]},
+                        "tint": {"type": "string"},
+                        "colors": {"type": "object"},
+                    },
+                    "required": ["at"],
+                },
+            )(
+                wrap(
+                    lambda a: self.map(
+                        a.get("at"),
+                        a.get("radius_m"),
+                        a.get("tone"),
+                        a.get("tint"),
+                        a.get("colors"),
+                    )
+                )
+            ),
             tool(
                 "name_film",
                 "Name the film (only when the person typed nothing): a short title, a few words.",
@@ -923,6 +1531,13 @@ class Tools:
             tools = [t for t in tools if t.name != "template_pictures"]
         if not paint_kinds(self.film.caps):
             tools = [t for t in tools if t.name != "paint"]
+        if "routes" not in self.film.caps:  # a film that replays a route on its map: a template's
+            tools = [t for t in tools if t.name != "route"]
+        if self.only is not None:  # the fix after the studio's review: look and check, no more
+            tools = [t for t in tools if t.name in self.only]
+        if self.round is not None:  # a round of changes: its own two, and none it must not use
+            tools = [t for t in tools if t.name not in self.round.without]
+            tools += self.round.tools(tool, wrap)
         return create_sdk_mcp_server("studio", tools=tools)
 
 

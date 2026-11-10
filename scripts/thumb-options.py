@@ -1,5 +1,6 @@
 #!/usr/bin/env python
-"""Four YouTube thumbnail options for a sketch film, each built on a still of the film itself.
+"""Four YouTube thumbnail options for a sketch film: posters composed from the film's own
+pictures (its cut-outs, its photographs) when it has any, else stills of the film itself.
 
 The same machinery kitcut.ai's "Publish to YouTube" runs (studio/thumbs.py), from the command
 line: for trying concepts by hand, for the bake-off that set the thresholds in
@@ -8,11 +9,21 @@ config/thumbnails/thumbnails.json, and for looking at what a film would be offer
   --film DIR        a finished film's folder (its sketch.json, film.js, voice timeline)
   --concepts FILE   four {"at", "words", "layout"} as JSON (a list, or {"thumbnails": [...]});
                     layout is one each of headline, card, panel, still; one word may be
-                    *starred* for the film's accent colour
+                    *starred* for the film's accent colour. A film with pictures gets posters
+                    whatever the layout: "hero" and "with" (a list of one) name the pictures a
+                    poster is built on, else it takes the pieces of its moment's frame
   --auto            no concepts: the picture alone at 25/50/75% of the film -- about what
                     YouTube offers when it picks for itself (the baseline)
   --moments         only the labelled sheet of moments a writer chooses from
-  --title TEXT      the video's title (words that repeat it are refused)
+  --title TEXT      the video's title
+  --title-box WHICH that title in a box on a whole frame of the film (layout "title"), as
+                    kitcut.ai offers it: on the options config title.options names (config),
+                    or on every one (all), to see it on four moments
+  --punch WHICH     the option's words as the video's punch line, very large on a dark box of
+                    the film's colours over the frame as the film drew it (layout "punch"):
+                    on the options config punch.options names (config, as kitcut.ai offers
+                    it), on every one (all), or none. A film that is not 16:9 (a Short) gets
+                    every option as a punch at its own frame, whatever this says
   --ocr             also read the words back with OCR at each feed width (slower)
   --list            print the moments, the settled frames, the layouts and every check;
                     writes stills and working files to the film's temp/ only
@@ -49,6 +60,17 @@ def main():
         default="config",
         help="which options carry the film's logo (config: logo.options)",
     )
+    ap.add_argument(
+        "--title-box",
+        choices=("config", "all"),
+        help="the title in a box on a whole frame: config title.options, or every option",
+    )
+    ap.add_argument(
+        "--punch",
+        choices=("config", "all", "none"),
+        default="config",
+        help="the punch line on a dark box: config punch.options, every option, or none",
+    )
     ap.add_argument("--list", action="store_true", help="print everything; write no options")
     a = ap.parse_args()
 
@@ -76,12 +98,21 @@ def main():
         with open(a.concepts, encoding="utf-8") as f:
             raw = json.load(f)
         raw = raw.get("thumbnails") if isinstance(raw, dict) else raw
-        concepts, notes, problems = _thumb.check_concepts(raw, length, a.title)
+        every = list(range(1, len(raw or []) + 1))
+        wide = _thumb.wide_frame(film)
+        punch = {"config": _thumb.cfg()["punch"]["options"], "all": every, "none": []}[a.punch]
+        punch = punch if wide else every
+        concepts, notes, problems = _thumb.check_concepts(raw, length, a.title, punch=punch)
         for n in notes:
             print("  note: %s" % n)
         for p in problems:
             print("  PROBLEM: %s" % p["text"])
         concepts = _thumb.fill_concepts(concepts, moments, length)
+        if a.title_box and wide:
+            concepts = _thumb.title_concepts(
+                concepts, a.title, every if a.title_box == "all" else None
+            )
+        concepts = _thumb.punch_concepts(concepts, punch)
 
     opts = _thumb.make_options(film, concepts, out, logo=a.logo)
     for o in opts:

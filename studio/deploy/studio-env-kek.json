@@ -1,0 +1,7 @@
+{
+ "vault": "kitcut-kv-prod",
+ "name": "studio-env-kek",
+ "version": "94cf320d6e0d4c39b5a20059110e5360",
+ "kid": "https://kitcut-kv-prod.vault.azure.net/keys/studio-env-kek/94cf320d6e0d4c39b5a20059110e5360",
+ "note": "RSA 3072, wrapKey and unwrapKey only. Its public half is studio-env-kek.pub.pem: it can seal, only the vault can open (studio/sealenv.py)."
+}

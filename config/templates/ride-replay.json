@@ -1,0 +1,66 @@
+{
+ "_about": "The spec of kitcut.ai's ride-replay template (studio/templates.py make --spec): what it is, what the film keeps of its sample (keep, generic, assets), when the sample is the person's own event (identity), and its author's notes to Claude. Its film is projects/ride-replay (local: the sample's logos and the recorded ride are third-party). v1 (2026-10-01): the sample is Pedal & Network, Instafill.ai's LA Tech Week gravel ride from Santa Monica Pier up Sullivan Fire Road.",
+ "title": "Ride replay",
+ "description": "A 45-second invite to a group ride, run or hike, its heart a replay of the real route on the real map, the way a cycling app replays a ride: the day and the time slam in over the place it starts, who it is for, then the dot runs the route on a paper relief map -- the line growing behind it, distance, elevation and climb counting up, the profile filling in, a stamp at the top -- and the whole route lands as the finish card with its numbers. What to bring is pasted in like a packing list, and the last screen holds the date, the place and a QR code to sign up. Collage, music only, no narration.",
+ "author": "KitCut",
+ "look": "collage",
+ "frames": [
+  "16:9"
+ ],
+ "caps": [
+  "routes"
+ ],
+ "limits": {
+  "images": 6
+ },
+ "moments": [
+  1.5,
+  5.0,
+  9.0,
+  12.0,
+  15.0,
+  19.0,
+  22.5,
+  24.5,
+  27.5,
+  33.5,
+  41.0
+ ],
+ "keep": [
+  "_about",
+  "palette"
+ ],
+ "assets": [
+  "riders",
+  "bike",
+  "jersey",
+  "bibs",
+  "gels",
+  "bar",
+  "bottles"
+ ],
+ "generic": [
+  "HOSTED BY",
+  "RIDE REPLAY",
+  "DISTANCE",
+  "ELEVATION",
+  "CLIMB",
+  "ELEVATION PROFILE",
+  "READY",
+  "FINISHED",
+  "START / FINISH",
+  "Map data © OpenStreetMap contributors",
+  "WEAR & BRING",
+  "JERSEY",
+  "BIBS",
+  "GELS",
+  "BARS",
+  "BOTTLES",
+  "Scan to open the event page"
+ ],
+ "identity": [
+  "event.name"
+ ],
+ "example": "Our Saturday 7 AM ride for SF founders: from the Golden Gate Bridge Welcome Center up Hawk Hill and back -- sign up at lu.ma/sf-founders-ride",
+ "brief": "A 45-second ride invite with no narration, on one 120 bpm clock that never moves: the hook over the place it starts (0-7.3 s), who it is for (7.3-11), the replay of the route on its map (11-31: to the climb fast, up it slowly, a breath at the top, home fast, then the whole route as the finish card at 27-31), the kit (31-36) and the last screen (36-45). The music and every sound are the film's own (score() and sfx() in film.js) and the camera works itself out from the route, so a short city run and a 60-mile mountain loop play the same 45 s.\n\nTHE ROUTE FIRST: call the route tool before anything else. A GPX the person attached: route(gpx='<its name>'), with start_at / finish_at (a place name or [lat, lon]) when the recording starts somewhere else than the event (someone's home: never show it). No GPX: route(points=[...]) with the route's places in order, each a name OpenStreetMap knows ('Golden Gate Bridge Welcome Center, San Francisco') or [lat, lon] -- end where it starts for a loop or an out-and-back -- mode 'bike' or 'foot'; units 'imperial' in the United States, 'metric' elsewhere. It writes route.json (SK.DATA.route) and the map picture route_map, and answers with the distance, the climb, the top, the marks (start, climb, top, finish: row numbers) and where the places you named sit. Never edit route.json by hand.\n\nEverything the film says is content.json. event: name (as the event writes it; up to ~18 characters a line, a \\n splits the last screen's two lines), day and time (the hook's two tapes: 'SATURDAY', '7:00 AM'), where (the meeting place, ~22 characters), again (a stamp when the event has run before, else \"\"), date_line ('SAT NOV 8 · 7:00 AM'), tag (a hashtag or the series, or \"\"), badge (the event's own mark: a picture key, framed on the hook and the last screen; null for none). host: {label, logo (a picture key), name (its web address)}, or null. who: lead ('A GRAVEL RIDE FOR', ~24 characters) and words (three, ~12 characters each: who it is for). pictures: hero (a cut-out of the place it starts, wide: a pier, a bridge, a square), decor (a tall cut-out beside it: a palm, a lamp post, a tree; or null), vista (a photograph of the route or its views, 3:2), riders (the template's own cut-out of two riders; repaint it only for a run or a hike). map: pin (the start's tag: 'START / FINISH' for a loop, else pin_start and pin_finish), labels (up to 5: {text, then where: mark 'start'|'climb'|'top'|'finish', row, lat+lon, or u+v; dx, dy to nudge it in px; when 'start'|'climb'|'top'|'finish' it is taped on; style 'cream'|'sun'|'water'}), stamp (the top's rubber stamp: the place and its height from the route tool, '<PLACE> · 1,951 FT'; \"\" for none) and stamp_at ({mark: 'top'} or a lat+lon), panel (the replay's labels, translated whole for another language), units ({dist, ele}: the units as the language writes them, 'км' and 'м'; the route tool's own otherwise), credit (keep the OpenStreetMap credit). finish: three tapes -- the distance and the climb from the route tool's numbers with their units ('23.5 MI', '2,590 FT'; '38 KM', '790 M'), then a third fact the event states (its length in time, a pace, 'ALL LEVELS'), never a guess. kit: title, stamp {top, text, bottom} (the pace or the level), main {image, label} (the bike, the shoes: what to come on), items (up to 5 {image, label}: what to wear and bring, as the event says; leave out what it does not say). cta: title (the call: 'RSVP on Luma', 'Apply on Partiful'), url (the shortest address that works, without https://, up to ~34 characters), note, qr (a picture key). lines: up to 11 captions, one per slot, each up to ~60 characters, short and dry: 0 the day, time and place; 1 the name; 2 who it is for; 3 the start of the route; 4 and 5 the climb; 6 the top; 7 the way home; 8 the numbers; 9 the kit; 10 the call to act. Write them as on-screen lines, never as a narrator.\n\nPictures. The sample's pier, palm and vista are Santa Monica's: paint new ones for this event's place (paint.json: hero and decor with \"cutout\": true, vista a photograph) under NEW names -- 'hero_bridge', not 'pier': the template's own names win over a painting of the same name -- and point content.pictures at them. The riders, bike, jersey, bibs, gels, bar and bottles are the template's own, kept by every film; for a run or a hike paint what it needs (shoes, a cap, a vest) under new names. The event's mark and the host's logo: pictures the person attached (upload1...) or found on the web (the picture tool: web_...), straight into content (template_pictures(logo=...) when a logo needs to read on dark and light). The QR code: template_pictures(qr='https://...') -- the full link the people sign up at -- then cta.qr: 'qr'. The colours may follow the event's brand, but keep the route orange (#FC5200) the one warm line on the map."
+}

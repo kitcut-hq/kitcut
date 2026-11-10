@@ -1,0 +1,27 @@
+# Who uses the machine: every 15 s, the CPU and memory of each server, each film's step, each
+# ops.sh job and the ssh sessions, and the top processes with their films, into
+# @HOME@/usage/<day>.jsonl (14 days kept). `ops.sh usage` is the report. Installed by install.sh
+# with the @...@ paths filled in; enabled by `ops.sh usage install`.
+#
+# The system python3 and the stdlib only: it does not depend on the venv a release may change,
+# and it is capped and niced so that it can never be the thing it is looking for.
+[Unit]
+Description=KitCut studio: who uses the CPU and memory (studio/deploy/usage.py)
+After=local-fs.target
+
+[Service]
+User=@USER@
+Group=@USER@
+Environment=STUDIO_HOME=@HOME@
+Environment=TZ=America/Los_Angeles
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 @REPO@/studio/deploy/usage.py sample --every 15 --keep-days 14
+Restart=always
+RestartSec=30
+Nice=10
+CPUWeight=10
+MemoryHigh=96M
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

@@ -9,8 +9,8 @@ and hand-drawn marks on top.
 ## COMMANDS
 - `paint` -- paints every image in `paint.json` at once (about 30 s; unchanged ones come from
   cache) and tiles them into `images/sheet.jpg`. `retake: ["<name>"]` repaints some. At most
-  8 paintings for a film of up to a minute, 12 up to four minutes, then one for about every
-  20 s (24 at most), repaints included.
+  8 paintings for a film under a minute, 12 from a minute up to four minutes, then one for
+  about every 20 s (24 at most), repaints included.
 
 ## DIRECTION
 - the painting style (see "The paintings"), the light and the palette;
@@ -18,11 +18,13 @@ and hand-drawn marks on top.
 - the colour of the words on screen, and of the marks drawn over the paintings;
 
 ## STEPS
-1. Decide the idea and the direction (above): one clear point, told in the film's length, in one
-   to three paintings (a few more for a long film, within the limit).
+1. Decide the idea and the direction (above): one clear point, told in the film's length, in as
+   many paintings as "The paintings" gives for that length, within the limit.
 2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end, and
-   every word's time on the film clock. If a line runs past the end of the film or `acc` is
-   below 0.9, shorten or rephrase it and record again.
+   every word's time on the film clock. If a line's `acc` is below 0.9, rephrase it and
+   record again. If the narration needs a little more than the film's length, the studio
+   lengthens the film and says so; only when it says the narration still does not fit do you
+   cut words and record again.
 3. Write `paint.json` (see "The paintings") and call `paint`. Read `images/sheet.jpg`. Repaint
    an image that is wrong -- lettering in it, the wrong subject, a character who does not match
    -- at most twice in all.
@@ -36,7 +38,16 @@ and hand-drawn marks on top.
    else. Then look hard at the details: a painting's edge showing inside the frame, words that
    are hard to read over the picture, a crossfade landing on the wrong word, text that does not
    match the narration; and from `motion`, any stretch where nothing moves and any change of
-   painting where nothing carries over. Fix and re-check. Two review rounds at most.
+   painting where nothing carries over.
+   Then Read every `outputs/review/film-NN.jpg` that `motion` lists: the whole film, a frame a
+   second, each with its time and the words being said. Read them in order, like a storyboard,
+   against the narration: is what each line says on screen while it is said? Does anything hold
+   for five seconds with nothing happening -- a shot, a hand, a prop? Then look inside the
+   seconds, where a frame a second cannot see: call `strip` on every moment somebody goes into,
+   out of or behind something, turns round, or moves from one place to another, and on each
+   moment `motion` points at. Fix what is broken, `strip` what you changed, and look once more.
+   Two review rounds, and a third when the second still found something broken: a film
+   that goes out with a mistake you saw costs its owner more than the minutes.
 6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 7. Finish with one or two sentences: what the film shows and says, and anything from the prompt
@@ -55,17 +66,32 @@ The studio has set `backend`, `model` and `max_images`; leave them. You set:
   the palette and the light in it too.
 - `images`: `[{"name": "kitchen", "prompt": "..."}, ...]` -- names of lowercase letters, digits,
   `-` and `_`. Describe each picture fully: who, doing what, where, the framing (wide,
-  close-up), the light. Never ask for words, letters or signs in a picture. The painter works
-  from the words alone: it takes no reference picture, so `ref` changes nothing.
+  close-up), the light. Never ask for words, letters or signs in a picture.
+- `ref` (on an image): a picture it is painted from, for its characters -- another image's name,
+  one of the project's pictures, `pic_<name>`, one of its painted characters, `cast_<name>`, or a
+  picture the person attached and marked "how we draw this" (`upload<n>`, its role `style`);
+  or a list of up to 4 of these, for several characters in one painting. The painter keeps
+  what it sees there -- faces, hair, clothes, proportions -- so use it for anyone or anything
+  that appears in more than one painting: paint them once (or take their picture), then every
+  later painting of them with `ref`. Leave it off a painting that shows none of them.
 
 Each painting comes back 1920x1280 (a little taller than the 1920x1080 frame: room to move).
 
-- Fewer, richer paintings: one wide painting gives several shots -- push in on one part, then
-  pan to another. One or two paintings for 5 s, two or three for 10-15 s, four to six for a
-  minute, six to ten for two.
-- The same character in two paintings will not look quite the same. Describe them identically
-  every time (age, hair, clothes and their colours), or keep them in one painting and frame
-  different parts of it.
+- Rich paintings: one wide painting gives several shots -- push in on one part, then pan to
+  another. One or two paintings for 5 s, two or three for 10-15 s, four or five for 30 s,
+  eight to ten for a minute or two -- a new place or moment for each beat of the narration,
+  and leave two or three of the limit for repaints.
+- From the words alone, the same character in two paintings will not look quite the same. Paint
+  the painting that shows them best first, and each later one they are in with `"ref"` naming
+  it; and still describe them identically every time (age, hair, clothes and their colours):
+  the picture keeps them close, the words keep them exact.
+- Where the project's cast has painted characters (`cast_<name>`), paint every scene they are
+  in from them. Where it has only pictures of its people, paint them from those:
+  first a cast sheet, `{"name": "cast", "prompt": "the family standing side by side, full length, on a
+  plain ground", "ref": "pic_<name>"}`, then each scene with `"ref": "cast"`. The characters stay
+  the same through the film, and they are the project's own people, not new ones. The cast
+  sheet is one of the film's paintings; it need not appear in the film. A repainted cast sheet
+  does not repaint the scenes made from it: repaint those too.
 - Draw a painting with `SK.image(name, x, y, w)` (centred on x, y; its height follows) under a
   camera: `SK.camera([[0, [x, y, zoom]], [t, [x, y, zoom], E.sine], ...])`. It must cover the
   frame at every moment -- a paper-coloured strip at an edge of a still means it does not. At zoom

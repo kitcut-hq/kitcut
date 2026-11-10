@@ -10,8 +10,10 @@ are the film's own frames without anything added after it (a Free plan's closing
 for here by a tail that paints the whole frame red, which the film's own render shows and no still
 may); four options made from a draft's concepts, each a 1920x1080 JPEG under YouTube's 2 MB, each
 passing every check (legible at 168 px, in contrast, clear of the duration stamp, hiding none of
-the film's own words); words that cannot be set legibly fall back rather than ship; the options
-are kept, keyed by the draft, and told to the site without anything of the studio's.
+the film's own words); the first is the punch line on a dark box over the frame the film drew,
+the second the title in a box; words that cannot be set legibly fall back rather than ship; the
+options are kept, keyed by the draft, and told to the site without anything of the studio's; and a
+tall film (a Short) gets its four as punches at its own 1080x1920 frame.
 """
 
 import os
@@ -146,6 +148,20 @@ def main():
         os.path.isabs(m["film"]) and os.path.isabs(m["audio"]["vo_timeline"]),
         "and every path is absolute",
     )
+    # a template's film keeps its words in a data file: the copy has to find it where the film does
+    tdir = os.path.join(HOME, "data-film")
+    os.makedirs(tdir, exist_ok=True)
+    with open(os.path.join(tdir, "content.json"), "w", encoding="utf-8") as fh:
+        json.dump({"title": "x"}, fh)
+    with open(os.path.join(tdir, "sketch.json"), "w", encoding="utf-8") as fh:
+        json.dump({"film": "film.js", "data": {"content": "content.json"}}, fh)
+    with open(_thumb.clean_manifest(tdir, os.path.join(HOME, "data-copy")), encoding="utf-8") as fh:
+        dm = json.load(fh)
+    check(
+        os.path.isabs(dm["data"]["content"]) and os.path.isfile(dm["data"]["content"]),
+        "a template film's data file is found from the copy (stills of such a film once all failed)",
+        dm.get("data"),
+    )
     own = [x["file"] for x in m["fonts"] if x["family"] == "Own"]
     check(own and os.path.isabs(own[0]), "the film's own font too, where the film keeps it", own)
     # the control: the same copy with the tail put back, as the film's final render draws it
@@ -215,8 +231,8 @@ def main():
         heads,
     )
     check(
-        [o["layout"] for o in opts] == ["headline", "card", "panel", "still"],
-        "each in its layout (an old draft's slab is a card)",
+        [o["layout"] for o in opts] == ["punch", "title", "panel", "still"],
+        "the first a punch, the second a title box, the others in their layouts",
         [(o["layout"], o["notes"]) for o in opts],
     )
     check([o["n"] for o in opts] == [1, 2, 3, 4], "four options", [o["n"] for o in opts])
@@ -240,9 +256,12 @@ def main():
             )
         check(red(img) < 0.05, "option %d carries no tail" % o["n"])
     check(
-        opts[0]["words"] == "Still waiting?",
-        "the words as the site shows them, stars gone",
-        opts[0]["words"],
+        opts[0]["words"] == "Still waiting?"
+        and opts[1]["words"] == "Pass It On"
+        and opts[2]["words"] == "A friend can use it",
+        "the words as the site shows them: the punch its own words, a title box the title up to its "
+        "colon when the moment's words are neither a question nor a quote; a moment's own, stars gone",
+        [o["words"] for o in opts],
     )
 
     # ---------------------------------------------------------------- kept, keyed, told
@@ -251,24 +270,129 @@ def main():
     pub = thumbs.public(rec)
     check(
         pub["state"] == "done"
-        and pub["v"] == "draft-1"
         and set(pub["options"][0]) == {"n", "path", "layout", "words", "at", "t"},
         "the site is told the options, not their checks or notes",
         pub,
+    )
+    check(
+        pub["v"] == "draft-1-" + _thumb.DESIGN
+        and thumbs.public(dict(rec, design="yt-0"))["v"] != pub["v"],
+        "and their version names the draft and the design: remade options are not a cached picture",
+        pub["v"],
     )
     check(thumbs.public({"state": "making"}) == {"state": "making"}, "or that they are being made")
     check(thumbs.public(None) == {"state": "none"}, "or that there are none")
 
     # ---------------------------------------------------------------- words that cannot be set
-    draft2 = dict(draft, key="draft-2")
+    # a title too long to read on a thumbnail: the options are their moments' own words
+    draft2 = dict(draft, key="draft-2", title="The invite you never used and why it is still worth sending on today")  # fmt: skip
     draft2["thumbnails"] = [dict(draft["thumbnails"][0], words="Pneumonoultramicroscopicsilicovolcanoconiosis")] + draft["thumbnails"][1:]  # fmt: skip
     rec2 = thumbs.make_now(f, "UCtest", draft2)
     o = rec2["options"][0]
     check(
-        o["layout"] != "headline" and o["notes"],
+        o["layout"] not in ("headline", "title") and o["notes"],
         "a word too long to read at feed size falls back",
         o,
     )
+    check(
+        rec2["options"][1]["layout"] == "card" and rec2["options"][1]["words"] == "Send it on",
+        "a title too long for a box leaves the options as their moments' own words",
+        rec2["options"][1],
+    )
+
+    # ---------------------------------------------------------------- a film with pictures
+    # the collage example, its cut-outs stood in for by paper shapes (check-thumbnail.py's
+    # fixture): its options are posters composed from them, the writer's hero on the one it named
+    import importlib
+
+    made = importlib.import_module("check-thumbnail").collage_fixture(HOME)
+    d = os.path.join(HOME, "projects", "studio-20261005-120000-poster")
+    shutil.move(made, d)
+    with open(os.path.join(d, "studio.json"), "w", encoding="utf-8") as fh:
+        json.dump({"ok": True, "state": "done", "direction": {"style": "collage"}}, fh)
+    g = Film(d)
+    draft3 = {
+        "key": "draft-3",
+        "title": "A Brief History of Paperwork",
+        "thumbnails": [
+            {"at": 11.0, "layout": "headline", "words": "Beer, on a *receipt*", "place": None},
+            {"at": 19.0, "layout": "card", "words": "The first *form*", "hero": "printer"},
+        ],
+    }
+    rec3 = thumbs.make_now(g, "UCtest", draft3, want=2)
+    opts3 = rec3["options"]
+    check(
+        [o["layout"] for o in opts3] == ["poster", "poster"] and rec3["design"] == _thumb.DESIGN,
+        "a film with pictures: its options are posters",
+        [(o["layout"], o["notes"]) for o in opts3],
+    )
+    for o in opts3:
+        p = g.path("outputs", o["path"])
+        ck = o["checks"]
+        check(
+            os.path.exists(p)
+            and Image.open(p).size == (1920, 1080)
+            and ck.get("cap_168", 0) >= 8
+            and ck.get("contrast", 0) >= 4.5
+            and ck.get("in_badge") == 0,
+            "poster %d: a 1920x1080 JPEG, legible, in contrast, clear of the stamp" % o["n"],
+            (ck, o["notes"]),
+        )
+    check(
+        any(
+            n.startswith("poster") and n.split(": ")[1].startswith("printer")
+            for n in opts3[1]["notes"]
+        ),
+        "built on the picture the writer named",
+        opts3[1]["notes"],
+    )
+    check(
+        thumbs.public(rec3)["options"][0]["layout"] == "poster",
+        "and the site is told so",
+        thumbs.public(rec3),
+    )
+
+    # ---------------------------------------------------------------- a Short
+    # the same film in a tall frame: four punches at 1080x1920, no share picture
+    t_dir = os.path.join(HOME, "projects", "studio-20261022-120000-tallth")
+    shutil.copytree(f.dir, t_dir, ignore=shutil.ignore_patterns("temp", "outputs", "youtube"))
+    os.makedirs(os.path.join(t_dir, "temp", "brand"), exist_ok=True)
+    shutil.copyfile(
+        f.path("temp", "brand", "red.js"), os.path.join(t_dir, "temp", "brand", "red.js")
+    )
+    with open(os.path.join(t_dir, "sketch.json"), encoding="utf-8") as fh:
+        tm = json.load(fh)
+    tm["frame"] = [1080, 1920]
+    with open(os.path.join(t_dir, "sketch.json"), "w", encoding="utf-8") as fh:
+        json.dump(tm, fh, indent=1)
+    tall = Film(t_dir)
+    rec4 = thumbs.make_now(tall, "UCtest", dict(draft, key="draft-4"))
+    opts4 = rec4["options"]
+    check(
+        [o["layout"] for o in opts4] == ["punch", "punch", "punch", "still"],
+        "a Short: every worded option a punch (a title box and a panel are composed for 16:9)",
+        [(o["layout"], o["notes"]) for o in opts4],
+    )
+    for o in opts4:
+        p = tall.path("outputs", o["path"])
+        ck = o["checks"]
+        ok = os.path.exists(p) and Image.open(p).size == (1080, 1920)
+        if o["layout"] == "punch":
+            ok = ok and ck.get("cap_168", 0) >= 8 and ck.get("contrast", 0) >= 4.5
+            ok = ok and ck.get("in_margin") == 0 and ck.get("hides_text") == 0
+        check(
+            ok,
+            "Short option %d: a 1080x1920 JPEG, legible, inside the tile's band" % o["n"],
+            (ck, o["notes"]),
+        )
+    check(
+        thumbs.public(rec4)["frame"] == [1080, 1920]
+        and thumbs.public(rec)["frame"] == [1920, 1080],
+        "and the site is told each picture's shape",
+        (thumbs.public(rec4).get("frame"), thumbs.public(rec).get("frame")),
+    )
+    share = thumbs.make_now(tall, "share", {"key": "s", "thumbnails": draft["thumbnails"]}, want=2)
+    check(share["options"] == [], "a Short gets no share picture (that is composed for 16:9)")
 
     shutil.rmtree(HOME, ignore_errors=True)
     print("\n%d failed" % len(bad) if bad else "\nall passed")

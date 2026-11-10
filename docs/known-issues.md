@@ -854,3 +854,467 @@ status route calls such a film `lost`, and it would not continue it.
 **Rule.** Never roll back past the release that brought `waiting` while any film is waiting
 (`ops.sh` status lists them). A continued film pays one uncached re-read of its Claude context,
 about $0.5-1 on a long film: the cost of pausing, instead of failing and making it again.
+
+### KI-054 · fixed · studio · A transcription model chosen on its word accuracy put the narration's word times a quarter-second late
+
+**Symptom.** For a few hours on 2026-09-29 the studio scored narration takes with
+`microsoft/mai-transcribe-2` (`34c96b9`). Its word starts ran 0.24-0.26 s late (worst 0.50 s), and
+it let 3 of 20 garbled English takes through where Groq's Whisper large-v3 let 1 through.
+**Cause.** It was compared against the VM's own small.en, and against that it looked equal. Its
+published claims, like every STT leaderboard, are word error rate. Nobody publishes word timing,
+and timing is what a caption, a cue hung off a word and a take's tail cut depend on.
+**Fix.** `2b364f6`: Whisper large-v3 on Groq through OpenRouter (`studio/procs.py` `SCORER`),
+0.08-0.12 s from a local large-v3 referee, 9-17 s a film, $0.003. The bench table is in
+`docs/studio-speed.md`.
+**Lesson.** Pick a transcriber with `scripts/vo-scorer-bench.py --reference` (a local large-v3
+referee), never against the model it replaces, and never on a WER headline. Re-asked on
+2026-10-01 when Microsoft announced MAI-Transcribe-2-Streaming ("most accurate real time
+transcription", 2.5 % WER, $0.54/h): still no. Nothing in KitCut transcribes live, and the claim
+is about words, not timing. Bench the streaming model only once OpenRouter serves it.
+
+### KI-055 · limitation · thumbnails · A film that draws everything itself still gets frames, not posters
+
+**Symptom.** A crayon or clean film with no pictures of its own -- its characters and screens are
+drawn by its code, stroke by stroke -- is offered four moments of the film with words on them
+(the design of 2026-09-30), while a film with cut-outs or photographs is offered posters composed
+from them (2026-10-05). On the day posters shipped, most studio films were of the first kind.
+**Cause.** A poster needs pieces it can set at any size apart from the frame they were drawn in.
+A picture file is one; a character drawn by forty calls inside a scene function is not: nothing
+says where it starts and the scene around it ends.
+**What would do it.** Draw the frame with no ground under it (the film's `draw()` loud, the
+paper, grain and vignette hushed), take the islands of what is left as pieces by their alpha, and
+let the film draw itself again inside the hero's box at the scale the poster wants -- the same
+vector lines, clipped to the island. Not built: it wants its own bake-off, and a frame whose
+drawing runs edge to edge (a floor line, a sky) has no islands.
+
+### KI-056 · limitation · thumbnails · Words in a script whose letters join are set smaller on a Windows laptop
+
+**Symptom.** A Persian or Arabic film's thumbnail words come out a third smaller from
+`thumb-options.py` on the laptop than from the studio's machine: 120 px caps where there was room
+for 160.
+**Cause.** The words are laid out in Python with Pillow, which shapes text only where it has
+libraqm (`_thumb.shapes()`): the studio's Linux machine does, a Windows wheel does not. Unshaped,
+every letter is measured in its isolated form, far wider than the joined word the page draws.
+**What is done.** The page (`sketch/thumb.js`) sets a right-to-left line from the right, first
+word first -- it was set first word left until 2026-10-05, on every machine -- holds a line to
+the width planned and centres one drawn narrower, so the words are never out of their box, only
+smaller than they could be. Judge such a film's thumbnails on the studio's machine.
+
+### KI-057 · limitation · thumbnails · Who a poster is built on is read from what a picture was painted as
+
+**Symptom.** A poster sets a sheaf of wheat large and the hunter small beside it; or cuts a
+kneeling baker at the waist; or builds on a photograph somebody uploaded that is not what the
+moment is about.
+**Cause.** A picture file does not say what it shows. `_thumb.film_pieces` reads the words it was
+painted from (`paint.json`): `BEING` (a list of nouns: girl, man, baker, fox, portrait...) says
+it is somebody, `FIGURE` ("full figure", "standing") and a tall picture that it stands whole and
+is shown from the waist up. A picture nobody described -- an upload, a picture fetched from a
+page -- is an object, and is left off the list the draft's writer chooses from.
+**What is done.** The writer (Claude, in the YouTube draft) names each poster's `hero` and `with`
+from the painted pictures and what each shows, which is right far more often than the rule; the
+rule is for a draft written before posters and a picture the writer could not be told about.
+Four options are four different pictures, so one wrong guess is one option of four.
+
+### KI-055 · fixed · films · A film's "map" of a real address was a made-up one
+
+**Symptom.** The open house template (v1-v3, and every film made from it) closed on "a drawn
+street map": a ruled grid, two green ovals, one line lit as the host's street, and a pin. Nothing
+on it existed. The owner, 2026-10-06: every film that shows a pin or a specific address must use
+the real map.
+**Cause.** The studio had a real map only for routes (`route-map.py`, the ride template), behind a
+capability no other film had, so a film that needed "where it is" drew a stand-in -- and the brief
+that produced the template asked for one in so many words ("a simple drawn street map").
+**Fix.** `scripts/place-map.py` (the real street map of one address from OpenStreetMap, and where
+the address is on it), the studio's `map` tool for every film, the kit's `SK.map` / `SK.mapPin`,
+and one rule in the brief. The template's sample changed with it, to a real listing whose street
+is on the map.
+**Lesson.** Two limits are part of the tool's answer, not hidden: a house number the map lacks is
+placed along its street (`block`: right to a house or two, the pin on the street), and an address
+whose street is on no map yet -- any subdivision still being built -- is refused, and the film
+shows it in type. Check a new sample's address with `place-map.py --list` before building a film
+on it. `scripts/check-map.py` pins the rules.
+
+### KI-058 · fixed · studio · A release's tests read the machine's `.env`, so a new storage setting sent test files to the real bucket
+
+**Symptom.** 2026-10-07, moving film copies from Azure to Cloudflare R2: with the three
+`STUDIO_R2_` settings in the VM's `.env`, `ops.sh ship` refused two releases in a row. `test_share`
+uploaded its stand-in pictures to the real bucket (four files, removed), then `test_delete_film`
+asked the real bucket to refuse a file and it did not.
+**Cause.** Every studio test imports `agent`, which loads the machine's `.env`. The tests that put
+a stand-in in Azure's place cleared `STUDIO_MEDIA_BASE` and `STUDIO_MEDIA_SAS` and nothing else,
+so the R2 settings, which win over the SAS, stayed real. On the laptop there were none, and every
+test passed.
+**Fix.** `ed2b4c1`, `048dee1`: each of those tests clears the R2 settings with the SAS.
+**Lesson.** A new setting that names a real service is cleared in every test that stands in for
+that service, in the same commit. Check it the way the VM will: run the release's list
+(`studio/release.py`) with the new settings exported to a dead address
+(`STUDIO_R2_ENDPOINT=http://127.0.0.1:9/b`) before the first ship.
+
+### KI-059 · mitigated · studio · A film's author saw twelve frames of it, so what breaks for half a second shipped
+
+**Symptom.** 2026-10-07: three two-minute episodes of one series each went out with 4-8 glitches
+their owner found by watching. A cat went into her carrier through its side wall; a cat came out
+of one cut by a straight line in mid-air; one was turned round by being flipped through a sliver;
+the same cat was in two places for a third of a second; whiskers showed under the pot she hid
+behind; an empty hand hung in the air for ten seconds; a line was narrated and never shown; a
+colour was laid over the whole frame like a filter. Fixed by hand, twice, and the hand-fixed
+versions still carried a one-frame sliver and a caption under the meter.
+**Cause.** The author checks its film against what it meant to draw. It looked at 6-12 frames of
+120 seconds (`stills`), and `motion` reported only two things: 4 s of stillness, and cuts. Every
+glitch above lasts 0.1-1 s, at an entrance, an exit or a turn, between two review stills. The
+brief allowed two review rounds and none when time was short, and nothing but the author looked
+at the picture before the film was called done.
+**Mitigated** (`studio/motion.py`, `sketch/probe.js`, `studio/review.py`; measured on
+`studio/defects.py`'s bench of 27 known glitches in six film versions, with three fixed ones):
+- `motion` hands back the whole film a frame a second on sheets, each frame with its time and the
+  words being said, and a `strip` tool shows any moment 0.1 s apart.
+- `sketch-render.py --stills --probe` plays the film once more without painting and reports what
+  each cast call drew, where, under what transform and through what clip; `motion.events()` reads
+  it for a character on screen twice, cut by what it is inside, going into a thing, squashed
+  through flat, and a colour laid over the frame. It found 11 of the 12 known glitches of the
+  kinds it can see (double, sliver, through, wash), and points at 1-11 moments in a clean film:
+  pointers, never verdicts.
+- `review.py`: after the author's last turn a fresh Claude reads the sheets and close-ups against
+  a fixed list of glitch kinds; what must be fixed gets one bounded turn; a fix that breaks
+  something else is thrown away; a reader that fails leaves the film as it was. Of the bench's
+  27 it found 25 on one run and 21 on the next (`motion` as it was: 1), with no false must-fix
+  on the three fixed films under its final rules; five of the 27 are its own finds in two films
+  a person had just fixed and believed clean.
+**Still open.** It cannot hear, and it judges a story only where the narration is specific ("she
+looks at the cushion" with no look was missed twice). A glitch drawn by a film's own local
+functions is invisible to the probe (only calls through `SK.cast` are named); the reader still
+sees it. Template films and films made in scenes are read less: see `studio/README.md`, "A second
+pair of eyes". **Never adopt a detector you have not measured:** two were dropped here after
+measuring -- a pixel finder for the wash (5 false alarms on shadows and set changes) and pixel
+stillness as "nothing happens" (a calm shot and an empty one look the same).
+
+### KI-060 · fixed · films · The narrator said "Chapter 1" after sixteen lines nobody wrote it in
+
+**Symptom.** 2026-10-07, studio-20261007-223612-ysk76f (6.5 minutes, 54 lines, Gemini voice
+Charon): 16 lines ended with a pause of 1-3 s and then "Chapter 1", five of them with a made-up
+title ("Chapter 1. The Crystal Ball Debate"). The owner heard it on the finished film. The
+author had seen "a few seconds of extra audio after the last word" on some lines, could not
+listen, and said so in its closing note; three of the lines were recorded again for other
+reasons and came back with the same words.
+**Cause.** Three things in a row. (1) The voice direction named a part of the script: `style`
+ended "...with a real pause after each numbered chapter title", and for the Vertex models the
+direction is the start of the prompt (`"<style>: <line>"`), so the voice spoke what the direction
+named. (2) Nothing looked for words after a line: two added words on a 15-word line score 0.93,
+`stretched` wants twice the line's length, and the take's printed transcript stopped at 70
+characters, before the added words. (3) A retake used the same direction and got the same words.
+It was not one film: the same check over the chosen takes of the 149 most recent films (1,754
+lines) finds 18 more such lines in six films, among them a direction read aloud ("And a burst of
+joy at the end.") and a line said twice.
+**Fixed** (`scripts/sketch-vo.py`: `line_span`, `cut_stray`, `added`). Every take Whisper times
+is compared with its script line. What follows a pause of 0.5 s after the line's last word is cut
+off (the timeline line's `cut` says what was cut); words added with no pause to cut in are
+recorded again twice, the second time without the direction; what still remains is in the line's
+`stray`, printed in full, ranked below any take without it, and told to the author as words that
+are in the film. On that film: all 16 lines cut clean, the 37 others untouched. The brief now
+keeps `style` to how the voice sounds. Sound after the pause that the listener heard no word in
+(a local Whisper left that film's "Chapter One. Finding Balance." out of the transcript
+altogether) is listened to on its own: the script's own last words said late are kept, anything
+else is cut. **Not covered:** ElevenLabs and edge takes are timed by their own service and not checked.
+
+### KI-061 · fixed · studio · A hand fix sent back over a version made from notes erased it, and the page still said "version 2"
+
+**Symptom.** 2026-10-07, studio-20261007-091710-nwhzxq (Duchess, episode 10). Its maker asked for
+four changes on the film's page; the round answered three "Done" (a witch on a broom in the window
+and in the doorway, the lamp on with shadows), rendered them and made version 2 at 14:05. The page
+said version 2 from then on and never showed one of them.
+**Cause.** A finished film had two ways to change and only one of them was a version. Its maker's
+notes worked on a copy and were swapped in as version 2 (`rounds.py`). A hand rework wrote
+`film.js` into the film's own folder and rendered it there (`resume.py --patched`): from a laptop
+copy taken at version 1, sent back at 14:59, an hour after version 2. Nothing compared what the
+hand's files had started from with what the film was, so the film became version 1 plus six
+changed lines under new file names (`r3`) while its record kept `version: 2` and the round's
+answers. The round's own swap had the same hole the other way: it never looked at the film again
+between copying it and replacing it. Nothing was lost by luck: the procedure's backup
+(`temp/before-fix-2/film.js`) was the round's file. It was the only film this happened to (three
+films had versions; the other two were never rendered in place).
+**Fixed** (`studio/rounds.py`: `clean_hand`, `overlay`, `where`, the two `digest` checks in `_run`;
+`studio/deploy/ops.sh take`, `put`; `studio/deploy/hand.py`; `studio/resume.py IN_PLACE`).
+- Files changed by hand are a round: laid over a copy, rendered there, swapped in as the next
+  version with the one before kept. `take` stamps them with the film's digest (what the version is
+  made of); `put` is refused unless that is still the film's digest, so the comparison is of
+  content, not of a version number or of anyone's word.
+- No round, a hand's or Claude's, swaps its copy in when the film's files are no longer what the
+  copy was made from; it fails and the film keeps its place.
+- `resume --patched` refuses every film a round can change. It is left for films made in scenes
+  (which rounds refuse), where it asks for `--over N` past version 1 and waits out a round.
+- `studio/test_rounds.py` (in the release gate) makes a version by hand, sends stale files, and
+  writes into a film while its version is made; `studio/test_resume.py` holds the refusals.
+**Not covered:** a film made in scenes is still changed in place. Someone with a shell on the VM
+can still write into a film's folder; the next round of that film then fails rather than hiding
+it, and nothing is said until then.
+
+### KI-062 · mitigated · studio · A film went out read "clean" with a head off its shoulders, a city on the sea and its last line cut
+
+**Symptom.** 2026-10-09, studio-20261009-160711-odoais (Leo, episode 11, "The Big Hike", 240 s).
+Its owner, the same evening: "There are glitches in this video. Why you didn't catch them. Houses
+were flying in the water and air. Mickey's head is disconnected. Mom's call is unclear if it's
+called or text. The scenes backgrounds are poor too. We could show more details on a hike. The end
+is cut too, the phrase is cut." All of it was plain on a one-frame-a-second sheet.
+**Cause.** Four separate things, none of them motion, which is all the gate of KI-059 looked for.
+- *The length was a wall.* A film's length was fixed, and the narration had to be cut to it. The
+  script asked for 59 short lines; a 240 s film may have 48 (one per 5 s), so lines were merged,
+  the voice tool laid them 0.35 s apart from the first second to the last, and the last line ended
+  at 240.58 s with every recording spent. It was faded out under its last word. The author had no
+  way to ask for a pause either: a line's `start` was allowed and never mentioned.
+- *The reader had no word for what was wrong.* Its kinds were about moving bodies. It read the
+  film in six minutes, found seven things that "could be better" (a message too small to read, a
+  phone hanging under a hand, a lamp post through the road among them), no must, and called it
+  clean; nothing that could be better was ever given to the fix turn.
+- *A character had one view.* Mikey's cast member is drawn from the front. The film needed him
+  from behind and drew that in its own code, with a gap of sky between his hair and his shoulders,
+  for 17 seconds. The probe only names what is drawn through the cast.
+- *One pass draws every place.* Ten places in four minutes, written in one sitting to a clock:
+  one flat hill for the whole climb. The brief had nothing to say about that.
+**Fixed** (`studio/film.py may_run_to, Film.run_to`; `studio/tools.py fit_length`; `sketch/engine.js
+SK.LENGTH`; `scripts/sketch-vo.py "pause"`; `sketch/probe.js g, x`; `studio/motion.py _apart,
+_small`; `studio/review.py EASY, to_fix, fix_s`; `studio/prompts/review.md`; `studio/prompt.md`).
+- The length is a target: the film grows to fit its narration, to a quarter over what was asked
+  (ten seconds at least), 1.5 s after the last word; the record keeps what was asked. A line may
+  ask for quiet before it (`pause`), and a film may have a line for every 3 s.
+- The probe measures two more things, a figure in two pieces and words set small, and says them
+  to the author and to the reader. On episode 11 as it went out they find the head (1:14 to 1:22)
+  and the message (28 px beside 44 px lines), and one sun whose rays open a gap for under a
+  second, which the 1.5 s rule drops.
+- The reader has `apart` (always a must when it lasts) and `float`; words the story needs are a
+  must; its fix turn also takes up to three small things (`text`, `float`, `stray`) and gets two
+  minutes for each thing past the second. A film whose author ran out of time is read too.
+  A gap the code measured for 3 s or more goes to the fix turn even when the reader did not
+  report it (`review.measured`): at the size the reader sees frames, the head's 12 px gap is
+  under three pixels. Episode 11 read again with all of this: two musts (the phone, the message)
+  and the measured head, where the reading that shipped had none.
+- The brief names, for every look: a body is one piece from every side; everything stands on what
+  holds it; light shows what is there; a place has what belongs in it; the picture gets room; the
+  last word is heard; words the story needs are a thirtieth of the frame high.
+- A prompt longer than the studio read was cut at 12,000 characters without a word: the remake's
+  script (20,338) reached its author ending in the middle of part 5 of 11, and the film was
+  finished from the first make's story. `server.PROMPT_MAX` is 30,000 and a longer prompt is
+  refused with a reason (`studio/test_server.py`).
+**Not covered.** The root of two of the four is untouched. A cast member still has only the views
+it was first drawn in, so a film that needs another one still draws it on the spot: the probe and
+the reader now catch a gap, not a badly drawn back. And a long film is still written in one pass,
+every place from nothing: the brief asks for more, nothing makes it so. The split-figure measure
+works on boxes of whole paths, so it finds a clean gap and misses a near one; it reads what is
+drawn through the cast or inside one `SK.at` group, nothing else. The reader's verdicts still
+differ run to run (KI-059), and the one reading made after the change still took the city on
+the sea for a far shore: what stands where is the brief's to get right.
+
+### KI-063 · fixed · studio · Every film left its check pictures behind, and the studio's disk was two days from full
+
+**Symptom.** 2026-10-12, found while asking what would be lost if the studio's machine died: its
+512 GB data disk held 399 GB and had 79 GB free. Films made up to 6 October took 3-7 GB a day;
+from 7 October, 43, 56, 90, 22 and 72 GB a day. Nothing warned: `ops.sh status` printed the
+figure and no more, and a full disk stops every film on the machine at once.
+**Cause.** The review that reads a film before it is called done went live on 2026-10-07
+(KI-059, KI-062). It renders the film a few times a second as full-size PNGs of about 3 MB
+(`temp/motion`), copies them before a fix (`temp/motion-before`), renders them again after it
+(`temp/motion-after`), and renders close looks (`temp/strip`); the thumbnails keep their stills
+(`temp/thumbs`), and the render keeps the film without its sound (`temp/film_silent.mp4`). Each
+is a cache or a scratch copy and each was left for good: 222 GB in 61,659 files over 489 films,
+an eight-minute film alone 9 GB. Nothing in the studio ever removed anything from a finished
+film's `temp/`.
+**Fixed** (`studio/prune.py`, `studio/deploy/kitcut-prune.timer`, `ops.sh prune`,
+`studio/test_prune.py`). Every hour, films that are over lose those pieces once nothing has
+written to them for six hours; `ops.sh prune --plan` prices a run first. The four frame folders go
+whole, in one rename, because a `temp/motion` holding its report and no frames is read by
+`review.folder_frames` as a film in which nothing is drawn. The first plan on the VM:
+
+    motion              362    30037    114.4 GB
+    motion-before        30    11752     42.3
+    thumbs              128     8901     31.8
+    strip               108     5453     21.8
+    motion-after         25     4399     15.7
+    silent              127      147     15.6      241.8 GB from 373 films
+
+`ops.sh status` now warns when the data disk passes 80 %.
+**Not covered.** What a film is made of still grows the disk and is never removed: its master,
+its web copy, its narration takes, the last three versions (about 0.3-0.8 GB a film; 136 GB on
+that day). At 30 films a day the disk fills again in weeks. The way out is for old films' large
+files to live only in storage and come back when the film is opened for work, which needs the
+mirror of the studio's home that does not exist yet (`studio/deploy/README.md`, "The data disk").
+**Lesson.** A step that writes scratch files inside a film says, in the same change, who removes
+them; and a number that can stop production (disk, memory: KI-045) gets a threshold and a
+warning the day it is first printed.
+**Two more leftovers, 2026-11-01 (kc-local, 72 % full and growing).** The prune never looked
+outside `temp/`, and inside `temp/thumbs` it took only the PNGs. Left behind: the stills Claude
+draws while writing a film (`sketch-render.py --stills` writes `outputs/review/<t>.png`, about
+3.7 MB each; 15,772 files, 58 GB) and the page each thumbnail still is drawn in
+(`temp/thumbs/**/manifest/outputs/thumbs.html` and its `artifact/` copy, about 8 MB each, 9 GB).
+Both are written again before they are next needed, so `prune.py` now takes them too. The sheets
+the site serves (`review/sheet.png`, `film-NN.jpg`, `look-NN.jpg`, `motion.png`,
+`fix-check.jpg`, `preview.html`) stay. The first plan: 60.3 GB from 683 films. The lesson above
+held: neither writer said who removes what it wrote.
+**And the films themselves live on R2, 2026-11-01.** Every finished film's master and web copy
+were already copied to R2 (`media.kitcut.ai`, `record["media"]`) and kept on the disk as well:
+126 GB on kc-local. `prune.py` now removes `outputs/film.mp4` and `film_web.mp4` of a film that is
+done and untouched for 7 days (`--videos-days`), each only after its online copy answers with the
+same size. What still reads them on the machine fetches them back first (`media.bring_back`: a
+YouTube send, a round's filmstrip, a share's frame thumbnail), and `/files/{id}/film*.mp4` sends
+the browser to the online copy. The first plan: 94 GB from 674 films. The narration, the code and
+older versions stay on the disk; the backup mirror lets the removed videos go after its 30 days of
+history, so R2's media bucket is then their one copy.
+
+### KI-064 · fixed · studio · Everything needed to work on a film again was on one disk, with one snapshot fourteen days old
+
+**Symptom.** None yet: found on 2026-10-12 by asking what would be lost if the studio's machine
+died. Finished films would have kept playing (their copies are on R2) and no account, credit or
+record would have gone (MongoDB). But each film's code and narration takes, its maker's uploaded
+pictures and voice notes, every project's cast, approved voice lines and brand kit, the built
+templates, older versions' sources and the Claude sessions were on the data disk and nowhere
+else: no "Change something", no going back a version, no publishing an older film to YouTube, no
+next episode with the same cast. The one snapshot of that disk was from 2026-09-28.
+**Cause.** `ops.sh snapshot` existed and nothing ran it; the runbook's rebuild assumed the disk
+survives ("a rebuild reattaches the existing data disk") and had no step that restores one. The
+films' move to R2 (2026-10-07) covered what a viewer plays, and read as "the films are backed
+up". Nothing listed what a film is made of beside what it plays as.
+**Fixed.** Three copies, each for another failure (`studio/deploy/README.md`, "Where the copies
+are"): Azure Backup of the whole machine nightly, 30 days, in a vault the machine cannot reach;
+the studio's home mirrored to a private R2 bucket every 15 minutes with 30 days of what each pass
+replaced (`studio/backup.py`, rules in `deploy/backup-filter.txt`); the site's database exported
+nightly (`studio/dbdump.py`). `studio/restore.py` brings the home or one film back, and
+"If the machine is gone" is the procedure for each way it can go. Delete-locks on the data disk,
+the key vault and the backup vault. The first mirror pass: 87,212 files, 162.8 GB.
+**Not covered.** A film's pictures and sound are mirrored as they are now; of an older version
+only what the film itself keeps (the last three). The laptop's own project folders are not part
+of this. If Azure itself is lost, the key that seals the site's YouTube grants and ElevenLabs
+keys goes with it and each owner connects again.
+**Lesson.** "Backed up" is a claim about a restore: say what would be opened again, by which
+command, and how old it would be -- and run that command once before believing it.
+
+### KI-065 · fixed · studio · Rebuilding the machine by its own script would have dropped the films' storage keys and left it without its tunnel
+
+**Symptom.** None yet: read off `studio/deploy/provision.sh` on 2026-10-12, before it was ever
+needed. Run against the surviving data disk it would have (1) written the machine's `.env` again
+from the laptop's, keeping four settings of the VM's own -- and the films' R2 keys were not
+among them, nor in the laptop's file, so new films would have gone back to Azure storage or
+nowhere; and (2) copied `~/.cloudflared` "except `backup-*`", while the laptop's only copy of the
+tunnel credential had been moved into `backup-20260928-moved-to-vm/` at the cutover, on purpose,
+so the laptop could not start a second connector. A rebuilt machine with no credential has no
+tunnel: kitcut.ai would not have found the studio.
+**Cause.** The script was written for the first build, when the laptop held every key, and was
+never run again as the VM's `.env` took on settings of its own (the Claude login, the tunnel,
+R2). Each later change added one name to a keep-list instead of asking which file is the truth.
+**Fixed** (`studio/deploy/provision.sh`, `ops.sh secrets`). The machine's own `.env` is kept as
+it is; a machine with none gets it from the sealed file of the machine's keys in the mirror,
+which only the key vault opens (`studio/sealenv.py`, `deploy/unseal.sh`; `ops.sh secrets check`
+proves it opens and is current), or from a file or another VM named on the command line, and an
+empty or short one is refused rather than written. The tunnel credential comes from the VM, the
+same sealed file, or the laptop wherever under `~/.cloudflared` it sits. A machine built again at the old address
+has its old host key forgotten first.
+**Lesson.** A rebuild script that is only ever read is a guess. The rehearsal
+(`provision.sh --drill`) is how it gets run without waiting for the day it is needed.
+
+### KI-066 · open · studio · One film's narration step took 12.5 GB of the machine's 16 and the whole studio froze
+
+**Symptom.** 2026-10-12, from 12:01 PDT: kitcut-studio-1 stopped answering. SSH timed out at the
+banner, studio.kitcut.ai returned Cloudflare 1033 and 502, Azure said "VM running" with its agent
+not ready, the load average was 96 on 4 cores, and Azure's own metric for available memory read
+8.6, 1.8, 0.1, 0.0, 0.0 GB in five-minute steps while the OS disk's queue went from 2 to 302.
+The kernel had killed a 12.5 GB python in `step-...-w564nf-sketch-vo-jobs` at 11:59:50, and one
+like it at 11:42:10. Two films were being made, both 30 seconds long, from two accounts made
+sixteen minutes apart, with the same 4,511-character prompt asking for a Hindi voice-over
+written in Roman letters; each film's narration step ran away 3.5 and 7 minutes after it started.
+**Cause.** Three things in a row; the first two were found the same afternoon, on the laptop,
+with film w564nf's own `vo.json` and five takes.
+- *The studio's OpenRouter key was at its own limit.* The key has a $50 limit set on it and had
+  used $50.05 ("Key limit exceeded (total limit) ... does not reset", HTTP 403; the VM's key is
+  the same one, read from `openrouter.ai/api/v1/key` on the VM). From that moment the service
+  that listens to every narration take (`studio/procs.py` `SCORER`) refused every call, in any
+  language, and `sketch-vo.py` scored every take on the machine instead, as it is meant to. Nothing
+  said so: the line that reports it was printed unflushed and died with the step.
+- *The fallback built a Whisper per thread.* With a service listening, the score stage runs
+  `--jobs` threads (the studio: 8). Each thread whose call failed went to `_whisper()`, which
+  tested `_WHISPER is None` with no lock: five takes, five threads, five models, all decoding at
+  once. For English that is five `small.en` and nobody noticed. For any other language it is five
+  `large-v3`: measured on the laptop with the film's takes, five models built in the same second
+  and 13.7 GB in 54 s (the VM's step: 12.5 GB in about 45 s, then the kill). It is not the Hindi,
+  and not the prompt: any narration that is not English would have done it once the key was out.
+- *A step's cap was 12 GB on a 16 GB machine.* `procs.Job` gives every step `STUDIO_FILM_MEM_GB`
+  (default 12), set when the VM had 32 GB and never lowered at the move to 16 (KI-032 added the
+  cap; the downsize of 2026-09-28 changed pools and timeouts, not this). A step that runs away
+  is meant to be killed and to fail its own film. At 12 of 16 GB, with no swap, the machine is
+  out of memory before the cap is reached: everything else is paged out to a hard disk, and the
+  server, sshd and the tunnel stop answering minutes before the kill. Two such steps cannot fit
+  at all.
+- *What was running beside it made it worse.* A first upload of the studio's home to R2
+  (rclone, capped at 1 GB, reading 160 GB through the page cache, since 11:02), the release
+  tests of a ship started at 11:41 (real browsers), and another session's render (three
+  browsers, capped at 6 GB). Each was capped or niced by itself; nobody added the caps up: 12 +
+  6 + 1 and a release's tests on a 16 GB machine.
+**What the site did.** `lib/studiowatch.js`, live for an hour by then, emailed the owner at 12:05
+("The studio has not answered for 5 minutes") and put the two films down for their makers,
+credits back, once the studio had been away fifteen minutes.
+**Done so far.** `sketch-vo.py` holds one local model and sends one take through it at a time,
+whoever asks (`_LOAD`, `_LOCAL`); a service that refuses the key (401, 402, 403:
+`ScorerRefused`) is asked once in a run and says so once, flushed. The same five takes: one
+model, one take at a time, 3.3 GB, 72 s. `check-sketch.py` holds all of it with eight threads and
+a stand-in model. `ops.sh status` prints what the key has left and a WARNING when it is at its
+limit. A step's cap is read off the machine (`procs.step_mem_gb`: 12 GB, never more
+than two fifths of its memory -- 6.2 GB on this VM), so a resize cannot leave it behind again;
+`studio/test_memory.py` holds it. It is live with the first release shipped after this entry.
+The mirror's passes yield too: three transfers on idle I/O, and a pass does nothing when under
+3 GB is available (`backup.short_of_memory`).
+**Open.**
+1. Done: restarted from Azure at 12:26 PDT on the owner's word (a graceful restart of a machine
+   that far gone took twelve minutes); the studio and its tunnel answered again at 12:38.
+2. Ship the release that carries the cap, and check 6.2 GB against the step peaks in
+   `STUDIO_HOME/usage/steps-*.jsonl`: a real step that needs more must be found before a
+   customer's film is.
+3. **The key's limit has to be raised by the owner** (openrouter.ai, Keys): until then every
+   take is scored on the machine (a long film's narration is minutes slower, KI-043), and what
+   else uses the key fails outright: people drawn from photos (`head-rig.py`), pictures painted
+   through OpenRouter, voice notes.
+4. The mirror's first upload was stopped part-way by the freeze (it resumes where it was) and
+   its timers are not installed; release e3496e8 is built on the VM and not current.
+5. A Hindi script written in Roman letters cannot be checked: Whisper writes Hindi in
+   Devanagari, so the five takes scored 0.00 to 0.28 against their own lines though they were
+   read correctly. Such a film is made, with takes re-recorded for "added words" that were not
+   added and word times that are guesses. It wants the transcript put into Roman letters before
+   the comparison; not built.
+**Lesson.** A cap protects a machine only if the caps that can be in force at once add up to less
+than the machine. Before starting a bulk job or a ship on the studio's VM, look at what else is
+capped to how much (`ops.sh usage`, `systemctl list-units 'kitcut-*' 'sports-*'`), and do one
+heavy thing at a time: a release's tests and a 160 GB upload were both started because each was
+"capped and niced".
+
+### KI-067 · open · studio · On kc-local, a push to studio-poc wiped uncommitted edits in /srv/kitcut/repo
+
+**Symptom.** 2026-10-25, 13:22:58 PDT: sections added to `docs/reference.md`, a fix in the
+video-h3 skill and another session's edits to tracked files in `/srv/kitcut/repo` were gone, and
+`git status` showed a clean tree. The reflog read "checkout: moving from studio-poc to
+studio-poc" and "branch: Reset to origin/studio-poc", 36 s after another session's push of
+20004f3. Untracked files survived.
+**Cause.** `kitcut-autoship.service` (`studio/deploy/autoship.py`) ships studio-poc whenever
+GitHub's head moves. It runs `git checkout -q -f -B studio-poc origin/studio-poc` in the checkout
+it runs from, `/srv/kitcut/repo`, which is also where sessions on kc-local start. `-f` discards
+changes to tracked files without a word. That is by design: it mirrors GitHub (live first,
+tested after; the owner's choice of 2026-10-16) and never looks for a dirty tree. The same reset
+is in the reflog at 00:34 that morning and four times on 2026-10-23.
+**Workaround.** Treat `/srv/kitcut/repo` as the deploy mirror. Edit in a worktree on its own
+branch (`git worktree add /srv/kitcut/worktrees/<name> -b <branch> origin/studio-poc`, then
+symlink `.venv` from the repo so scripts run). Push from a session that can: kc-local has no
+GitHub credentials, and its `origin` is the local bare repo, which autoship fills from the public
+GitHub URL.
+**Fix, not made.** autoship could refuse to move a dirty checkout, or stash first and say so.
+That is the owner's call, because it can delay a ship.
+
+### KI-068 · fixed · studio · A tall painted film had paper-coloured bands at the top and bottom
+
+**Symptom.** 2026-10-23: Brella's survey demo, a painted film in 9:16, showed empty
+paper-coloured bands above and below its paintings for most of its length.
+**Cause.** The painted look never asked the painter for a tall picture. `sketch-paint.py` painted
+every scene 16:9 (Muse was sent the fixed `UNLISTED` 16:9, Gemini a hardcoded 16:9), and Claude
+was told the frame (`film.frame_note`) but not the painting's shape, so `looks/painted.md`'s
+"1920x1280, drawn 2000 wide" left a 1080x1920 frame with about two thirds of its height covered.
+**Fix.** The scenes are painted in the film's own shape (`sketch-paint.py frame_aspect`, from the
+manifest's `frame`; a wide painting keeps its old cache key), by the same painter as a wide film:
+Muse, or the painter of the project's style picture. Asked for 9:16, Muse paints 2:3 (1280x1920)
+with rough paper up to about 150 px in at its edges (the painter bake-off of 2026-10-28,
+`paint-compare.py --aspect 9:16`), so `frame_note` tells a tall Muse film's Claude to draw a
+painting about 1430 wide, which covers the frame and keeps the paper off screen; a style picture's
+painter paints 9:16, drawn about 1170 wide (`film.TALL_PAINTING`). `studio/test_paint_frame.py`
+holds all of it.

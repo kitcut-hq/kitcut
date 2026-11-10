@@ -21,8 +21,10 @@ printed words, labels, stamps and marks -- every piece entering and moving on th
 1. Decide the idea and the direction (above): one clear point, told in the film's length, as a
    run of pages -- one for each beat of the narration, most of them 4-8 s on screen.
 2. Write the narration in `vo.json` and call `voice`. It returns each line's start and end, and
-   every word's time on the film clock. If a line runs past the end of the film or `acc` is
-   below 0.9, shorten or rephrase it and record again (a number read as words and written as
+   every word's time on the film clock. If a line's `acc` is below 0.9, rephrase it and
+   record again. If the narration needs a little more than the film's length, the studio
+   lengthens the film and says so; only when it says the narration still does not fit do you
+   cut words and record again (a number read as words and written as
    digits scores low without being wrong).
 3. Write `paint.json` (see "The cut-outs") and call `paint`. Read `images/sheet.jpg`. Repaint an
    image that is wrong -- lettering in it, the wrong subject, a background or paper shape left
@@ -37,8 +39,16 @@ printed words, labels, stamps and marks -- every piece entering and moving on th
    that before anything else. Then look hard at the details: a page that stays bare for long
    after it arrives, a piece covering words or another piece's point, text too small or hard to
    read, a piece cut off by the frame, a reveal the next page covers before it has been seen;
-   and from `motion`, any stretch where nothing moves. Fix and re-check. Two review rounds at
-   most.
+   and from `motion`, any stretch where nothing moves.
+   Then Read every `outputs/review/film-NN.jpg` that `motion` lists: the whole film, a frame a
+   second, each with its time and the words being said. Read them in order, like a storyboard,
+   against the narration: is what each line says on screen while it is said? Does anything hold
+   for five seconds with nothing happening -- a shot, a hand, a prop? Then look inside the
+   seconds, where a frame a second cannot see: call `strip` on every moment somebody goes into,
+   out of or behind something, turns round, or moves from one place to another, and on each
+   moment `motion` points at. Fix what is broken, `strip` what you changed, and look once more.
+   Two review rounds, and a third when the second still found something broken: a film
+   that goes out with a mistake you saw costs its owner more than the minutes.
 6. Write `score.json` and `sfx.json`, then call `sound` once to prove they render. The music
    ducks under the voice by itself.
 7. Finish with one or two sentences: what the film shows and says, and anything from the prompt
@@ -63,7 +73,9 @@ The studio has set `backend`, `model`, `max_images` and `cutouts`; leave them. Y
     in a picture: words go on screen in code, where they are sharp and can move.
   - It comes back as `images/<name>.webp`, up to 1024 px on its long side. An image without
     `cutout` is a whole scene (1920x1280), drawn with `SK.image`.
-  - The painter works from the words alone; `ref` changes nothing.
+  - `ref` (on an image): a picture it is painted from, for its characters -- another image's
+    name, `pic_<name>` or `cast_<name>` (the project's pictures and painted characters), or a
+    list of up to 4. The painter keeps the faces, clothes and proportions it sees there.
 
 # Pages and pieces (`engine/collage.js`)
 

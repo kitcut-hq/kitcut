@@ -29,6 +29,7 @@ os.environ["STUDIO_HOME"] = HOME
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import server  # noqa: E402 -- imports agent, which imports _env first
 import agent  # noqa: E402
+import episode  # noqa: E402
 import film as films  # noqa: E402
 import store  # noqa: E402
 import validate  # noqa: E402
@@ -43,6 +44,10 @@ from aiohttp.test_utils import TestClient, TestServer  # noqa: E402
 # online has its own test against a stand-in (test_media.py).
 os.environ.pop("STUDIO_MEDIA_BASE", None)
 server.procs.SECRETS.pop("STUDIO_MEDIA_SAS", None)
+os.environ.pop("STUDIO_R2_ENDPOINT", None)  # nor to R2, whatever the .env says
+os.environ.pop("STUDIO_MEDIA_OLD_BASE", None)
+server.procs.SECRETS.pop("STUDIO_R2_KEY_ID", None)
+server.procs.SECRETS.pop("STUDIO_R2_SECRET", None)
 
 TOKEN = "test-token"
 USAGE = {"input_tokens": 1000, "output_tokens": 2000, "cache_read_input_tokens": 100000}
@@ -121,6 +126,10 @@ async def fake_claude(
         with open(film.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as f:
             json.dump({"lines": []}, f)
         await asyncio.sleep(60)
+        return
+    if "keeps the last film.js" in prompt:  # an episode that started from the last one's
+        for f in ("score.json", "sfx.json"):  # code (episode.py) and never changed its picture
+            shutil.copy(os.path.join(ex, f), film.dir)
         return
     for f in films.MADE:
         shutil.copy(os.path.join(ex, f), film.dir)
@@ -264,6 +273,74 @@ async def projects(c, auth, mem, check):
     r = await c.get("/api/library/pictures/logo/thumb.png?project=" + P, headers=other)
     check(r.status == 404, "its person's only")
 
+    # what a picture is for: a role on the way in, changed later, refused when it is not one
+    async def upload(who=me):
+        r = await c.post(
+            "/api/uploads", data=buf.getvalue(), headers=who | {"Content-Type": "image/png"}
+        )
+        return (await r.json()).get("id")
+
+    r = await c.post(
+        "/api/library/pictures",
+        json={"project": P, "upload": await upload(), "name": "city", "role": "style"},
+        headers=me,
+    )
+    check(r.status == 201 and (await r.json()).get("role") == "style", "a picture takes a role")
+    r = await c.post(
+        "/api/library/pictures",
+        json={"project": P, "upload": await upload(), "name": "odd", "role": "paint"},
+        headers=me,
+    )
+    check(r.status == 400, "a role that is not one is refused")
+    role_of = "/api/library/pictures/city/role"
+    r = await c.post(role_of, json={"project": P, "role": "scene"}, headers=me)
+    check(r.status == 200 and (await r.json())["role"] == "scene", "a picture's role changes")
+    r = await c.post(
+        "/api/library/pictures/city/role", json={"project": P, "role": "scene"}, headers=other
+    )
+    check(r.status == 404, "only by its person")
+    r = await c.post(role_of, json={"project": P, "role": "x"}, headers=me)
+    check(r.status == 400, "and only to a role")
+    lib = await (await c.get("/api/library?project=" + P, headers=me)).json()
+    check(
+        {p["name"]: p.get("role") for p in lib["pictures"]} == {"city": "scene", "logo": None},
+        "the listing says each picture's role (%s)" % lib["pictures"],
+    )
+    r = await c.delete("/api/library/pictures/city?project=" + P, headers=me)
+    check(r.status == 200, "and a picture with a role is taken out as any other")
+    # an attached picture's role: checked, and the film's inputs/roles.json says it (an account
+    # of its own: this one's library is looked at below)
+    rl = auth | {"X-Client-Ip": "u:proj-roles"}
+    a1, a2 = await upload(rl), await upload(rl)
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "a city", "attachments": [a1], "picture_roles": {a2: "style"}},
+        headers=rl,
+    )
+    check(r.status == 400, "a role for a picture not attached is refused")
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "a city", "attachments": [a1], "picture_roles": {a1: "brief"}},
+        headers=rl,
+    )
+    check(r.status == 400, "a role that is not one is refused for an attachment too")
+    r = await c.post(
+        "/api/films",
+        json={"prompt": "a city", "attachments": [a1, a2], "picture_roles": {a1: "style"}},
+        headers=rl,
+    )
+    fid = (await r.json()).get("id")
+    f = films.Film.open(fid) if r.status == 202 else None
+    roles_p = f and f.path("inputs", "roles.json")
+    check(
+        f is not None
+        and [a.get("role") for a in f.record()["attachments"]] == ["style", None]
+        and json.load(open(roles_p, encoding="utf-8")) == {"upload1": "style"},
+        "an attached picture keeps its role, in its record and in inputs/roles.json (%s)"
+        % (f and f.record().get("attachments")),
+    )
+    await wait_for(c, auth, fid)
+
     # an organisation's project: a member's own upload becomes the organisation's picture
     member = auth | {"X-Client-Ip": "u:tm-jo"}
     team = auth | {"X-Client-Ip": "o:tm-northwind", "X-Member": "u:tm-jo"}
@@ -295,6 +372,15 @@ async def projects(c, auth, mem, check):
         headers=me,
     )
     check(r.status == 400, "and is one of KitCut's voices")
+    # a quality above a draft, only where the painter has one (film.chooses_quality)
+    for body, why in (
+        ({"look": "collage", "quality": "ultra"}, "a quality that is not one"),
+        ({"look": "drawn", "quality": "high"}, "a drawn film"),
+        ({"look": "painted", "quality": "high"}, "a painted film outside a project (Muse)"),
+        ({"look": "painted", "quality": "medium", "project": project}, "a project with no style"),
+    ):
+        r = await c.post("/api/films", json={"prompt": "x"} | body, headers=me)
+        check(r.status == 400, "a quality is refused for %s (%d)" % (why, r.status))
     # the site asks as the workspace ("o:proj", the personal one: the same owner as "u:proj"),
     # says who asked, and sends the narrator the project set
     r = await c.post(
@@ -352,6 +438,35 @@ async def projects(c, auth, mem, check):
         "the project's library has the episode's cast (%s)" % lib,
     )
     check(own["cast"] == [] and own["films"] == [], "and the person's own does not")
+    # while the setting names the project, its next episode starts from this one's code
+    os.environ[episode.SETTING] = P
+    try:
+        r = await c.post(
+            "/api/films", json={"prompt": "episode two", "project": project}, headers=me
+        )
+        ep2 = (await r.json())["id"]
+        st = await wait_for(c, auth, ep2)
+        f2 = films.Film.open(ep2)
+        check(
+            st.get("status") == "done"
+            and (f2.record().get("carried") or {}).get("film") == ep
+            and (mem.docs[ep2].get("carried") or {}).get("film") == ep
+            and os.path.exists(f2.path("library", "start", "film.js")),
+            "the next episode starts from the last one's code, and its run record says so",
+        )
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "episode three keeps the last film.js", "project": project},
+            headers=me,
+        )
+        ep3 = (await r.json())["id"]
+        st = await wait_for(c, auth, ep3)
+        check(
+            st.get("status") == "error" and "the last episode" in (st.get("error") or ""),
+            "one that leaves the last episode's film.js as it was fails (%s)" % st.get("error"),
+        )
+    finally:
+        del os.environ[episode.SETTING]
     r = await c.get("/api/library?project=p-bad", headers=me)
     check(r.status == 404, "a library route with a bad project")
     r = await c.delete("/api/library/pictures/logo?project=" + P, headers=other)
@@ -484,6 +599,171 @@ NOT_LOGGED_IN = "Not logged in · Please run /login"
 BAD_TOKEN = "Failed to authenticate. API Error: 401 Invalid bearer token"
 
 
+def probe(mp4):
+    """(seconds, frame rate as ffprobe writes it) of a video."""
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries"]
+        + ["stream=r_frame_rate:format=duration", "-of", "json", mp4],
+        capture_output=True,
+        text=True,
+    ).stdout
+    j = json.loads(out or "{}")
+    return float(j["format"]["duration"]), j["streams"][0]["r_frame_rate"]
+
+
+async def unbranded(c, auth, mem, check, ids):
+    """A finished Free-plan film drawn again without its mark and closing (unbrand.py): only for
+    its own client; a failed render leaves the film exactly as it was; then the same film, 3 s
+    shorter, at the paid frame rate, still the film it was (done, its finish time, its costs)."""
+    unbrand = server.unbrand
+    paid, free = ids[0], ids[1]
+    f = films.Film.open(free)
+    was = f.record()
+    mp4 = f.path("outputs", "film.mp4")
+    url = "/api/films/%s/unbrand"
+
+    async def stands(want):
+        for _ in range(600):
+            s = await (await c.get("/api/films/%s?since=100000" % free, headers=auth)).json()
+            if s.get("unbrand") in want:
+                return s
+            await asyncio.sleep(0.5)
+        return s
+
+    s = await (await c.get("/api/films/%s" % free, headers=auth)).json()
+    check(
+        s.get("branded") is True and "unbrand" not in s,
+        "a Free-plan film's status says it is branded",
+    )
+    r = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-0"})
+    check(r.status == 403, "another client cannot take a film's branding off (%d)" % r.status)
+    r = await c.post(url % paid, headers=auth | {"X-Client-Ip": "u:test-0"})
+    b = await r.json()
+    check(
+        r.status == 200 and b.get("branded") is False and b.get("unbrand") == "done",
+        "a film with no branding: nothing to do (%s)" % b,
+    )
+
+    # a render that comes out wrong: said, and the film is untouched
+    real = unbrand.check
+    unbrand.check = lambda *a: "forced: not the film"
+    try:
+        r = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1"})
+        again = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1"})
+        check(
+            r.status == 202 and again.status == 202 and len(unbrand.JOBS) == 1,
+            "asked for, and asked twice is the same job (%d, %d)" % (r.status, again.status),
+        )
+        s = await stands(("failed", "done"))
+    finally:
+        unbrand.check = real
+    rec = f.record()
+    secs, rate = probe(mp4)
+    check(
+        s.get("unbrand") == "failed"
+        and s.get("status") == "done"
+        and s.get("branded") is True
+        and rec.get("state") == "done"
+        and rec.get("ok") is True
+        and rec.get("branding") is True
+        and rec.get("finished") == was.get("finished")
+        and abs(secs - 8) < 0.1
+        and rate == "30/1"
+        and mem.docs[free].get("state") == "done"
+        and mem.docs[free].get("branding") is True
+        and not os.path.exists(f.path("temp", "unbrand"))
+        and not os.path.exists(f.path(unbrand.SIDE)),
+        "a failed one leaves the film as it was: done, branded, 8 s (%s, %.2f s, %s)"
+        % (s.get("unbrand"), secs, (rec.get("unbrand") or {}).get("error")),
+    )
+
+    # asked again: the same film without them
+    r = await c.post(
+        url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1", "X-Fps": "60"}
+    )
+    check(r.status == 202, "a failed one can be asked for again (%d)" % r.status)
+    s = await stands(("done", "failed"))
+    rec = f.record()
+    secs, rate = probe(mp4)
+    d = mem.docs[free]
+    check(
+        s.get("unbrand") == "done" and s.get("branded") is False and s.get("status") == "done",
+        "its status: no branding left (%s, %s)"
+        % (s.get("unbrand"), (rec.get("unbrand") or {}).get("error")),
+    )
+    check(
+        abs(secs - 5) < 0.1 and rate == "60/1",
+        "the same film without the closing, at the paid frame rate (%.2f s, %s)" % (secs, rate),
+    )
+    check(
+        rec.get("branding") is False
+        and rec.get("fps") == 60
+        and rec.get("state") == "done"
+        and rec.get("ok") is True
+        and rec.get("finished") == was.get("finished")
+        and rec.get("seconds") == was.get("seconds")
+        and rec.get("cost_usd") == was.get("cost_usd")
+        and (rec.get("unbrand") or {}).get("before", {}).get("fps") == 30,
+        "its record: still the film it was, finished when it was, and what it was before",
+    )
+    check(
+        d.get("branding") is False
+        and d.get("fps") == 60
+        and d.get("state") == "done"
+        and (d.get("unbrand") or {}).get("state") == "done"
+        and len(d.get("calls", [])) == 1,
+        "the run's record says so too, with no new Claude call",
+    )
+    check(
+        os.path.getsize(f.path("outputs", "film_poster.png")) > 1000
+        and os.path.getsize(f.path("audio", "final.wav")) > 1000
+        and not os.path.exists(f.path("temp", "unbrand"))
+        and not os.path.exists(f.path(unbrand.SIDE))
+        and not os.listdir(unbrand.MARKS),
+        "its poster and sound are the new film's, and nothing of the second render is left",
+    )
+    r = await c.post(url % free, headers=auth | {"Cf-Ray": "t", "X-Client-Ip": "u:test-1"})
+    b = await r.json()
+    check(
+        r.status == 200 and b.get("unbrand") == "done" and not unbrand.in_flight(),
+        "asked once more: already done",
+    )
+
+    # a server that went away mid-way: the leader finds the film by its mark (orphans). One whose
+    # new film was already in place is only recorded done; one tried too often is given up on,
+    # and its film stays as it is
+    gone = {"state": "running", "server": "gone.1", "tries": 1, "fps": 60}
+    unbrand.JOBS.pop(free, None)
+    f.update(unbrand=gone)
+    unbrand._set_mark(free)
+    found = [x.id for x, _ in unbrand.orphans()]
+    unbrand.resume(f, server.SCHED)
+    await asyncio.sleep(0.2)
+    rec = f.record()
+    check(
+        found == [free]
+        and rec["unbrand"]["state"] == "done"
+        and not os.listdir(unbrand.MARKS)
+        and mem.docs[free]["unbrand"]["state"] == "done"
+        and not unbrand.orphans(),
+        "an orphan whose new film was already in place is recorded done (%s)" % found,
+    )
+    f.update(branding=True, unbrand=gone | {"tries": unbrand.TRIES})
+    unbrand._set_mark(free)
+    unbrand.resume(f, server.SCHED)
+    await asyncio.sleep(0.2)
+    rec = f.record()
+    check(
+        rec["unbrand"]["state"] == "failed"
+        and rec.get("state") == "done"
+        and not os.listdir(unbrand.MARKS)
+        and mem.docs[free]["unbrand"]["state"] == "failed"
+        and not unbrand.in_flight(),
+        "one whose server went away %d times is given up on, the film untouched" % unbrand.TRIES,
+    )
+    f.update(branding=False, unbrand=rec["unbrand"] | {"state": "done"})  # as it really is
+
+
 async def main():
     bad = []
 
@@ -506,6 +786,8 @@ async def main():
             lim["lengths"] == {"min": films.LENGTHS[0], "max": films.LENGTHS[-1], "step": 5}
             and lim["prompt"]["max_chars"] == server.PROMPT_MAX
             and lim["attachments"]["pictures_per_film"] == server.uploads.MAX_IMAGES
+            and lim["library"]["style_pictures"] == server.stylekit.MAX_PICTURES
+            and lim["pictures"]["choose"] == {"looks": ["collage"], "style_routes": ["gpt"]}
             and lim["films"]["per_account_per_day"] == server.PER_CLIENT_DAILY
             and lim["films"]["at_once_per_account_max"] == server.AT_ONCE_MAX,
             "the limits are the constants the studio enforces (%s)" % lim["lengths"],
@@ -529,6 +811,10 @@ async def main():
         )
         n = [films.limits(s)["images"] for s in films.LENGTHS]
         check(n == sorted(n), "a longer film never gets fewer paintings (8 ... %d)" % n[-1])
+        check(
+            films.limits(55)["images"] == 8 and films.limits(60)["images"] == 12,
+            "a minute's painted film gets 12 paintings, a shorter one 8",
+        )
         vo = {"voice": validate.VOICES[0], "lines": [{"text": "Hi.", "start": 200}]}
         check(
             not validate._vo(vo, 12, 480) and validate._vo(vo, 12, 60),
@@ -556,6 +842,16 @@ async def main():
         check(TOKEN not in page, "the page relayed by the tunnel does not")
         r = await c.post("/api/films", json={"prompt": "x" * 10, "seconds": 7}, headers=auth)
         check(r.status == 400 and "seconds" in (await r.json())["error"], "a length off the list")
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "x" * (server.PROMPT_MAX + 1), "seconds": 15},
+            headers=auth,
+        )
+        said = await r.json()
+        check(
+            r.status == 400 and said.get("reason") == "prompt" and "Shorten" in said["error"],
+            "a prompt longer than the studio reads is refused, not cut (it was cut at 12,000)",
+        )
 
         # ------------------------------------------------ three films at once, three clients
         ids = []
@@ -676,6 +972,9 @@ async def main():
             )
         waits = [e for st in results for e in st["all_events"] if e["type"] == "wait"]
         check(bool(waits), "films queued for the renderer (%d waits)" % len(waits))
+
+        # ------------------------------------------------ the Free film, without its branding
+        await unbranded(c, auth, mem, check, ids)
 
         pv = [e for e in results[2]["all_events"] if e["type"] == "preview"][-1]["url"]
         r = await c.get(pv[pv.index("/files/") :])
@@ -1280,6 +1579,59 @@ async def main():
             and "keep the narration you have" in tools_mod.recording_refused(late_film, runs),
             "a narration that fits has the film's limit, no more",
         )
+        # ...and the length is a target, not a wall (2026-10-09): a narration that ends under the
+        # closing fade, or a little past the end, lengthens the film instead of losing its words
+        check(
+            (films.may_run_to(240), films.may_run_to(15), films.may_run_to(60, "9:16"))
+            == (300, 25, 75)
+            and films.may_run_to(170, "9:16") == 180
+            and films.may_run_to(170) == 212,
+            "a film may run a quarter over what was asked (ten seconds at least), a Short to 180 s",
+        )
+        lay((1, 50), (50.5, 58))
+        check(tools_mod.fit_length(late_film) is None, "a narration that fits changes nothing")
+        lay((1, 50), (50.5, 60.58))
+        got = tools_mod.fit_length(late_film)
+        with open(late_film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
+            grown_tl = json.load(f)
+        check(
+            got == {"was": 60, "now": 63, "asked": 60, "ends": 60.58, "top": 75}
+            and late_film.length == 63
+            and late_film.asked == 60
+            and late_film.record().get("length") == 60
+            and late_film.record().get("runs") == 63
+            and grown_tl["duration"] == 63
+            and tools_mod.narration_over(late_film) is None
+            and "the film is now 63 s long" in tools_mod.grown_note(got),
+            "a last line past the end makes the film longer, and says so: %r" % (got,),
+        )
+        lay((1, 50), (50.5, 59.5))
+        check(
+            tools_mod.fit_length(late_film)["now"] == 61 and late_film.length == 61,
+            "a last word under the closing fade gets its second and a half too",
+        )
+        lay((1, 50), (50.5, 58))
+        back = tools_mod.fit_length(late_film)
+        check(
+            back["now"] == 60
+            and late_film.length == 60
+            and not late_film.record().get("runs")
+            and "60 s long again" in tools_mod.grown_note(back),
+            "a narration recorded shorter brings the film back to what was asked",
+        )
+        lay((1, 50), (50.5, 70), (71, 90))
+        far = tools_mod.fit_length(late_film)
+        over = tools_mod.narration_over(late_film)
+        check(
+            far["now"] == 75
+            and late_film.length == 75
+            and over["ends"] == 90
+            and over["length"] == 75
+            and "asked for at 60 s may run" in tools_mod.fit_advice(late_film, 0),
+            "past what a film may run to, it is as long as it may be and the words are cut back",
+        )
+        lay((1, 50), (50.5, 58))
+        tools_mod.fit_length(late_film)
 
         # ------------------------------------------------ the server stops: interrupted, not cancelled
         r = await c.post(

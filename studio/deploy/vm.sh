@@ -7,6 +7,7 @@
 #                                                    [--public] [--dry-run]
 #   bash studio/deploy/vm.sh ssh    <name> [command...]
 #   bash studio/deploy/vm.sh ip     <name>
+#   bash studio/deploy/vm.sh own    <name>          # exit 0 when <name> is a machine of our own
 #   bash studio/deploy/vm.sh resize <name> <size>   # stop, resize, start (minutes of downtime)
 #   bash studio/deploy/vm.sh stop|start|delete <name>
 #   bash studio/deploy/vm.sh price <size>           # list price here, per hour and per month
@@ -19,6 +20,11 @@
 # and no inbound port on the internet at all. `--public` instead gives a machine a public IP and
 # SSH from this laptop's address only: throwaway benchmark boxes (KITCUT_RG=kitcut-bench, which
 # then goes in one `az group delete`).
+#
+# The one other way in is for Claude cloud sessions, which cannot join a VPN: ssh.kitcut.ai, a
+# second Cloudflare tunnel to this machine's sshd, locked at Cloudflare and usable with one key
+# (README, "SSH for Claude cloud sessions"; ssh-lock.mjs, ssh-tunnel.sh, cloud-env.sh). `ssh` and
+# everything built on it here work unchanged in such a session; the az actions do not.
 #
 # Region and group sit beside the films' blob account (kitcutst, kitcut-PROD, southcentralus), so
 # the upload of a finished film never leaves the region. Disks are Standard HDD (a decision:
@@ -46,16 +52,40 @@ DRY=0
 die() { echo "vm.sh: $*" >&2; exit 1; }
 run() { if [ "$DRY" = 1 ]; then echo "  would run: $*"; else "$@"; fi; }
 myip() { curl -fsS https://ifconfig.me; }
+# A Claude cloud session has no VPN, no az and no route to the VM's address. There the VM is its
+# own name, an SSH host alias that the environment's setup script wrote (cloud-env.sh): it leads
+# through ssh.kitcut.ai and brings its own key and host key, under the same file names as here.
+in_cloud() { [ "${CLAUDE_CODE_REMOTE:-}" = true ]; }
+# A machine that is not Azure's (the PC at home, kc-local): `<name> <address>` a line in
+# ~/.ssh/kitcut-hosts, which this laptop keeps and the repo does not -- a home address is nobody
+# else's business and changes with the router. Such a machine is reached exactly as a VM is
+# (same key, same user, same /srv/kitcut), so push.sh, serve.sh and ops.sh work on it unchanged;
+# what az does to a VM (create, resize, stop, start, delete) is refused for it.
+OWN_HOSTS="${KITCUT_HOSTS:-$HOME/.ssh/kitcut-hosts}"
+own_host() {
+  [ -f "$OWN_HOSTS" ] || return 1
+  awk -v n="$1" '$1 == n && $2 != "" { print $2; found = 1; exit } END { exit !found }' "$OWN_HOSTS"
+}
+not_own() { ! own_host "$1" >/dev/null || die "$1 is a machine of our own, not an Azure VM: $2 is done at the machine"; }
 vmip() {
   local ip
+  if own_host "$1"; then return; fi
+  if in_cloud; then
+    ssh -G "$1" 2>/dev/null | grep -qi '^proxycommand ' ||
+      die "this cloud session has no SSH route to $1: its environment needs the setup script from studio/deploy/cloud-env.sh (see /var/log/kitcut-setup.log)"
+    echo "$1"
+    return
+  fi
   ip="$(az vm show -d -g "$RG" -n "$1" --query publicIps -o tsv)"
   [ -n "$ip" ] || ip="$(az vm show -d -g "$RG" -n "$1" --query privateIps -o tsv)"
   echo "$ip"
 }
 sshto() {
-  local name="$1"; shift
+  local name="$1" host; shift
+  host="$(vmip "$name")"  # on its own line: inside the ssh command a failure here would be lost
+  [ -n "$host" ] || die "no address for $name"
   ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ConnectTimeout=15 \
-    -o UserKnownHostsFile="$HOME/.ssh/known_hosts.kitcut" "$ADMIN@$(vmip "$name")" "$@"
+    -o UserKnownHostsFile="$HOME/.ssh/known_hosts.kitcut" "$ADMIN@$host" "$@"
 }
 subnet_id() {
   az network vnet subnet show -g "$VPN_RG" --vnet-name "$VPN_VNET" -n "$SUBNET" --query id -o tsv
@@ -157,15 +187,24 @@ case "$cmd" in
     sshto "${args[@]}"
     ;;
   ip) vmip "${args[0]}" ;;
+  own) own_host "${args[0]}" >/dev/null ;;
   resize)
+    not_own "${args[0]}" resize
     run az vm deallocate -g "$RG" -n "${args[0]}"
     run az vm resize -g "$RG" -n "${args[0]}" --size "${args[1]}" --output none
     run az vm start -g "$RG" -n "${args[0]}"
     ;;
-  stop) run az vm deallocate -g "$RG" -n "${args[0]}" ;;
-  start) run az vm start -g "$RG" -n "${args[0]}" ;;
+  stop)
+    not_own "${args[0]}" stop
+    run az vm deallocate -g "$RG" -n "${args[0]}"
+    ;;
+  start)
+    not_own "${args[0]}" start
+    run az vm start -g "$RG" -n "${args[0]}"
+    ;;
   delete)
     name="${args[0]}"
+    not_own "$name" delete
     # the OS disk and NIC go with the VM (delete options set at create) and the data disk is
     # detached, kept; a --public machine's IP, NSG and VNET do not go by themselves, and bill
     run az vm delete -g "$RG" -n "$name" --yes --output none

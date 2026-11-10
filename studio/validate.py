@@ -16,11 +16,13 @@ import os
 import re
 import sys
 import json
+import contextlib
 from importlib import import_module
 
 sys.path.insert(
     0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 )
+import _narration as N  # noqa: E402
 import _sketch  # noqa: E402
 import _sketchaudio as A  # noqa: E402
 
@@ -35,11 +37,15 @@ MAX_JSON = 64 * 1024
 MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a whole film
 # "jobs": pinned for a person's own ElevenLabs voice (film._own_pins); every key a pin set
 # writes must be here, or the guard puts it back and this refuses it on every check
-VO_KEYS = set(VO_PINNED) | {"model", "voice", "style", "language", "lines", "cast", "jobs"}
+# "dry": a voice mixed with no room (_sketchaudio.vo_stereo)
+VO_KEYS = set(VO_PINNED) | {
+    "model", "voice", "style", "language", "lines", "cast", "jobs", "say", "dry",
+}
 # "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
-VO_LINE_KEYS = {"text", "start", "who"}
+VO_LINE_KEYS = {"text", "start", "who", "pause"}
+MAX_PAUSE_S = 15  # the quiet a line may ask for before it: a gag's beat, a sunset without words
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
-PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts"}
+PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts", "style_ref", "quality", "redo"}
 # a cut-out (film.CAPS "cutouts") is painted on a canvas of its own shape
 ASPECTS = ("1:1", "2:3", "3:2", "3:4", "4:3", "16:9", "9:16")
 LANG = re.compile(r"^[a-z]{2,3}(-[A-Za-z]{2,4})?$")
@@ -81,6 +87,20 @@ def _vo(d, max_lines, length=60, people=()):
         out.append('vo.json: language is an ISO 639-1 code such as "en" or "uk"')
     if not isinstance(d.get("style", ""), str) or len(d.get("style", "")) > 300:
         out.append("vo.json: style is one line of text (at most 300 characters)")
+    if "dry" in d and not isinstance(d["dry"], bool):
+        out.append("vo.json: dry is true (a voice with no room sound) or false")
+    say = d.get("say", {})
+    if (
+        not isinstance(say, dict)
+        or not all(
+            isinstance(k, str) and isinstance(v, str) and 0 < len(k) <= 40 and 0 < len(v) <= 60
+            for k, v in say.items()
+        )
+        or len(say) > 30
+    ):
+        out.append(
+            'vo.json: say is {"word as written": "how the voice should say it", ...} (30 at most)'
+        )
     cast = d.get("cast", {})
     if not isinstance(cast, dict):
         out.append('vo.json: cast is {"p1": {"voice": "..."}, ...}')
@@ -127,7 +147,9 @@ def _vo(d, max_lines, length=60, people=()):
         if len(ln["text"]) > MAX_LINE_CHARS:
             out.append("vo.json: line %d is over %d characters" % (i, MAX_LINE_CHARS))
         if set(ln) - VO_LINE_KEYS:
-            out.append("vo.json: line %d may only have text (and start, who)" % i)
+            out.append("vo.json: line %d may only have text (and pause, start, who)" % i)
+        if "pause" in ln and not _num(ln["pause"], 0, MAX_PAUSE_S):
+            out.append("vo.json: line %d pause is seconds, 0-%d" % (i, MAX_PAUSE_S))
         if "who" in ln and not own and (ln["who"] not in people or ln["who"] not in cast):
             out.append(
                 "vo.json: line %d who %r must be one of this film's people with a voice in cast"
@@ -138,7 +160,16 @@ def _vo(d, max_lines, length=60, people=()):
     return out
 
 
-def _paint(d, length, caps):
+MAX_REFS = 4  # sketch-paint.py MAX_REFS: the pictures one painting is made from
+CHARACTERS = 16  # library.CHARACTERS: a project's painted characters
+CAST_NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")  # library.NAME: a kept painting joins the cast
+
+
+def _paint(d, length, caps, film_dir=None, cast=None):
+    """`film_dir`: the film's folder, whose project pictures and painted characters
+    (inputs/pic_<name>.*, inputs/cast_<name>.*) a ref may name. `cast`: an episode's
+    {"drawn": names, "painted": names} -- a painting it keeps ("keep": true) joins its project's
+    cast (library._keep_painted); None for a film outside projects, which keeps none."""
     out = []
     if not isinstance(d, dict):
         return ["paint.json must be an object"]
@@ -150,7 +181,7 @@ def _paint(d, length, caps):
     ims = d.get("images", [])
     kinds = paint_kinds(caps)  # what this film's capabilities paint (film.CAPS)
     cap = sum(limits(length)[kind["cap"]] for kind in kinds)
-    keys = {"name", "prompt", "ref"} | {k for kind in kinds for k in kind["keys"]}
+    keys = {"name", "prompt", "ref", "keep", "about"} | {k for kind in kinds for k in kind["keys"]}
     if not isinstance(ims, list) or len(ims) > cap:
         return out + ["paint.json: images is a list of at most %d" % cap]
     names = [im.get("name") for im in ims if isinstance(im, dict)]
@@ -164,8 +195,8 @@ def _paint(d, length, caps):
             out.append(str(e))
         if not isinstance(im.get("prompt"), str) or not 0 < len(im["prompt"]) <= 2000:
             out.append("paint.json: image %d needs a prompt (at most 2000 characters)" % i)
-        if "ref" in im and (im["ref"] not in names or im["ref"] == im.get("name")):
-            out.append("paint.json: image %d ref must name another image" % i)
+        out += _ref(im, i, names, film_dir)
+        out += _keep(im, i, cast)
         if set(im) - keys:
             out.append("paint.json: image %d may only have %s" % (i, ", ".join(sorted(keys))))
         c = im.get("cutout", False)
@@ -178,7 +209,101 @@ def _paint(d, length, caps):
             out.append("paint.json: image %d aspect is one of %s" % (i, ", ".join(ASPECTS)))
     if len(set(names)) != len(names):
         out.append("paint.json: image names must be unique")
-    return out
+    return out + _kept_count(ims, cast) + _named(ims, cast)
+
+
+def _ref(im, i, names, film_dir):
+    """An image's "ref": another image, a project picture or a painted character; or a list of
+    up to MAX_REFS of them."""
+    if "ref" not in im:
+        return []
+    ref = im["ref"]
+    refs = ref if isinstance(ref, list) else [ref]
+    if not refs or len(refs) > MAX_REFS or not all(isinstance(r, str) and r for r in refs):
+        return ["paint.json: image %d ref is a name, or a list of up to %d names" % (i, MAX_REFS)]
+    if len(set(refs)) != len(refs):
+        return ["paint.json: image %d ref names a picture twice" % i]
+    for r in refs:
+        if r in names and r != im.get("name"):
+            continue
+        if not (r not in names and film_dir and _sketch.project_picture(film_dir, r)):
+            return [
+                "paint.json: image %d ref %r must name another image, or one of this film's "
+                "project pictures (pic_<name>), painted characters (cast_<name>) or attached "
+                "pictures marked as how to draw something (upload<n>)" % (i, r)
+            ]
+    return []
+
+
+def _keep(im, i, cast):
+    """A painting kept for the project's cast: "keep": true, with "about"."""
+    if "keep" in im and not isinstance(im["keep"], bool):
+        return ["paint.json: image %d keep is true or false" % i]
+    if "about" in im and not (isinstance(im["about"], str) and 0 < len(im["about"]) <= 200):
+        return ["paint.json: image %d about is one line saying who it is (at most 200)" % i]
+    if not im.get("keep"):
+        return []
+    if cast is None:
+        return ["paint.json: image %d keep is for a project's episodes; this film has none" % i]
+    name = im.get("name") or ""
+    if not CAST_NAME.match(name):
+        return [
+            "paint.json: image %d is kept in the cast under its name: lowercase letters, digits "
+            "and _, starting with a letter" % i
+        ]
+    if not im.get("about"):
+        return ['paint.json: image %d is kept: give it "about", who it is and what they wear' % i]
+    if name in cast["drawn"]:
+        return [
+            "paint.json: image %d: the cast has a drawn member called %s; name it else" % (i, name)
+        ]
+    return []
+
+
+def _kept_count(ims, cast):
+    """The project's painted characters once this film's kept paintings join them, over the cap."""
+    if not cast:
+        return []
+    new = {im.get("name") for im in ims if isinstance(im, dict) and im.get("keep") is True}
+    if len(set(cast["painted"]) | new) > CHARACTERS:
+        return [
+            "paint.json: the project's cast holds %d painted characters and has %d: keep fewer "
+            "new ones, or keep one as the next version of a character it has"
+            % (CHARACTERS, len(cast["painted"]))
+        ]
+    return []
+
+
+def _named(ims, cast):
+    """The painted characters the prompt names (@name): once paintings are written, each is
+    painted from its picture in at least one of them."""
+    if not cast or not cast.get("named") or not ims:
+        return []
+    refs = set()
+    for im in ims:
+        r = im.get("ref") if isinstance(im, dict) else None
+        refs |= {x for x in (r if isinstance(r, list) else [r]) if isinstance(x, str)}
+    gone = [n for n in cast["named"] if "cast_" + n not in refs]
+    if not gone:
+        return []
+    return [
+        "paint.json: the prompt names %s: paint the paintings they are in from their pictures, "
+        '"ref": %s' % (", ".join("@" + n for n in gone), ", ".join('"cast_%s"' % n for n in gone))
+    ]
+
+
+def _cast_of(film):
+    """An episode's cast as _paint checks a kept painting against it; None outside projects."""
+    rec = film.record()
+    if not (rec.get("project") or {}).get("id"):
+        return None
+    got = rec.get("library") or {}
+    drawn = {c["name"] for c in got.get("cast") or []}
+    if os.path.isdir(film.path("cast")):
+        drawn |= {n[:-3] for n in os.listdir(film.path("cast")) if n.endswith(".js")}
+    painted = [c["name"] for c in got.get("painted") or []]
+    named = [n for n in rec.get("characters") or [] if n in painted]
+    return {"drawn": drawn, "painted": painted, "named": named}
 
 
 def _cut_ok(c):
@@ -258,6 +383,62 @@ def _sfx(d, length):
     return out
 
 
+MAX_SOUNDS, MAX_THEMES = 24, 6  # what a series' sounds.json keeps (library.py)
+MAX_THEME_EVENTS = 40
+
+
+def _kit(film):
+    """The film's kept sounds (sounds.json), or {} -- sfx.json and score.json play them by name."""
+    d, _ = _load(film, "sounds.json")
+    return d if isinstance(d, dict) else {}
+
+
+def _sounds(d, length):
+    """sounds.json: a series' named sound effects and themes (_sketchaudio.expand_sounds)."""
+    if not isinstance(d, dict) or set(d) - {"sounds", "themes"}:
+        return ['sounds.json must be {"sounds": {name: {about, cue}}, "themes": {name: ...}}']
+    out = []
+    sounds, themes = d.get("sounds") or {}, d.get("themes") or {}
+    if not isinstance(sounds, dict) or not isinstance(themes, dict):
+        return ["sounds.json: sounds and themes are objects, keyed by name"]
+    if len(sounds) > MAX_SOUNDS or len(themes) > MAX_THEMES:
+        out.append("sounds.json: at most %d sounds and %d themes" % (MAX_SOUNDS, MAX_THEMES))
+    for kind, got in (("sound", sounds), ("theme", themes)):
+        for n, e in got.items():
+            where = "sounds.json %s %r" % (kind, n)
+            if not A.SOUND_NAME.match(n):
+                out.append("%s: a name is lowercase letters, digits and _" % where)
+            if not isinstance(e, dict) or not isinstance(e.get("about", ""), str):
+                out.append(
+                    '%s must be {"about": "...", %s}'
+                    % (where, kind == "sound" and '"cue": {...}' or '"events": [...]')
+                )
+                continue
+            if len(e.get("about", "")) > 200:
+                out.append("%s: about is at most 200 characters" % where)
+            if kind == "sound":
+                cue = e.get("cue")
+                if not isinstance(cue, dict) or "sound" in cue:
+                    out.append("%s: cue is one sfx.json cue (fx, args, db...)" % where)
+                    continue
+                out += [
+                    "%s: %s" % (where, m.split(": ", 1)[-1])
+                    for m in _sfx([{**cue, "t": 0}], length)
+                ]
+            else:
+                ev = e.get("events")
+                if not isinstance(ev, list) or not ev or len(ev) > MAX_THEME_EVENTS:
+                    out.append("%s: events is a list of 1-%d" % (where, MAX_THEME_EVENTS))
+                    continue
+                if any(not isinstance(x, dict) or x.get("type", "notes") != "notes" for x in ev):
+                    out.append('%s: a theme is made of "notes" events' % where)
+                    continue
+                out += [
+                    "%s: %s" % (where, m.split(": ", 1)[-1]) for m in _score({"events": ev}, length)
+                ]
+    return out
+
+
 def problems(film, name):
     """What is wrong with one of Claude's files ([] when nothing, or when it is not there yet)."""
     if name.startswith("engine"):
@@ -293,16 +474,99 @@ def problems(film, name):
         return [] if isinstance(d, dict) else ["content.json must be one JSON object"]
     if name == "vo.json":
         people = [p["id"] for p in film.record().get("people") or []]
-        return _vo(d, limits(film.length)["lines"], film.length, people)
+        script = narration_script(film)
+        cap = limits(film.length)["lines"]
+        if script:  # the person's script sets how many lines: each may be split once, at the limit
+            cap = max(cap, 2 * len(script[1]))
+        out = _vo(d, cap, film.length, people)
+        if script and not out:
+            out = _verbatim(d, *script)
+        return out
     if name == "paint.json":
-        return _paint(d, film.length, film.caps)
-    if name == "score.json":
-        return _score(d, film.length)
-    if name == "sfx.json":
-        return _sfx(d, film.length)
+        return _paint(d, film.length, film.caps, film.dir, _cast_of(film))
+    if name in ("score.json", "sfx.json"):  # a kept sound or theme, played by name
+        try:
+            score, cues = A.expand_sounds(
+                d if name == "score.json" else None, d if name == "sfx.json" else [], _kit(film)
+            )
+        except (ValueError, TypeError) as e:
+            return ["%s: %s" % (name, e)]
+        if name == "score.json":
+            return _score(score, film.length)
+        return _sfx(cues if isinstance(d, list) else d, film.length)
+    if name == "sounds.json":
+        return _sounds(d, film.length)
     if name == "scenes.json":
         return _scenes(d, film)
     return []
+
+
+# A narration the person wrote word for word (scripts/_narration.py): a research film's script,
+# every line checked against its sources. The studio's prompt used to tell Claude a script's words
+# "may be cut to fit", and the Anthropic IPO pilot (2026-10-21) dropped the line about the
+# valuation's history; so vo.json is held to such a script every time it is saved, and the tools
+# wait until it matches. Only the stretch vo.json covers is held to it (a pilot of L01 to L08
+# passes); what it leaves out at either end is said after the recording (verbatim_note).
+def narration_script(film):
+    """(label, [(id, words)]) of the first document the person attached that is a word-for-word
+    narration -- "Document 3", as attached_note numbers them -- or None."""
+    docs = [a for a in film.record().get("attachments") or [] if a.get("kind") == "text"]
+    for i, a in enumerate(docs, 1):
+        try:
+            with open(film.path(*a["file"].split("/")), encoding="utf-8") as f:
+                lines = N.script_lines(f.read(400 * 1024))
+        except (OSError, KeyError, ValueError):
+            continue
+        if lines:
+            return "Document %d" % i, lines
+    return None
+
+
+def _said(d):
+    return [ln.get("text", "") if isinstance(ln, dict) else "" for ln in d.get("lines") or []]
+
+
+def _verbatim(d, label, script):
+    found, span = N.check(script, _said(d), "vo.json line", 0)
+    if not found:
+        return []
+    head = "vo.json is not %s word for word (%s)" % (
+        label,
+        N.summary(script[span[0] : span[1] + 1]),
+    )
+    return ["%s: %s" % (head, x) for x in found]
+
+
+def verbatim_note(film):
+    """What the recorded narration says of the person's word-for-word script, for Claude: all of
+    it, or which lines it leaves out. "" when the film has none."""
+    script = narration_script(film)
+    d, _ = _load(film, "vo.json")
+    if not script or not isinstance(d, dict):
+        return ""
+    label, lines = script
+    span = N.covered(lines, _said(d))
+    if span is None:
+        return (
+            "\n\nNOTE: vo.json does not say %s, the narration the person wrote word for word "
+            "(%s). Unless the prompt asked for other words, say its lines."
+            % (label, N.summary(lines))
+        )
+    if span == (0, len(lines) - 1):
+        return "\n\n%s's narration: all %s, word for word." % (label, N.summary(lines))
+    left = [lines[i][0] for i in range(len(lines)) if not span[0] <= i <= span[1]]
+    return (
+        "\n\nNOTE: vo.json says %s to %s of %s's %d lines; %s %s not in this film. Unless the "
+        "prompt asked for fewer, add them: the film is as long as its lines take, never cut to fit."
+        % (
+            lines[span[0]][0],
+            lines[span[1]][0],
+            label,
+            len(lines),
+            ", ".join(left[:3]) + (" ... %s" % left[-1] if len(left) > 3 else ""),
+            "is" if len(left) == 1 else "are",
+        )
+    )
 
 
 # a film made in scenes (studio/scenes.py): its plan, scenes.json
@@ -401,3 +665,50 @@ def gate(film):
     for name in names:
         out += problems(film, name)
     return out
+
+
+# a cue on a word of a narration line, as film code writes it: SK.w(3, 'bus')
+CUE = re.compile(r"""\bSK\.w\(\s*(\d+)\s*,\s*(['"])((?:(?!\2)[^\\\n]){1,60})\2""")
+
+
+def _word(s):
+    """A word as the engine matches it (sketch/engine.js SK.w): lower case, no apostrophes,
+    letters, digits and $ only."""
+    s = str(s).lower().replace("’", "").replace("'", "")
+    return "".join(ch for ch in s if ch.isalnum() or ch == "$")
+
+
+def cue_misses(film):
+    """Cues that name a word their line does not say: the engine gives them its fallback (0 s
+    unless one is passed), so what hangs on them happens at the start -- silently. Read off
+    film.js and the scenes against vo.json's lines; an episode that started from the last one's
+    code (episode.py) keeps that one's cues until they are moved. ["line 3: 'bus'"], at most 20."""
+    try:
+        with open(film.path("vo.json"), encoding="utf-8") as f:
+            lines = json.load(f).get("lines") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+    if not lines:
+        return []
+    said = [{_word(w) for w in str((ln or {}).get("text") or "").split()} for ln in lines]
+    code = []
+    for rel in ["film.js"] + [
+        "scenes/" + n
+        for n in (
+            sorted(os.listdir(film.path("scenes"))) if os.path.isdir(film.path("scenes")) else []
+        )
+        if n.endswith(".js")
+    ]:
+        with (
+            contextlib.suppress(OSError, UnicodeDecodeError),
+            open(film.path(*rel.split("/")), encoding="utf-8") as f,
+        ):
+            code.append(f.read())
+    out = []
+    for m in CUE.finditer("\n".join(code)):
+        li, w = int(m.group(1)), m.group(3)
+        if li >= len(said) or _word(w) not in said[li]:
+            miss = "line %d: '%s'" % (li, w) + ("" if li < len(said) else " (no such line)")
+            if miss not in out:
+                out.append(miss)
+    return out[:20]

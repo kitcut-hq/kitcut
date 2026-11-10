@@ -1,0 +1,72 @@
+{
+  "_comment": "How analyze.py groups Etsy's terms into product families for the video-services research. First match wins, so order matters: specific occasions before the generic invitation family. 'licensed' is other people's characters and brands (demand we cannot serve); 'physical' drops objects that only share a word with a film.",
+  "licensed": "toy story|lion king|disney|mickey|minnie|bluey|paw patrol|spider|spidey|frozen|elsa|rugrats|plim|cocomelon|stitch|k-?pop|demon hunter|barbie|mario|sonic|pokemon|harry potter|pooh|encanto|moana|hello kitty|marvel|star wars|minecraft|roblox|fortnite|peppa|ms rachel|miss rachel|gabby|cars\\b|mcqueen|pixar|up pregnancy|monsters inc|nemo|dory|simba|grinch|elf on the shelf|taylor swift|wicked|hot wheels|blippi|sesame|elmo|baby shark|unicorn academy|inside out|super ?man|batman|avengers|hulk|sus anime|anime|labubu|squid game|wednesday|stranger things|jurassic|ninja turtle|tmnt|trolls|care bears|strawberry shortcake|my little pony|lilo|winnie|curious george|hungry caterpillar|dr\\.? seuss|cat in the hat|nintendo|zelda|among us|capybara squishmallow|squishmallow|bratz|lol surprise|mermaid ariel|ariel|rapunzel|cinderella|tinker ?bell|snow white|beauty and the beast|aladdin|jasmine|tiana|pocahontas|mulan|coco\\b|luca\\b|turning red|zootopia|dinsey|disny|star war|yoda|mandalorian|grogu|lego|nfl|nba|fifa|messi|ronaldo|kelce",
+  "physical": "\\bbook\\b|frame|orb|bauble|box|card with screen|projector|camera|doorbell|baby monitor|game|vhs|tape|dvd|player|ornament|shirt|sweatshirt|svg|png",
+  "families": [
+    [
+      "gender reveal video",
+      "gender reveal.*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*gender reveal"
+    ],
+    [
+      "pregnancy / baby announcement video",
+      "(pregnan|baby announcement|baby reveal|birth announcement).*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*(pregnan|baby announcement|baby reveal|birth announcement)"
+    ],
+    [
+      "trip reveal video",
+      "(trip|vacation|lapland|holiday|cruise).*reveal.*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*(trip|vacation).*reveal|reveal video|trip reveal video"
+    ],
+    [
+      "santa / christmas video for a child",
+      "(santa|elf|north pole|nice list|christmas).*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*(santa|christmas|nice list)"
+    ],
+    [
+      "save the date video",
+      "save the date.*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*save the date"
+    ],
+    [
+      "wedding video invitation",
+      "(wedding|nikkah|nikah|sangeet|mehndi|engagement|bridal|rehearsal).*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*(wedding|nikkah|nikah|bridal)"
+    ],
+    [
+      "halloween video invitation",
+      "halloween.*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*halloween"
+    ],
+    [
+      "birthday video invitation",
+      "(birthday|bday|sweet 16|quince|sleepover|pool party|party).*(video|videos|movie|film|animated|animation).*(invit|invite|evite)|(video|videos|movie|film|animated|animation).*(birthday|bday|quince|party).*(invit|invite|evite)|(birthday|quince).*(invit|invite|evite).*(video|videos|movie|film|animated|animation)"
+    ],
+    [
+      "baby shower video invitation",
+      "(baby shower|baptism|christening|sip and see).*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*(baby shower|baptism)"
+    ],
+    [
+      "graduation video / invitation",
+      "graduat.*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*graduat"
+    ],
+    [
+      "birthday video greeting / message",
+      "(birthday).*(video|videos|movie|film|animated|animation)|(video|videos|movie|film|animated|animation).*birthday|video message|personali[sz]ed video|video greeting|video card"
+    ],
+    [
+      "generic video / animated invitation",
+      "(video|videos|movie|film|animated|animation).*(invit|invite|evite)|(invit|invite|evite).*(video|videos|movie|film|animated|animation)"
+    ],
+    [
+      "love story / custom animated film",
+      "love story|custom animat|custom cartoon video|custom cartoon animation|animated story|story video|cartoon video|custom video"
+    ],
+    [
+      "slideshow / memorial / tribute",
+      "slideshow|montage|tribute|memorial video|funeral video|celebration of life video|memory video"
+    ],
+    [
+      "business video",
+      "logo animation|animated logo|logo reveal|intro video|youtube intro|explainer|promo video|product video|real estate video|commercial|ad video|reel|tiktok video|instagram video"
+    ]
+  ],
+  "listing_classes": {
+    "video": "video|animated|animation|movie|film|slideshow|reel|gif\\b|evite",
+    "template": "template|canva|editable|edit yourself|instant download|diy|self.edit|corjl|templett|capcut",
+    "made_to_order": "custom|personali[sz]ed|made to order|we edit|we make|i (will )?(make|create|edit)|any theme|any language|from (your )?photos?|bespoke"
+  }
+}

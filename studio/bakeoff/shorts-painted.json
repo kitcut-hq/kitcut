@@ -1,0 +1,28 @@
+{
+  "about": "Painted YouTube Shorts (9:16, captions in the picture): are the paintings tall and do they fill the frame? Before 2026-10-28 every painting was 16:9 and a tall painted film showed paper-coloured bands above and below (KI-068). Four short throwaway ideas, one with a character who comes back, made in the painted look. Bars: no band or paper edge in any frame, the painting's subject inside the phone's safe area, a character the same from scene to scene, professional >= 4. Compare an arm of the new studio with one of studio-poc before it: the wide films of other sets must not change (their prompts are byte for byte the same, test_paint_frame.py).",
+  "seconds": 20,
+  "frame": "9:16",
+  "grade_extra": ["legible"],
+  "prompts": [
+    {
+      "id": "fox-bread",
+      "audience": "children aged 4 to 7",
+      "prompt": "A small red fox in a striped apron bakes her first loaf of bread: kneading, waiting while it rises, and the warm loaf at the end."
+    },
+    {
+      "id": "lighthouse",
+      "audience": "adults: a calm, curious explainer",
+      "prompt": "How a lighthouse lens throws its beam twenty miles out to sea."
+    },
+    {
+      "id": "market",
+      "audience": "adults who travel",
+      "prompt": "Three things to buy at a morning market in a small French village, and how to ask for them."
+    },
+    {
+      "id": "rain",
+      "audience": "children aged 4 to 7",
+      "prompt": "Why puddles shine after the rain, told by a child waiting for the bus in a yellow raincoat."
+    }
+  ]
+}

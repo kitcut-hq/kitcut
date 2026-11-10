@@ -1,0 +1,12 @@
+# Every 15 minutes after the last pass ended, the studio's home is mirrored to R2
+# (kitcut-backup.service). Enabled by `ops.sh backup install`:
+#   sudo systemctl enable --now kitcut-backup.timer kitcut-backup-full.timer
+[Unit]
+Description=KitCut studio: mirror the studio's home to R2 every 15 minutes
+
+[Timer]
+OnBootSec=10min
+OnUnitInactiveSec=15min
+
+[Install]
+WantedBy=timers.target

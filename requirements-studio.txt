@@ -9,3 +9,7 @@ pywin32>=306; sys_platform == "win32"  # each film's processes live in a Job Obj
 # and fails only when a film asks for its voice -- the Azure VM's first films on 2026-09-28 went
 # out silent that way ("cannot import name 'genai' from 'google'"). Pinned to the laptop's.
 google-genai==2.25.0
+# The machine's keys sealed for the key vault alone to open (studio/sealenv.py: AES-GCM, RSA-OAEP).
+# Already installed through google-auth and pymongo; named here so that it stays when they stop
+# needing it. No new package reaches the shared venv by this line.
+cryptography>=42

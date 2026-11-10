@@ -1,0 +1,14 @@
+{
+  "_about": "A made-up example of the facts film.js reads (SK.DATA.content) -- the real sample is local, because its pictures are third-party. figure (1-8 characters; a long one wraps onto two lines), subline (1-3 lines; *words* in asterisks are bold, the rest light; a line with no asterisks is all bold), cta and legal (optional), photo (a picture key, or '' for the brand's colour field), focus ([x, y] 0-1: the part of the photo to keep in the frame), product ({image, round} or null: round is the corner radius at 1080 px, 0 for a cut-out), logo ({image, light} or null: image reads on light grounds, light on dark ones), brand ({name, ground, accent, ink}), anchor ('top' or 'bottom': which edge the words sit on), align ('left' or 'center': with no product, or above a product in a vertical frame).",
+  "figure": "50%",
+  "subline": ["*off* your first year", "of *any plan*"],
+  "cta": "Start free",
+  "legal": "New customers only. Offer ends December 31. Terms apply.",
+  "photo": "",
+  "focus": [0.5, 0.5],
+  "product": null,
+  "logo": null,
+  "brand": {"name": "Northwind", "ground": "#1F2A5C", "accent": "#FF6B3D", "ink": "#FFF8EC"},
+  "anchor": "top",
+  "align": "left"
+}

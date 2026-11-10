@@ -20,6 +20,7 @@ All are SIL Open Font License 1.1 (text in OFL.txt), from Google Fonts.
 | Anton-Regular.ttf | Anton | thumbnails; collage films: condensed labels (Latin only) |
 | IBMPlexMono-Regular.ttf, IBMPlexMono-Bold.ttf | IBM Plex Mono | collage films: a typewriter line in Cyrillic, where Courier Prime has no letters (Latin and Cyrillic) |
 | SofiaSansCondensed-VF.ttf, SofiaSans-VF.ttf (variable 1-1000) | Sofia Sans Condensed, Sofia Sans | motion-design films: a heavy condensed grotesk, the open stand-in for Korolev (Web Summit's Adobe face) (Latin, Cyrillic) |
+| Inter-VF.ttf (variable 100-900 and optical size, full glyph set) | Inter | proposals (`make-proposal.py`): body type in any language, where Inter.woff2 has Latin only (Latin, Cyrillic, Greek) |
 
 The collage fonts are the complete `.ttf` files from github.com/google/fonts (`ofl/<family>/`),
 fetched 2026-09-28; the variable ones are renamed from `<Family>[wght].ttf` to `<Family>-VF.ttf`.
@@ -39,3 +40,5 @@ should add that subset beside them. The `.ttf` files above are the complete font
 github.com/google/fonts (`ofl/<family>/`), not a subset: a Cyrillic-only woff2 has no digits
 or Latin, and two faces under one family name without `unicode-range` do not merge on a
 canvas -- the digits in "101" would fall back to a system font.
+
+Inter-VF.ttf is `ofl/inter/Inter[opsz,wght].ttf` from the same place, fetched 2026-10-07.

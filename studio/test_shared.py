@@ -8,8 +8,10 @@ is checked here with real processes racing through it (a child is this file run 
     a film's record    two processes updating one studio.json, 100 fields each: all 200 there
     the cost outbox    two processes appending 100 rows each while a sync sends and rewrites the
                        file: every row sent once or still waiting, none lost, none doubled
-    a library          two processes keeping 10 films each into one person's library: versions
-                       1..20 with none written twice, and every film in the index
+    a library          two processes keeping 10 films each into one person's library, each film
+                       changing the member it started from: every film saved a version or was
+                       refused over a newer one, versions 1..n with none written twice, and
+                       every film in the index
     a voice note       one server writing a note out, another taking it into a film: the taker
                        waits for the live one, and writes it out itself when that one is dead
 
@@ -74,10 +76,13 @@ def child(what, args):
         ]
         ready(go)
         out = []
-        for f in films:
+        for f in films:  # each starts from the library's pip as it is (seed), then changes it
+            e = library.load(CLIENT)["cast"].get("pip")
+            f.update(library={"cast": [{"name": "pip", "hash": e["hash"]}] if e else []})
             code = "SK.cast.pip = { about: 'Pip, as film %s drew him', draw() {} };\n" % f.id
             items = [{"name": "pip", "code": code, "hash": library._hash(code), "about": ""}]
-            out.append([f.id, library.keep(f, items)["saved"]])
+            kept = library.keep(f, items)
+            out.append([f.id, kept["saved"], kept.get("clashed", [])])
     elif what == "stt":  # a server writing a voice note out: done after args[1] s (0: never)
         peers.hold_own()
         uid, after = args[0], float(args[1])
@@ -209,19 +214,22 @@ def main(nolock):
     d = os.path.join(library.dir_of(CLIENT), "cast", "pip")
     on_disk = sorted(int(n[1:-3]) for n in os.listdir(d) if n.endswith(".js"))
     drawn_by = {read(os.path.join(d, "v%d.js" % v)).split("as film ")[-1][:30] for v in on_disk}
+    saves = sum(1 for _, saved, _ in kept if saved == ["pip"])
+    clashes = sum(1 for _, _, clashed in kept if clashed == ["pip"])
     expect(
-        "two processes, %d films each: a version per film (%s)" % (FILMS, pip.get("version")),
-        all(saved == ["pip"] for _, saved in kept) and pip.get("version") == 2 * FILMS,
+        "two processes, %d films each: a version per film that saved (%d saved, %d refused over "
+        "a newer one, version %s)" % (FILMS, saves, clashes, pip.get("version")),
+        saves + clashes == 2 * FILMS and pip.get("version") == saves >= FILMS,
     )
+    top = pip.get("version", 0)
     expect(
         "the last %d versions on disk, each from a different film (%s)" % (library.KEEP, on_disk),
-        on_disk == list(range(2 * FILMS - library.KEEP + 1, 2 * FILMS + 1))
-        and len(drawn_by) == library.KEEP,
+        on_disk == list(range(top - library.KEEP + 1, top + 1)) and len(drawn_by) == library.KEEP,
     )
     expect(
         "the index names the latest, and every film",
-        library._hash(read(os.path.join(d, "v%d.js" % pip.get("version", 0)))) == pip.get("hash")
-        and sorted(idx["films"]) == sorted(fid for fid, _ in kept),
+        library._hash(read(os.path.join(d, "v%d.js" % top))) == pip.get("hash")
+        and sorted(idx["films"]) == sorted(fid for fid, _, _ in kept),
     )
 
     if not nolock:

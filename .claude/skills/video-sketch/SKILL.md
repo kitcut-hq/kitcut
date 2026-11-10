@@ -1,6 +1,6 @@
 ---
 name: video-sketch
-description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. It also makes real people talk from their photos -- bobble-heads, puppet cut-outs, a newspaper photo or a painting where only the mouth moves -- each with their own voice. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, talking heads or bobble-heads made from photos, or anything that should be illustrated rather than filmed. Also for a square or vertical social promo in 3D motion-design style with real people in it -- a conference speaker announcement, a line-up, an event teaser with a speaker carousel, a ticket and a poster, music only, no narration.
+description: Make an animated explainer film with no footage — a hand-drawn/whimsical, a clean editorial, or a mixed-media paper-collage animation (cut-out pictures from an image model animated with type, tape labels, rubber stamps and torn paper, the "newspaper cutout" motion-design look) written as JavaScript, with an AI voice-over, an original score on sampled instruments and synthesised sound effects, rendered to MP4 and to a self-contained HTML player. It also makes real people talk from their photos -- bobble-heads, puppet cut-outs, a newspaper photo or a painting where only the mouth moves -- each with their own voice. Use when asked for an animation, an animated explainer or promo, a motion-graphics or motion-design video, a "whimsical hand-drawn" video, a collage / mixed-media / cut-out / scrapbook / newspaper-style video, a product or feature explainer, a 30-60 second ad, talking heads or bobble-heads made from photos, or anything that should be illustrated rather than filmed. Also for a square or vertical social promo in 3D motion-design style with real people in it -- a conference speaker announcement, a line-up, an event teaser with a speaker carousel, a ticket and a poster, music only, no narration. Also for a vertical short drama (a micro-drama: characters who speak in their own voices, a hook, a reversal and a twist in about 60 seconds), one film or a set in different looks.
 ---
 
 # A sketch film: an explainer written as code
@@ -52,8 +52,9 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    words the voice added, or its direction read aloud; `HARD-CUT` means no silence was found before
    the tail word — pick another take with `"pick"` on the line. Put brand names in `hotwords`.
    A long script: `--jobs 8` records eight takes at once (70 Gemini lines: 341 s -> 52 s).
-   Pauses that belong to the picture (a click, a screen change) go on the line as `"gap_after"`,
-   with no `start`: re-recording a line then moves the rest. Do not write a per-project layout.py.
+   Pauses that belong to the picture (a click, a screen change) go on the line as `"pause"`
+   (quiet before it), with no `start`: re-recording a line then moves the rest. Do not write a
+   per-project layout.py.
 5. **Picture.** Write `film.js` scene by scene, every cue on a word -- all of them at the top with
    `const T = SK.cues({snap: [2, 'snap'], end: [5, null, 'e']})` (a miss warns instead of hiding
    behind a fallback second). Reach for the kit before drawing text furniture, a chart, a screen,
@@ -73,7 +74,13 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    transition midpoint) with `--sheet`, then look at the sheet. Fix, re-still, repeat. A round
    of 18 stills costs ~9 s. Check text overlaps, off-frame content, elements hidden behind
    later-drawn ones (draw order is paint order), and emotional reads (a "sad" brow drawn the
-   wrong way reads as angry).
+   wrong way reads as angry). **Stills at chosen moments miss what breaks inside a second**
+   (a character through a wall, flipped through a sliver, in two places at once): before a
+   film is called done, `python studio/review.py --folder projects/<id>` lays the whole of
+   it out a frame a second (`outputs/review/film-NN.jpg`), reads the drawing code for those
+   moments and has a fresh Claude read both; `--machine` is the free half. A body goes into
+   a thing through its opening, whole; it turns with a hop or a pose change, never by
+   scaling through flat.
 7. **Sound.** Write `score.json` (tempo chosen so bar lines land on the story beats — compute
    `bar = 240 / bpm` and line the scene changes up) and `sfx.json` (a cue on every visual hit).
    `sketch-audio.py --levels`: the voice should sit 8-12 dB over the heard music. Every volume
@@ -90,17 +97,23 @@ edit. Read `projects/<id>/journal.md` before re-deciding anything; end with a no
    least as good at the same `cq`, but a bigger master on grainy films. The studio renders
    this way; the script's default is still the pipe. It falls back to ffmpeg by itself where the browser cannot encode.
 9. **Publish** with `yt-upload.py --channel <handle>` — unlisted unless told otherwise. For a
-   thumbnail, make four from the film's own frames: `python studio/ytdraft.py --film <folder>
-   --thumbs` (Claude picks the moments and words, the first the video's main message; ~$0.06) or
-   `python scripts/thumb-options.py --film <folder> --concepts c.json [--logo all|none]` (your
+   thumbnail, make four from the film itself: `python studio/ytdraft.py --film <folder>
+   --thumbs` (Claude picks the moments, the words and -- for a film with pictures -- which of
+   them each is built on, the first the video's main message; ~$0.06) or
+   `python scripts/thumb-options.py --film <folder> --concepts c.json [--logo all|none]` (kitcut.ai's option 1 is the punch line on a dark box, `--punch all` sets it on every option; add `--title "..." --title-box all` for the video's title in a box on a whole frame, its option 2) (your
    own), then look at `feed.jpg` -- the options at YouTube's feed sizes -- and pass the one you
-   pick to `yt-upload.py --thumbnail`. They are made the way YouTube thumbnails are: the film's
-   own titles and labels left out of the frame, its subject pushed in on one side, the message
-   large on the other in the film's title type and outline, its logo on options 1 and 3. Every
+   pick to `yt-upload.py --thumbnail`. A film with pictures (cut-outs, photographs) gets posters
+   composed from them: one large on the film's own page (somebody from the waist up, an object
+   whole), another tucked behind it, the message beside or above in the film's title type and
+   outline or on its label strips, the template varied by the film and the option. A film that
+   draws everything itself gets frames of it: its own titles and labels left out, its subject
+   pushed in on one side, the message large on the other. Its logo on options 1 and 3. Every
    option has passed the checks (legible at 168 px, contrast, clear of the duration stamp). So
    give the film's titles to `SK.txt` / `SK.headline` (an outline on them carries into the
-   thumbnail), its labels to `SK.tape`, its pictures to `SK.image` / `SK.cutout` (their boxes
-   are the subject), and its logo a name with `logo` in it -- the thumbnail finds them all.
+   thumbnail), its labels to `SK.tape`, its pictures to `SK.image` / `SK.cutout` (they are what
+   a poster is made of, so paint a character as "full figure, standing" and it is shown from
+   the waist up; lay a page down with `SK.sheet` and the poster stands on it), and its logo a
+   name with `logo` in it -- the thumbnail finds them all.
 10. **Report the timings** (`--timings`) with the deliverables.
 
 ## A product walkthrough from screenshots (no screen recording)
@@ -187,6 +200,39 @@ Whose face it is, and whether they agreed to be animated saying these words, is 
 call: ask before putting words in a real person's mouth unless the user is that person or
 has said so.
 
+## Actors: a character an image model draws, animated by swapping
+
+When a film needs a recurring character with a designed look -- a historical figure as a cartoon,
+a mascot, a host -- and nobody's photo, make it an actor (`docs/reference.md`, "Actors"). The
+owner chose this road on 2026-10-17 ("we'll be using this approach in the future").
+
+1. Write a spec beside the project (`actors/<name>.json`): `name`, `describe` (the outfit, the
+   colours, which hand holds what), and `look`, `faces`, `talk`, `poses` only where the defaults
+   (`config/actors/defaults.json`) do not fit. Say in a pose which hand moves if the character
+   holds something. `--plan` prices it (about $1.10 for 45 pieces on the default model).
+2. Run it: three candidates come back in `design/sheet.jpg`. Pick the one with the biggest,
+   clearest face (it is what talks), set `"pick"`, run again. Never pick for the user when they
+   asked to choose; otherwise pick and say which, and that a re-pick redraws the rest (~$1).
+3. Look at `check.jpg` before using the pack: every face, mouth, blink and pose put together, with
+   its drift. Anything over its gate was already redrawn; `--retake <id>` redraws one you dislike.
+   A pose the model barely turned is still marked "turned" if its head was not found: fine.
+4. In the manifest, `"actors": {"<name>": "actors/<name>"}`; give the character's lines `"who"`
+   and a voice in `vo.cast`. In film.js, `SK.actor(name, x, y, h, {face, pose})` with the feet on
+   the ground at x, y; cue faces and poses on words (`SK.w`), and give each change a small squash
+   (`squash`) so the swap reads as acting, not a cut. Faces without mouths (laugh, shocked) hold
+   while the character speaks: put them between lines.
+5. Review stills at 1.5-2x on the face (the atlas is drawn for it) and at mid-word moments; check
+   that a line that is not the actor's leaves its mouth shut.
+6. **For kitcut.ai films**, put the pack into the channel's project, once: `bash
+   studio/deploy/ops.sh actor-put <p-id> <pack folder> --dry-run`, then without `--dry-run`
+   (`ops.sh actors <p-id>` lists them). Every next episode of that project gets it, and its Claude
+   is told who it is, its faces and poses, and how to make it speak. Name the actor in the
+   episode's idea when it should be in it ("Enrique tells how he built the first court").
+
+Traps already paid for: redraws asked for on a transparent background come back with a cloudy
+halo half the time (the script asks for white); muse-image takes no reference and draws a
+stranger every time; a spec that does not say which hand holds a prop gets poses that swap it.
+
 ## A motion-design promo (square, 3D pieces, real people, music only)
 
 The worked example is `projects/websummit-speakers/` (local; docs/reference.md "Motion-design
@@ -227,6 +273,145 @@ Effects piece in the conference's own look. What it takes:
 Check the whip, the turns and every transition frame by frame from a `--draft` render
 (`ffmpeg ... -vf "fps=30,scale=216:216,tile=6x5"`), not only from stills: an empty frame between two
 scenes only shows in motion.
+
+## A benchmark film (a race we measured ourselves, music only)
+
+Models raced on the same task and replayed from the real timestamps; then why, by how much, what
+it cost. Worked examples (local): projects/nemotron-8gb, frontier-race, video-race and their
+-short versions; docs/reference.md "Benchmark films".
+
+1. **Measure first**: `scripts/llm-race.py` (language models, local servers too) or
+   `scripts/video-race.py` (video models). `--plan`, one wave, then the matrix with medians. One
+   effort setting on every model, said on screen. Tasks with checks a machine can score.
+2. **The film reads race.json and nothing else measured**; numbers we did not measure go in a
+   facts.json with a source each. `"modules": ["kit", "bench"]`. Video clips: leave windows,
+   return placements from `SK.REPORT()`, then `scripts/clip-overlay.py`.
+3. **Shape**: the finding on frame 0 with both sides of every comparison named; each round a held
+   question, the race (strobe cut in, laid out on the cut, a time-lapse once nothing differs), the
+   result given the screen; a board that names the winners in big type; the method small.
+4. **Nothing holds still**: stagger reveals, `pushKeys`, `strobe` cuts, a boiling `highlight`.
+   Look at a 1 fps sheet; a board that lands in 2 s and sits for 8 reads dead.
+5. **Sound from the film's clock**: `B.music(sections)` and a cue per data event; `"mix":
+   {"sfx_db": 10}`, `"master": {"lowpass": 15000, "tp": -3.5}`, audio at 256k.
+6. **A Short is laid out again** for 1080x1920 (one idea a screen, type 44 px+, nothing to read
+   in the bottom fifth or under the button column), sharing the data by a link, not shrunk.
+7. A fresh `video-review` pass before anything is shown; expect NOT YET and fix it.
+
+## A YouTube Short (9:16, the words in the picture)
+
+A narrated film for a phone feed: `"frame": [1080, 1920]`, `"fps": 30` and `"modules": [...,
+"captions"]` in the manifest. `sketch/captions.js` draws the narration a card at a time from the
+voice timeline -- white on a dark card, the word being said in yellow -- so the words are in the
+pixels: YouTube shows no subtitle track on a Short. On kitcut.ai it is one flag, `npm run film --
+make ... --short` (the studio's `"frame": "9:16", "captions": true`), and the film's first message
+tells its writer the canvas and what is taken.
+
+**`docs/shorts-guidebook.md` is the rulebook: read it before writing a Short's prompt and hold the
+finished file to it.** Thirty-three rules, each checkable, each with what it rests on (YouTube's own
+statements, 25 high-view Shorts measured, and the owner's calls). The ones that cost a day when
+they were missed:
+
+- **The news is the first frame and the first sentence.** A headline of eight words or fewer on
+  frame 0, the voice inside 0.3 s, the first sentence saying who did what. Never a clue first.
+- **A news Short is a bulletin** (strap, headline, a lower band naming the source on screen), with
+  **real screenshots of the source sites' own headlines**, masthead to date, one page at a time.
+- **No music** (`--no-music`), and a narrator who is fast and confident but steady: neither a flat
+  anchor nor an alarmed one. The owner picks the voice by ear from an audition page.
+- **A 20-second pilot before a batch** in a new format; the batch after the owner's yes.
+- **Nothing stands still.** A diagram a wide film would hold is moved in a Short: the camera
+  follows the action, a picture is studied part by part on the narrator's words, a number counts
+  up. Run `python scripts/short-stillness.py <mp4> --check` on the finished file before showing
+  it: over 5% of the time frozen, or a drift longer than 3 s with nothing moving, fails. A Short
+  cut from a wide film fails it by default (49 to 65% frozen on the first five), so each scene is
+  laid out again for the tall frame, not scaled into it.
+- **A channel's own Short ends with a spoken ask to subscribe**, four to five seconds after the
+  payoff line: one sentence naming the channel over a card with its picture, its name and a
+  button pressed as the sentence ends (rule 28; the owner's call on the Padel Tactics Shorts).
+
+The studio does its part for a 9:16 film: the first word 0.1 s in, and the film's own frame 0 as
+the video's first frame (`"cover": false`). By hand, set both: `"lead": 0.1` in `vo.json` and
+`"cover": false` in the manifest; for no music, `"audio": {"music": false}`.
+
+- **Compose for the tall frame**, never a wide layout shrunk into it: stacked top to bottom, one
+  idea on screen at a time, a headline of 90 px or more, nothing to be read under 44.
+- **Three things lie over the film.** The caption band (`SK.captionBox()`: about y 1330-1530 of
+  1920); below it the phone's title and channel name (the bottom fifth); and the like/comment/share
+  column down the right of the lower half. The picture runs under all three; nothing that must be
+  read goes there. A thing that moves (a hand that presses a button low in the frame) wanders in:
+  bring it in from the side.
+- **The first frame is the hook**, on screen at 0.0 s. A feed shows that frame before anything
+  plays.
+- **No thumbnail.** The thumbnail options are 1280x720 posters and come out cropped on a tall
+  film, so the studio makes none (`thumbs.wide`); YouTube shows a Short by a frame of its own.
+  The film's cover on kitcut.ai is a frame of it: `ops.sh share <id> --frame 0.3`.
+- **Check the words against the source, not against the prompt.** Two of the first five Shorts
+  (2026-10-08) said what the prompt had invented: a list item the policy never names, and "the
+  reason" for a rule whose announcement gives none. Open the primary source once more with the
+  finished narration beside it; a line that is wrong is re-recorded by itself (studio-vm skill,
+  "Reworking a finished film by hand").
+
+## A vertical short drama (characters who speak, a twist, 60 s)
+
+A complete story in about a minute, 9:16, told in dialogue: the micro-drama format of ReelShort,
+DramaBox and TikTok, as one standalone film rather than episode 1 of 80. Ten were made on
+kitcut.ai on 2026-10-15 in ten looks (project "Vertical dramas", p-344ollfpug; prompts, brief,
+review sheet and journal in `projects/vertical-drama/`, local). **The rulebook is
+`docs/market-vertical-drama-2026.md`, "Rules for a 60-second standalone vertical drama"**: frame 0
+is the conflict, the setup done by 0:10, the first reversal by 0:25, the final twist at 0:48-0:56
+turning something planted by 0:12, a held last image, 90-150 spoken words.
+
+How one is made on kitcut.ai:
+
+- **Voices come only with People.** The studio gives a character their own voice (`vo.json`
+  `cast` + a line's `who`) only for a person made from a photo; everyone else is read by the one
+  narrator voice. For fictional characters, generate a casting portrait each with
+  `scripts/sketch-paint.py` (a manifest whose `paint` block uses `"backend": "openrouter"`,
+  `"model": "openai/gpt-image-2.5-flare"`, a "photorealistic casting headshot of a fictional
+  character, front view, head and shoulders, plain light grey background" style line and one
+  image per role; about $0.01 and 10 s each), then `npm run film -- make ... --short
+  --person "Name=portrait.jpg" ... --style <people-style> --people-consent`. A fifth speaker is the
+  film's narrator voice: write "his one line is in the narrator voice" in the prompt.
+- **Write the prompt as a screenplay**: the look in detail (as if one named kind of artist made
+  it, plus how captions should look via `SK.CAPTIONS`), the cast with a Gemini voice and a
+  one-line manner each, then every line timed and attributed, the plant marked "(the plant: show
+  it clearly, once)", the sound. 100-110 spoken words for 60 s; 120+ ran 68-74 s.
+- **Put the format's rules in the project brief**, not in each prompt (`projects/vertical-drama/
+  brief.md` is a worked one, and a project that keeps nothing so films do not copy each other).
+- **The people-style is a gamble; test it before the film** (`head-rig.py` on one portrait with
+  the look, $0.11). Felt, crayon, sticker, woodcut and pop art drew real drawings; courtroom and
+  paper cut-out drew photographs with a stylised edge until studio-poc d7768a6; watercolour and
+  wooden peg still draw a near-photo face. When the style fails, tell the film to paint the
+  characters itself and not show the talking heads: one look beats a moving mouth.
+- **A talking head has one expression.** The face that has to fall, the scream, the cold smile
+  are painted pictures of that character, cut to on the beat; in the drawn look (no painter) the
+  characters are drawn in code so their faces can change.
+- **Expect one notes round per film** (`ops.sh notes <id> notes.json`, about 10 min). The first
+  cut's recurring faults, in order of how often: a reaction carried by an unchanging portrait;
+  the key action told by heads and a prop on a card instead of a painted two-shot; a character
+  who becomes another person between paintings (the painted look's painter takes no reference
+  picture, so paste one fixed description into every prompt); 8-14 s too long. A fresh reviewer
+  (video-review skill) found each in 2-4 minutes.
+
+## A pin, an address, "find us here": the real map
+
+A film that shows where a real place is draws the real map of it -- never a made-up street plan.
+
+1. Price it: `python scripts/place-map.py --at "<the address as written, with its town>" --list` says
+   what it matched and **how exactly** (`house`, `block`, `street`, `place`), and what is there. When
+   only the street is known the pin marks the street: letter it, point at no house, and say "on
+   <street>" in the narration. A street on no map is refused (`no map:`): show the address in type.
+2. Make it into the film: `--film spec.json --out-image <film>/images/place_map.jpg --out-data
+   <film>/place.json` (spec: `at`, and `tint` = the film's main colour, or `tone: "dark"`), then add
+   `"place_map": "images/place_map.jpg"` to the manifest's `images` and `"place": "place.json"` to its
+   `data`. On kitcut.ai the studio's `map` tool does both.
+3. Draw it with the kit: `const m = SK.map(x, y, {s, own: {col, p}, names, clear: [[card box]]})`
+   puts the address at (x, y) and letters the real street names; `SK.mapPin(x, y, {t})` drops the
+   pin. Keep `s >= m.cover` or the map's edge shows. `© OpenStreetMap` must show (SK.map letters it).
+4. Look at a still of every frame the film is made in: the pin off-centre plus a card over the map
+   is the usual layout, and a name half under the card is why `clear` exists.
+
+`docs/reference.md`, "A real map of a real address". The open house template
+(`config/templates/open-house-invitation/`) is the worked example, with its no-map fallback.
 
 ## A ride or a route on a real map (a cycling-app replay)
 

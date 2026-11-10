@@ -66,6 +66,7 @@ KEEP = (
     "sfx.py",
     "description.txt",
     "content.json",
+    "vo.json",
 )
 KEEP_DIRS = ("images", "assets", "scenes", "cast", "web", "inputs", "template")
 
@@ -113,6 +114,19 @@ def source(folder):
         sys.exit("%s has no sketch.json" % folder)
     with open(man, encoding="utf-8") as f:
         m = json.load(f)
+    # a picture the manifest reaches out of the folder for (a logo kept in the repo), or keeps in a
+    # folder that is not copied, is not there on the studio: the film could never be drawn again --
+    # no share picture, no thumbnails, no stills (the first square import, 2026-10-05)
+    for name, rel in (m.get("images") or {}).items():
+        if isinstance(rel, str) and (
+            os.path.isabs(rel)
+            or os.path.normpath(rel).replace("\\", "/").split("/")[0] not in KEEP_DIRS
+        ):
+            sys.exit(
+                "picture %r (%s) is not in one of the film's own folders (%s): copy it into assets/ "
+                "and name it there, or the studio cannot draw the film again"
+                % (name, rel, ", ".join(KEEP_DIRS))
+            )
     slug = re.sub(r"[^a-z0-9]+", "-", (m.get("slug") or os.path.basename(folder)).lower()).strip(
         "-"
     )
@@ -141,6 +155,17 @@ def build(folder, fid, m, files, rec):
     for d in KEEP_DIRS:
         if os.path.isdir(os.path.join(folder, d)):
             shutil.copytree(os.path.join(folder, d), film.path(d))
+    # what else its code reads: the data beside its content (a map's place.json, a route) and the
+    # narration's word times its cues hang on -- without them a later still, share picture or
+    # thumbnail draws another film (no map, every cue at its line's start)
+    timeline = (m.get("audio") or {}).get("vo_timeline") or "audio/vo/timeline.json"
+    for rel in [*(m.get("data") or {}).values(), timeline]:
+        src = os.path.join(folder, *str(rel).split("/"))
+        if isinstance(rel, str) and not os.path.isabs(rel) and os.path.isfile(src):
+            dst = film.path(*rel.split("/"))
+            if not os.path.exists(dst):
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copyfile(src, dst)
     # the engine the film was drawn with, beside it (a studio film's own copy): the release on the
     # VM may not have a module it uses yet
     engine = m.get("engine")
@@ -151,6 +176,11 @@ def build(folder, fid, m, files, rec):
     for name, p in files.items():
         shutil.copyfile(p, film.path("outputs", name))
     m = dict(m, slug="film", engine="engine")
+    if isinstance(m.get("vo"), dict) and not os.path.exists(film.path("vo.json")):
+        # a narration kept inline in the manifest (a Short built by hand) becomes the studio's
+        # own vo.json, as every studio film has it: versions, editing and translation read it there
+        films._write_json(film.path("vo.json"), m["vo"])
+        m["vo"] = "vo.json"
     m["title"] = rec["title"]
     films._write_json(film.manifest, m)
     films._write_json(film.path("studio.json"), rec)
@@ -281,6 +311,9 @@ async def main():
 
     fid = new_id()
     now = datetime.now().isoformat(timespec="seconds")
+    # a square or vertical film says so in its record: KitCut TV sizes its player by it (tv.js), and
+    # without it takes the film for 16:9
+    shape = {"frame": frame} if frame and frame != "16:9" else {}
     project = {
         "id": proj["_id"],
         "name": proj.get("name"),
@@ -295,6 +328,8 @@ async def main():
         "caps": list(films.RECIPES[args.look]),
         "length": length,
         "client": client,
+        # who made it: the account it is imported as (an "All videos" list says whose it is)
+        "member": "u:" + uid,
         "source": "import",
         "priority": 0,
         "auth": "api",
@@ -312,7 +347,7 @@ async def main():
         "created": now,
         "finished": now,
         "imported": {"from": os.path.basename(folder), "at": now},
-        **({"template": tpl, "frame": frame or "16:9", "narration": False} if tpl else {}),
+        **({"template": tpl, "frame": frame or "16:9", "narration": False} if tpl else shape),
     }
     film = build(folder, fid, m, files, rec)
     say("\nmade:     %s" % film.dir)
@@ -321,6 +356,7 @@ async def main():
         "kind": "film",
         "source": "import",
         "client": client,
+        "member": "u:" + uid,
         "host": store.HOST,
         "prompt": prompt,
         "title": title,
@@ -339,7 +375,7 @@ async def main():
         "cost_usd": 0.0,
         "finished_at": store.now(),
         "imported": {"from": os.path.basename(folder)},
-        **({"template": tpl, "frame": frame or "16:9"} if tpl else {}),
+        **({"template": tpl, "frame": frame or "16:9"} if tpl else shape),
     }
     if not await agent.save(fid, first, final=True):
         sys.exit(

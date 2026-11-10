@@ -11,7 +11,16 @@
 #                                                     made carry on: the old server finishes them
 #   bash studio/deploy/ops.sh releases                what is built there, and which one leads
 #   bash studio/deploy/ops.sh rollback <sha12>        back to a release already built (no rebuild):
-#                                                     a switch like a ship, nothing is stopped
+#                                                     a switch like a ship, nothing is stopped;
+#                                                     it pauses autoship, or that ships back
+#   bash studio/deploy/ops.sh autoship [status|--plan|on|off|now [--retry]|hook]   the ship that
+#                                                     follows GitHub's main by itself (its
+#                                                     push hook, and a poll every 15 min:
+#                                                     deploy/autoship.py): its last decision and
+#                                                     ship log | what it would do now | start (and
+#                                                     lift a pause) | stop | one look, followed |
+#                                                     the hook's secret and GitHub's webhook, made
+#                                                     or checked
 #   bash studio/deploy/ops.sh migrate [<commit>]      ONCE: from the legacy one-server unit to one
 #                                                     server per release (deploy/README.md); waits,
 #                                                     on the VM, for the running films to finish
@@ -20,6 +29,17 @@
 #   bash studio/deploy/ops.sh drafts [--days N] [--json]   the YouTube drafts written lately: seconds
 #                                                     to the words, to the thumbnail picks, to the
 #                                                     pictures, cost (studio/draft_times.py). Reads only
+#   bash studio/deploy/ops.sh usage [--hours N] [--at "HH:MM"] [--film ID]   who used the CPU and
+#                                                     memory: by hour, the low points of memory, by
+#                                                     film and by step (studio/deploy/usage.py)
+#   bash studio/deploy/ops.sh usage install           install and (re)start the sampler behind it
+#   bash studio/deploy/ops.sh monitor [status|update|install|tunnel|link|tidy|down|rules]   the
+#                                                     machine's watch (github.com/Instafill/machine-
+#                                                     monitor, /opt/machine-monitor there): what it
+#                                                     sees and what stands wrong | push the laptop's
+#                                                     checkout to it | set it up | publish the page |
+#                                                     its address with the key | clear failed hand-job
+#                                                     units | stop the page | the thresholds
 #   bash studio/deploy/ops.sh resume <film-id> [--plan] [--finish]   pick up a film the studio
 #                                                     stopped half-way (studio/resume.py), in the
 #                                                     same film; --plan spends nothing
@@ -27,6 +47,19 @@
 #                                                     share-page title, description and picture
 #                                                     (studio/share.py); the price is printed
 #                                                     first, and --dry-run stops there
+#   bash studio/deploy/ops.sh share <film-id> --frame <seconds>|off   the film's own frame as its
+#                                                     page's thumbnail, or the drawn one back; the
+#                                                     words and the link preview stay, no cost
+#   bash studio/deploy/ops.sh review <film-id> [--machine] [--api]   read a finished film for
+#                                                     glitches as the studio reads one before it
+#                                                     is done (studio/review.py): the whole of it
+#                                                     a frame a second, then the moments worth a
+#                                                     closer look. Prints what it finds; changes
+#                                                     nothing. --machine: only what the drawing
+#                                                     code shows, no Claude call
+#   bash studio/deploy/ops.sh canon <p-id> [--show | --dry-run | --force]   a project's episode
+#                                                     log (studio/canon.py): write the entries it
+#                                                     lacks, oldest first; --show prints it
 #   bash studio/deploy/ops.sh template push <templates/t-x/vN folder> | publish|retire|draft <t-x> <N>
 #                                  | list | check      kitcut.ai's templates (studio/templates.py):
 #                                                     push copies a version made on this laptop into
@@ -39,15 +72,88 @@
 #                                                    a film made on the VM itself
 #                                                     (on the Claude login unless --api), followed;
 #                                                     --no-watch prints its id and returns
+#                                                     --attach file ...: photos and logos it may use,
+#                                                     named upload1..N in the prompt, in that order
 #                                                     --person "Name=photo.jpg" (up to 4), --style felt:
 #                                                     people drawn into it as characters who talk
 #   bash studio/deploy/ops.sh watch <film-id>...      follow films to the end (one line per change)
-#   bash studio/deploy/ops.sh pull <film-id> [dest] [--all]   its outputs (or the whole folder) here
+#   bash studio/deploy/ops.sh pull <film-id> [dest] [--all | --light]   its outputs (or the whole folder,
+#                                          or --light: what it chose and its small video) here
 #   bash studio/deploy/ops.sh hide|show <film-id>     out of / back into the public gallery
+#   bash studio/deploy/ops.sh unbrand <film-id> [--no-watch]   a finished Free-plan film drawn again
+#                                                     without its mark and closing (studio/unbrand.py):
+#                                                     a render, no Claude; followed to the end
+#   bash studio/deploy/ops.sh notes <film-id> <notes.json> [--no-watch]   a round of changes to a
+#                                                     finished film (studio/rounds.py): the notes in the
+#                                                     file made into its next version; followed to the end.
+#                                                     notes.json: [{"kind": "moment|spot|stretch|line|film",
+#                                                     "t", "t2", "x", "y", "line", "words", "text"}, ...]
+#   bash studio/deploy/ops.sh take <film-id> <dir>   a finished film's files, to change by hand
+#                                                     here; stamped with what they were taken from
+#   bash studio/deploy/ops.sh put <film-id> <dir> --summary "..." [--no-watch]   what changed since
+#                                                     take, made the film's next version as a round
+#                                                     is; refused if the film changed meanwhile
+#   bash studio/deploy/ops.sh versions <film-id>      a film's versions, and how its last round ended
+#   bash studio/deploy/ops.sh version <film-id> <n>   version n is the film again (nothing is rendered)
+#   bash studio/deploy/ops.sh library-get <project> <dir>   a project's library to work on here:
+#                                                     each member's latest version as
+#                                                     <dir>/cast/<name>.js, cast.png, index.json
+#   bash studio/deploy/ops.sh library-put <project> [--dry-run] [--replace] <cast/x.js>...
+#                                                     a back-fill: cast files (places a series
+#                                                     drew in film.js) into its library as the
+#                                                     next versions (studio/library_put.py)
+#   bash studio/deploy/ops.sh actor-put <project> [--dry-run] [--replace] [--name N] <pack dir>
+#                                                     an actor pack (scripts/actor-pack.py) into a
+#                                                     project: each next episode gets it as
+#                                                     SK.actor('<name>') (studio/actor_put.py)
+#   bash studio/deploy/ops.sh actors <project> [--remove <name>]   its actors, or one taken out
 #   bash studio/deploy/ops.sh replace <film-id> <folder>   a remade film takes its place (same id
 #                                                     and page; the old one to backups/)
+#   bash studio/deploy/ops.sh delete <film-id>        a film deleted for good: its copy online, its
+#                                                     record, its folder, what else names it. Nothing
+#                                                     is kept. --dry-run says what would go
 #   bash studio/deploy/ops.sh forward [port]          the VM's studio on this laptop's 127.0.0.1:port
 #                                                     (default 8765), as if it ran here
+#   bash studio/deploy/ops.sh prune [--plan] [--older-than H] [--film <id>]   finished films'
+#                                                     working pictures removed (studio/prune.py):
+#                                                     what would go is printed first, and --plan
+#                                                     stops there. An hourly timer does the same
+#   bash studio/deploy/ops.sh prune install           install and start that timer
+#   bash studio/deploy/ops.sh backup [--plan | --full]   one pass of the mirror of the studio's
+#                                                     home to R2 (studio/backup.py); --plan says
+#                                                     what it would send and sends nothing; --full
+#                                                     compares every file by checksum
+#   bash studio/deploy/ops.sh backup status|verify    the last pass and the timers | every mirrored
+#                                                     file checked against the bucket
+#   bash studio/deploy/ops.sh backup db [--plan]      the site's database exported into the bucket
+#   bash studio/deploy/ops.sh backup install          install and start the mirror's two timers
+#   bash studio/deploy/ops.sh filmgit [--plan] [--film <id>] | --log <id> | install
+#                                                     films' code in their projects' git
+#                                                     repositories (studio/filmgit.py): commit
+#                                                     what is new, forget deleted films; a film's
+#                                                     versions as commits; the hourly timer
+#   bash studio/deploy/ops.sh filmgit publish         the repositories GitHub does not have yet:
+#                                                     made there, private (github.com/kitcut-films),
+#                                                     each with a key of its own that may write
+#                                                     only it; every sync then pushes them
+#   bash studio/deploy/ops.sh credit [--month YYYY-MM|--plan|--json]   the month on Claude's keys:
+#                                                     the credit key's spend, what is left, the
+#                                                     day it runs out; the paid key's (apikey.py)
+#   bash studio/deploy/ops.sh secrets seal|check|names   the machine's .env and tunnel credential
+#                                                     sealed for the key vault alone to open
+#                                                     (studio/sealenv.py) | opened through the
+#                                                     vault and compared with the machine's, by
+#                                                     name | what the sealed file holds
+#   bash studio/deploy/ops.sh rc                      Remote Control (claude rc) on the machine: at
+#                                                     boot or not, who is signed in, its screen
+#   bash studio/deploy/ops.sh rc login | code <code> | install | stop
+#                                                     the sign-in a person finishes in a browser
+#                                                     (its link, then the code the page shows);
+#                                                     start it now and with the machine; take it off
+#   bash studio/deploy/ops.sh restore --plan          what the mirror holds, folder by folder
+#   bash studio/deploy/ops.sh restore --all | --film <id> [--from-history YYYY-MM-DD]
+#                                                     the home, or one film, back from the mirror
+#                                                     (studio/restore.py): it only adds
 #   bash studio/deploy/ops.sh snapshot [--keep N]     an incremental snapshot of the data disk
 #                                                     (films, checkout, .env), keep the newest N (7)
 #   bash studio/deploy/ops.sh snapshots               list them
@@ -59,6 +165,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_LOCAL="$(cd "$HERE/../.." && pwd)"
 VM="${KITCUT_VM:-kitcut-studio-1}"
 RG="${KITCUT_RG:-kitcut-PROD}"
+BACKUP_RG="${KITCUT_BACKUP_RG:-kitcut-backup}"
+BACKUP_VAULT="${KITCUT_BACKUP_VAULT:-kitcut-backup-rsv}"
 PORT=8765
 REMOTE=/srv/kitcut/repo
 HOME_DIR=/srv/kitcut/studio
@@ -74,13 +182,13 @@ change_on() { if [ "$DRY" = 1 ]; then echo "  would run on $VM: $*"; else on "$@
 TOKEN_SH="TOKEN=\$(grep -E '^STUDIO_TOKEN=' $REMOTE/.env | tail -1 | cut -d= -f2- | tr -d '\r' | sed -e 's/^[\"\x27]//' -e 's/[\"\x27]\$//')"
 az_() { MSYS_NO_PATHCONV=1 az "$@"; }
 
-# The commit to ship: only what the team can see (on origin/studio-poc). Sets sha.
+# The commit to ship: only what the team can see (on origin/main). Sets sha.
 resolve() {
-  local ref="${1:-origin/studio-poc}"
+  local ref="${1:-origin/main}"
   git -C "$REPO_LOCAL" fetch -q origin
   sha="$(git -C "$REPO_LOCAL" rev-parse --verify "$ref^{commit}")" || die "no commit $ref"
-  git -C "$REPO_LOCAL" merge-base --is-ancestor "$sha" origin/studio-poc ||
-    die "$ref (${sha:0:12}) is not on origin/studio-poc -- merge and push it first"
+  git -C "$REPO_LOCAL" merge-base --is-ancestor "$sha" origin/main ||
+    die "$ref (${sha:0:12}) is not on origin/main -- merge and push it first"
 }
 # What the VM runs now, in one call: whether the legacy one-server unit is still installed
 # ("loaded" until ops.sh migrate), and its /api/health. Sets legacy, health, leader.
@@ -107,12 +215,24 @@ for i in h.get("instances") or []:
 '
 }
 # Tag studio-stable and put the commit on the VM (push.sh: the VM holds no GitHub credentials).
-# The commit itself, not this clone's studio-poc (behind origin's in a worktree).
+# The commit itself, not this clone's main (behind origin's in a worktree).
 deliver() {
   echo "shipping ${sha:0:12}: $(git -C "$REPO_LOCAL" log --format=%s -1 "$sha")"
   change git -C "$REPO_LOCAL" tag -f studio-stable "$sha"
   change git -C "$REPO_LOCAL" push -q -f origin refs/tags/studio-stable
-  if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM studio-poc $sha"; else bash "$HERE/push.sh" "$VM" studio-poc "$sha"; fi
+  if [ "$DRY" = 1 ]; then echo "  would run: push.sh $VM main $sha"; else bash "$HERE/push.sh" "$VM" main "$sha"; fi
+}
+# Follow a film's round of changes (its maker's notes, or files put by hand) to its end, then
+# say how it ended and what each note was answered.
+watch_round() {
+  local id="$1"
+  on "$TOKEN_SH; last=''; while :; do
+    d=\$(curl -s 'http://127.0.0.1:$PORT/api/films/$id/versions' -H \"Authorization: Bearer \$TOKEN\")
+    s=\$(printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d.get(\"round\") or {}; l=d.get(\"last\") or {}; print(r.get(\"state\") or l.get(\"state\"), \"-\", r.get(\"now\") or \"\")' 2>/dev/null) || s='unreadable'
+    [ \"\$s\" != \"\$last\" ] && echo \"\$(date +%T)  \$s\"; last=\$s
+    case \"\$s\" in queued*|running*|finishing*) sleep 5 ;; *) break ;; esac
+  done
+  printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); l=d.get(\"last\") or {}; print(json.dumps({\"version\": d.get(\"version\"), \"round\": {k: l.get(k) for k in (\"id\",\"state\",\"error\",\"summary\")}, \"answers\": l.get(\"answers\")}, indent=1, ensure_ascii=False))'"
 }
 # Follow a transient unit on the VM to its end (Ctrl+C stops the following, not the unit).
 follow() {
@@ -133,6 +253,8 @@ UNIT_ENV="$UNIT_ENV --setenv=PATH=\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin
 case "$cmd" in
   status)
     printf 'VM %s: %s\n' "$VM" "$(az_ vm show -d -g "$RG" -n "$VM" --query powerState -o tsv 2>/dev/null || echo '?')"
+    # Azure's own nightly copy of the whole machine (vault kitcut-backup-rsv, 30 days kept)
+    printf 'azure backup: %s\n' "$(az_ backup job list -g "$BACKUP_RG" -v "$BACKUP_VAULT" --query "[0].join(' ', [properties.operation, properties.status, properties.startTime])" -o tsv 2>/dev/null || echo '?')"
     on "HOME_DIR=$HOME_DIR bash -s" <<'EOF'
 h=$(curl -s --max-time 5 http://127.0.0.1:8765/api/health || true)
 python3 - "$h" <<'PY'
@@ -150,7 +272,20 @@ for i in h.get("instances") or []:
 PY
 public=$(curl -s --max-time 8 https://studio.kitcut.ai/api/health | python3 -c 'import json,sys; print(json.load(sys.stdin)["release"])' 2>/dev/null || echo "NOT REACHABLE")
 echo "studio.kitcut.ai: $public"
-echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+# the one way in besides the VPN, for Claude cloud sessions (ssh-tunnel.sh). Its lock is a
+# Cloudflare firewall rule (ssh-lock.mjs): asked without the secret header it must refuse
+ssh_code=$(curl -s -o /dev/null --max-time 8 -w '%{http_code}' https://ssh.kitcut.ai/ || true)
+case "$ssh_code" in
+  403) echo "ssh.kitcut.ai: locked (refuses without its header), tunnel $(systemctl is-active kitcut-ssh-tunnel)" ;;
+  000) echo "ssh.kitcut.ai: not set up" ;;
+  *) echo "ssh.kitcut.ai: NOT LOCKED (answered $ssh_code without the header): ssh-lock.mjs --out, or ssh-tunnel.sh down" ;;
+esac
+echo "units: $(for u in kitcut-tunnel kitcut-studio-boot kitcut-login-check.timer kitcut-usage kitcut-prune.timer kitcut-backup.timer kitcut-backup-full.timer machine-monitor machine-monitor-tunnel; do printf '%s=%s ' $u $(systemctl is-active $u); done)"
+# the copy off the machine (studio/backup.py): when it last went through, and STALE when it has not
+STUDIO_HOME=$HOME_DIR STUDIO_REPO=/srv/kitcut/repo python3 /srv/kitcut/repo/studio/backup.py --status 2>&1 | sed 's/^/mirror: /'
+# the ship that follows GitHub (deploy/autoship.py): whether it is on, and what it last decided
+[ -f /srv/kitcut/repo/studio/deploy/autoship.py ] &&
+  echo "$(STUDIO_HOME=$HOME_DIR python3 /srv/kitcut/repo/studio/deploy/autoship.py --status 2>&1 | head -1)  (hook $(systemctl is-active kitcut-autoship.path), poll $(systemctl is-active kitcut-autoship.timer))"
 systemctl list-units --all --no-legend --plain 'kitcut-studio@*' kitcut-studio.service | awk '{ printf "  %s %s/%s\n", $1, $3, $4 }'
 python3 - <<'PY'
 import glob, json, os
@@ -171,12 +306,39 @@ res=$(systemctl show kitcut-login-check.service -p Result --value)
 next=$(systemctl show kitcut-login-check.timer -p NextElapseUSecRealtime --value)
 if [ -n "$at" ]; then echo "login check: $res at $at (next $next)"; else echo "login check: not run yet (first $next)"; fi
 echo "disks: $(df -h / | awk 'NR==2{print "system "$3"/"$2}')  $(df -h /srv/kitcut | awk 'NR==2{print "data "$3"/"$2}')   load $(cut -d' ' -f1-3 /proc/loadavg)   mem free $(free -g | awk '/Mem:/{print $7}') GB"
+# a full data disk stops every film (KI-063): say so while there is still room to act
+used=$(df --output=pcent /srv/kitcut | tail -1 | tr -dc 0-9)
+if [ "${used:-0}" -ge 80 ]; then
+  echo "WARNING: the data disk is $used% full -- ops.sh prune --plan says what can go (KI-063)"
+fi
 # below 2 GB a film's Claude may not start at all ("Control request timeout: initialize", KI-045):
 # say so loudly, and name what holds the memory
 avail=$(awk '/MemAvailable/{print int($2/1024)}' /proc/meminfo)
 if [ "$avail" -lt 2048 ]; then
   echo "WARNING: only $avail MB of memory available -- films may fail to start Claude (KI-045). Biggest:"
   ps -eo pid,rss,etime,args --sort=-rss | head -4 | cut -c1-160
+fi
+# the key the studio's outside services answer to: the service that listens to every narration
+# take, the image model that draws people, pictures painted through OpenRouter, voice notes. A key
+# at its own spending limit is refused on every call (HTTP 403) and nothing else says so: on
+# 2026-10-12 that sent every take to the machine's own Whisper, and the studio froze (KI-066)
+key=$(sed -n 's/^OPENROUTER_API_KEY=//p' /srv/kitcut/repo/.env | tr -d '"\r' | head -1)
+if [ -n "$key" ]; then
+  curl -s --max-time 8 -H "Authorization: Bearer $key" https://openrouter.ai/api/v1/key | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)["data"]
+except Exception:
+    print("openrouter key: could not be read (no answer from openrouter.ai)")
+    sys.exit()
+lim, used, left = d.get("limit"), d.get("usage") or 0, d.get("limit_remaining")
+if lim is None:
+    print("openrouter key: $%.2f used, no limit on the key" % used)
+else:
+    print("openrouter key: $%.2f of its $%.2f limit used, $%.2f left" % (used, lim, left or 0))
+    if (left or 0) < max(2.0, 0.1 * lim):
+        print("WARNING: the OpenRouter key is at its limit -- narration takes are scored on this machine (slower), and people drawn from photos, pictures painted through OpenRouter and voice notes fail. Raise the limit: openrouter.ai, Keys (KI-066)")
+'
 fi
 n=$(journalctl -u 'kitcut-studio@*' -u kitcut-studio -u kitcut-tunnel --since -24h -p err --no-pager -q | wc -l)
 echo "errors in the last 24 h: $n"
@@ -196,6 +358,82 @@ EOF
       shift
     done
     on "journalctl -u $unit -n $n --no-pager $follow"
+    ;;
+
+  usage)
+    # who uses the machine: the sampler's timeline and the servers' steps log (deploy/usage.py)
+    if [ "${1:-}" = install ]; then
+      change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q kitcut-usage.service && sudo systemctl restart kitcut-usage.service && systemctl is-active kitcut-usage.service"
+    else
+      on "STUDIO_HOME=$HOME_DIR python3 $REMOTE/studio/deploy/usage.py report$(printf ' %q' "$@")"
+    fi
+    ;;
+
+  monitor)
+    # the machine's watch: its own repository (github.com/Instafill/machine-monitor), checked out
+    # at /opt/machine-monitor on the machine. The machine holds no GitHub key, so `update` pushes
+    # this laptop's checkout to it over ssh, as push.sh does the studio. Its alerts reach the owner
+    # through studio/machine_note.py (its notify_cmd) and the site's watch.
+    what="${1:-status}"
+    MM=/opt/machine-monitor
+    case "$what" in
+      update)
+        local_mm="${MACHINE_MONITOR_REPO:-$(cd "$HERE/../../.." && pwd)/machine-monitor}"
+        [ -d "$local_mm/.git" ] || die "no machine-monitor checkout at $local_mm (MACHINE_MONITOR_REPO)"
+        git -C "$local_mm" pull -q --ff-only
+        ip="$(bash "$HERE/vm.sh" ip "$VM")"
+        if [ "$DRY" = 1 ]; then
+          echo "  would push $local_mm main to $VM:$MM"
+        else
+          GIT_SSH_COMMAND="ssh -i ${KITCUT_SSH_KEY:-$HOME/.ssh/kitcut-studio} -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$HOME/.ssh/known_hosts.kitcut" \
+            git -C "$local_mm" push -q "ssh://kitcut@$ip$MM" main
+          on "git -C $MM log --oneline -1"
+        fi
+        ;;
+      install|tunnel|tidy|down) change_on "bash $MM/setup.sh $what" ;;
+      status|link) on "bash $MM/setup.sh $what" ;;
+      rules) on "python3 $MM/monitor.py rules" ;;
+      *) die "monitor [status|update|install|tunnel|link|tidy|down|rules]" ;;
+    esac
+    ;;
+
+  rc)
+    # Remote Control on the machine: `claude rc` kept in tmux by kitcut-claude-rc.service, so it
+    # starts with the machine (deploy/README.md, "Remote Control"). The sign-in is its own tmux
+    # (claude-login): the service's tmux server must be the one systemd started.
+    rc_tm="tmux -L claude-rc"
+    rc_in="tmux -L claude-login"
+    # never the films' token: it is inference-only, Remote Control refuses it
+    rc_cl="env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY \$HOME/.local/bin/claude"
+    rc_shown="grep -v '^[[:space:]]*\$' | tail"
+    case "${1:-}" in
+      "")
+        on "e=\$(systemctl is-enabled kitcut-claude-rc.service 2>/dev/null); echo \"at boot: \${e:-not installed}   now: \$(systemctl is-active kitcut-claude-rc.service 2>/dev/null)\"
+          $rc_cl auth status 2>/dev/null | grep -E '\"(loggedIn|email|orgName|subscriptionType)\"' || echo 'not signed in: ops.sh rc login'
+          $rc_tm capture-pane -p -J -t rc 2>/dev/null | $rc_shown -15 || true"
+        ;;
+      login)
+        change_on "$rc_in kill-server 2>/dev/null
+          $rc_in new-session -d -s login -x 250 -y 50 '$rc_cl auth login; echo; echo THE SIGN-IN ENDED; sleep 900' && sleep 7 &&
+          $rc_in capture-pane -p -J -t login | $rc_shown -5"
+        echo "open that link in the browser signed in to the account that should see $VM, press Authorize,"
+        echo "then within a few minutes: ops.sh rc code <the code the page shows>"
+        ;;
+      code)
+        [[ "${2:-}" =~ ^[A-Za-z0-9_#.-]+$ ]] || die "rc code <the code the sign-in page shows>"
+        change_on "$rc_in send-keys -t login -l '$2' && $rc_in send-keys -t login Enter && sleep 7 &&
+          $rc_in capture-pane -p -J -t login | $rc_shown -4
+          $rc_cl auth status 2>/dev/null | grep -E '\"(loggedIn|email)\"'"
+        ;;
+      install)
+        change_on "$rc_cl auth status 2>/dev/null | grep -q '\"loggedIn\": true' || { echo 'nobody is signed in on $VM: ops.sh rc login' >&2; exit 1; }
+          bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && { $rc_in kill-server 2>/dev/null; true; } &&
+          sudo systemctl enable -q kitcut-claude-rc.service && sudo systemctl restart kitcut-claude-rc.service && sleep 10 &&
+          systemctl is-active kitcut-claude-rc.service && $rc_tm capture-pane -p -J -t rc | $rc_shown -12"
+        ;;
+      stop) change_on "sudo systemctl disable -q --now kitcut-claude-rc.service; systemctl is-active kitcut-claude-rc.service || true" ;;
+      *) die "rc | rc login | rc code <code> | rc install | rc stop" ;;
+    esac
     ;;
 
   ship)
@@ -269,7 +507,61 @@ EOF
     rel="${1:?rollback <sha12> (see: ops.sh releases)}"
     [[ "$rel" =~ ^[0-9a-f]{12}$ ]] || die "not a release: $rel"
     on "test -f $HOME_DIR/releases/$rel/studio/server.py" || die "no release $rel built on $VM"
+    # autoship would see GitHub's head ahead of the release and ship it straight back
+    change_on "echo 'ops.sh rollback to $rel at $(date '+%F %T')' > $HOME_DIR/autoship.paused"
     change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR bash studio/serve.sh use $rel"
+    echo "autoship is paused (it would ship GitHub's head back): ops.sh autoship on, once fixed"
+    ;;
+
+  autoship)
+    # the ship that follows GitHub's main (deploy/autoship.py): its push hook starts it
+    # (kitcut-autoship.path), and a poll every 15 minutes (kitcut-autoship.timer)
+    use="autoship [status | --plan | on | off | now [--retry] | hook [--check]]"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE"
+    py="/usr/bin/python3 $REMOTE/studio/deploy/autoship.py"
+    case "${1:-status}" in
+      status)
+        on "$envs $py --status; rc=\$?; systemctl list-timers --no-pager kitcut-autoship.timer | sed -n 1,2p; echo \"hook: \$(systemctl is-active kitcut-autoship.path)\"; exit \$rc"
+        exit $? ;;
+      --plan) on "$envs $py --plan"; exit $? ;;
+      on)
+        change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && rm -f $HOME_DIR/autoship.paused && sudo systemctl enable -q --now kitcut-autoship.timer kitcut-autoship.path && systemctl is-active kitcut-autoship.timer kitcut-autoship.path"
+        exit $? ;;
+      off) change_on "sudo systemctl disable -q --now kitcut-autoship.timer kitcut-autoship.path; systemctl is-active kitcut-autoship.timer kitcut-autoship.path || true"; exit 0 ;;
+      hook)
+        # GitHub's push hook (server.py github_hook): the secret, made once on the machine and kept
+        # in its .env -- never printed, never on this laptop's disk -- and the webhook on
+        # kitcut-hq/kitcut made or put back to send that secret, push events only, to the one URL.
+        # The Cloudflare half (only GitHub's addresses reach the path) is deploy/hook-lock.mjs.
+        hook_url="https://studio.kitcut.ai/hooks/github"
+        hook_repo="kitcut-hq/kitcut"
+        id="$(gh api "repos/$hook_repo/hooks" --jq ".[] | select(.config.url == \"$hook_url\") | .id" | head -1)"
+        if [ "${2:-}" = --check ]; then
+          [ -n "$id" ] || die "no webhook on $hook_repo for $hook_url: ops.sh autoship hook"
+          gh api "repos/$hook_repo/hooks/$id" --jq '"webhook \(.id): active \(.active), events \(.events | join(",")), content \(.config.content_type), last \(.last_response.code) \(.last_response.message // "")"'
+          gh api "repos/$hook_repo/hooks/$id/deliveries?per_page=5" --jq '.[] | "  \(.delivered_at)  \(.event)  \(.status_code) \(.status)"'
+          on "grep -q '^AUTOSHIP_HOOK_SECRET=.' $REMOTE/.env && echo 'secret: in the machine .env' || echo 'secret: NOT in the machine .env'"
+          code="$(curl -s -o /dev/null -w '%{http_code}' -X POST --max-time 10 "$hook_url" -d '{}')"
+          echo "a POST from this laptop: $code ($( [ "$code" = 403 ] && echo 'blocked at Cloudflare, as it should be' || echo 'NOT blocked at Cloudflare: node --env-file=<token> studio/deploy/hook-lock.mjs'))"
+          exit 0
+        fi
+        [ "$DRY" = 1 ] && { echo "  would make the secret on $VM if missing, then ${id:+update webhook $id}${id:-make a webhook} for $hook_url on $hook_repo"; exit 0; }
+        # the secret: 32 random bytes, appended once; the servers read it per request
+        on "grep -q '^AUTOSHIP_HOOK_SECRET=.' $REMOTE/.env || { printf '\n# GitHub push hook (server.py github_hook; ops.sh autoship hook)\nAUTOSHIP_HOOK_SECRET=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(32))')\" >> $REMOTE/.env; echo 'made the hook secret'; }"
+        # straight from the machine into GitHub's API, through a pipe: it is never printed
+        on "sed -n 's/^AUTOSHIP_HOOK_SECRET=//p' $REMOTE/.env | tail -1 | tr -d '\"\r'" |
+          python -c 'import json, sys; s = sys.stdin.read().strip(); print(json.dumps({"name": "web", "active": True, "events": ["push"], "config": {"url": sys.argv[1], "content_type": "json", "insecure_ssl": "0", "secret": s}}))' "$hook_url" |
+          if [ -n "$id" ]; then gh api -X PATCH "repos/$hook_repo/hooks/$id" --input - --jq '"updated webhook \(.id)"'
+          else gh api -X POST "repos/$hook_repo/hooks" --input - --jq '"made webhook \(.id): GitHub sends it a ping now"'; fi
+        exit $? ;;
+      now)
+        # a look of its own, as the timer's would be: the same unit, so never beside one (and
+        # systemctl start waits for it); --retry first forgets that the head failed
+        retry=""; [ "${2:-}" = --retry ] && retry="$envs $py --forget && "
+        change_on "${retry}sudo systemctl start kitcut-autoship.service; $envs $py --status"
+        exit $? ;;
+      *) die "$use" ;;
+    esac
     ;;
 
   claude-log)
@@ -288,14 +580,15 @@ EOF
     ;;
 
   resume)
-    id="${1:?resume <film-id> [--plan] [--finish [--patched]] [--minutes N]}"; shift
+    id="${1:?resume <film-id> [--plan] [--finish [--patched [--over N]]] [--minutes N]}"; shift
     [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
     plan=0; how=""
     while [ $# -gt 0 ]; do
       case "$1" in
         --plan) plan=1 ;; --finish) how="$how --finish" ;; --patched) how="$how --patched" ;;
         --minutes) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--minutes needs a number"; how="$how --minutes $2"; shift ;;
-        *) die "resume <film-id> [--plan] [--finish [--patched]] [--minutes N]" ;;
+        --over) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--over needs a version number"; how="$how --over $2"; shift ;;
+        *) die "resume <film-id> [--plan] [--finish [--patched [--over N]]] [--minutes N]" ;;
       esac
       shift
     done
@@ -315,24 +608,32 @@ EOF
   share)
     # a finished film's share (studio/share.py): the price first, always -- it spends nothing --
     # then the work in a unit of its own, like resume, so it goes on if this laptop sleeps
-    use="share <film-id>|--missing [--dry-run] [--limit N]"
+    use="share <film-id>|--missing|--titles [--dry-run] [--limit N] | share <film-id> --frame <seconds>|off"
     what="${1:?$use}"; shift
     if [ "$what" = "--missing" ]; then args="--missing"
+    elif [ "$what" = "--titles" ]; then
+      # films in another language get their share's title as their own: no model call, no unit
+      dry=""; [ "${1:-}" = "--dry-run" ] && dry=" --dry-run"
+      change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/share.py --titles$dry"
+      exit $?
     else
       [[ "$what" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $what"
       args="--film $what"
     fi
-    only_price=0
+    only_price=0; frame=0
     while [ $# -gt 0 ]; do
       case "$1" in
         --dry-run) only_price=1 ;;
+        --frame)
+          [[ "$args" == --film* && "${2:-}" =~ ^(off|[0-9]+(\.[0-9]+)?)$ ]] || die "--frame needs a film id and seconds, or off"
+          args="$args --frame $2"; frame=1; shift ;;
         --limit) [[ "${2:-}" =~ ^[0-9]+$ ]] || die "--limit needs a number"; args="$args --limit $2"; shift ;;
         *) die "$use" ;;
       esac
       shift
     done
     py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/share.py $args"
-    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --dry-run" || exit 1
+    [ "$frame" = 1 ] || on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $py --dry-run" || exit 1
     [ "$only_price" = 1 ] && exit 0
     unit="kitcut-share-$(date +%Y%m%d-%H%M%S)"
     # capped, and behind the films: an uncapped --missing grew to 15 GB of the VM's 16 on
@@ -342,8 +643,54 @@ EOF
     follow "$unit"
     ;;
 
+  review)
+    # a finished film read for glitches (studio/review.py): its frames and the probe are rendered
+    # beside the server, so in a capped unit like canon's, and not while a film records its voice
+    use="review <film-id> [--machine] [--api]"
+    id="${1:?$use}"; shift
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    args="--film $id"; auth="--auth login"  # the login unless --api: a reading by hand bills no film
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --machine) args="$args --machine" ;; --api) auth="--auth api" ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/review.py $args $auth"
+    unit="kitcut-review-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  canon)
+    # a project's episode log (studio/canon.py): --show reads it, --dry-run names the episodes
+    # without an entry; else they are written, oldest first, in a capped unit like share's
+    use="canon <p-id> [--show | --dry-run | --force]"
+    proj="${1:?$use}"; shift
+    [[ "$proj" =~ ^p-[a-z2-7]{10}$ ]] || die "not a project id: $proj"
+    args="--project $proj --missing"; mode=write
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --show) mode=show ;; --dry-run) mode=price ;; --force) args="$args --force" ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/canon.py $args"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    if [ "$mode" = show ]; then on "cd $REMOTE && $envs $py --show"; exit $?; fi
+    on "cd $REMOTE && $envs $py --dry-run" || exit 1
+    [ "$mode" = price ] && exit 0
+    unit="kitcut-canon-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=1G -p MemoryMax=2G -p Nice=10 $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
   film)
-    use="film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch] [--person Name=photo ...] [--style S] | film \"<what you want>\" --template t-x [--attach file ...] [--frame F]"
+    use="film \"<idea>\" [--seconds N] [--look L] [--unlisted] [--api] [--no-watch] [--attach file ...] [--person Name=photo ...] [--style S] | film \"<what you want>\" --template t-x [--attach file ...] [--frame F]"
     idea=""; [[ "${1:-}" == --* ]] || { idea="${1:?$use}"; shift; }
     secs=30; auth=""; look=drawn; listed=1; follow=1; people=(); style=auto
     tpl=""; attach=(); frame=""
@@ -355,27 +702,29 @@ EOF
       shift
     done
     [ -n "$idea" ] || [ -n "$tpl" ] || die "$use"
+    # --attach files (pictures, .md/.txt notes), each uploaded to the VM's studio first, as the
+    # site does: a template's pictures, or the photos and logos a plain film is told to use. They
+    # reach the film as upload1..N in the order given, so the prompt names them by number
+    ids="[]"
+    for f in ${attach[@]+"${attach[@]}"}; do
+      [ -f "$f" ] || die "no file: $f"
+      case "$f" in *.png|*.PNG) ct=image/png ;; *.webp|*.WEBP) ct=image/webp ;;
+        *.md|*.MD) ct=text/markdown ;; *.txt|*.TXT) ct=text/plain ;; *) ct=image/jpeg ;; esac
+      if [ "$DRY" = 1 ]; then up="up-dryrun"; echo "  would upload $f ($ct)"
+      else
+        up="$(on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/uploads -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: $ct' --data-binary @-" < "$f" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')" || exit 1
+      fi
+      ids="$(python -c 'import json,sys; l=json.loads(sys.argv[1]); l.append(sys.argv[2]); print(json.dumps(l))' "$ids" "$up")"
+    done
     if [ -n "$tpl" ]; then
-      # a template's film (studio/templates.py): what you want in your own words, and --attach
-      # files (pictures, .md/.txt notes), each uploaded to the VM's studio first, as the site does
-      ids="[]"
-      for f in "${attach[@]}"; do
-        [ -f "$f" ] || die "no file: $f"
-        case "$f" in *.png|*.PNG) ct=image/png ;; *.webp|*.WEBP) ct=image/webp ;;
-          *.md|*.MD) ct=text/markdown ;; *.txt|*.TXT) ct=text/plain ;; *) ct=image/jpeg ;; esac
-        if [ "$DRY" = 1 ]; then up="up-dryrun"; echo "  would upload $f ($ct)"
-        else
-          up="$(on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/uploads -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: $ct' --data-binary @-" < "$f" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')" || exit 1
-        fi
-        ids="$(python -c 'import json,sys; l=json.loads(sys.argv[1]); l.append(sys.argv[2]); print(json.dumps(l))' "$ids" "$up")"
-      done
+      # a template's film (studio/templates.py): what you want in your own words
       body="$(python -c '
 import json, sys
 tid, _, ver = sys.argv[1].partition(":")
 body = {"template": {"id": tid, **({"version": int(ver)} if ver else {})}, "prompt": sys.argv[2], "attachments": json.loads(sys.argv[3]), "listed": sys.argv[4] == "1"}
 if sys.argv[5]:
     body["frame"] = sys.argv[5]
-print(json.dumps(body, ensure_ascii=False))
+print(json.dumps(body))  # ASCII on the wire: a letter outside it (a dash, an accent) reached the studio broken from a Windows shell
 ' "$tpl" "$idea" "$ids" "$listed" "$frame")"
       body="${body%\}}$auth}"
       [ "$DRY" = 1 ] && { echo "  would POST a template film ($tpl) to the VM's studio"; exit 0; }
@@ -399,7 +748,7 @@ print(json.dumps(body, ensure_ascii=False))
       ppl="$(python -c 'import json,sys; l=json.loads(sys.argv[1]); l.append({"upload": sys.argv[2], "name": sys.argv[3]}); print(json.dumps(l))' "$ppl" "$up" "$name")"
     done
     # --look: drawn, painted, collage (the studio refuses one it does not have); --unlisted: link-only
-    body="$(python -c 'import json,sys; ppl=json.loads(sys.argv[5]); print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2]), "look": sys.argv[3], "listed": sys.argv[4] == "1", **({"people": ppl, "character_style": sys.argv[6]} if ppl else {})}))' "$idea" "$secs" "$look" "$listed" "$ppl" "$style")"
+    body="$(python -c 'import json,sys; ppl=json.loads(sys.argv[5]); att=json.loads(sys.argv[7]); print(json.dumps({"prompt": sys.argv[1], "seconds": int(sys.argv[2]), "look": sys.argv[3], "listed": sys.argv[4] == "1", **({"attachments": att} if att else {}), **({"people": ppl, "character_style": sys.argv[6]} if ppl else {})}))' "$idea" "$secs" "$look" "$listed" "$ppl" "$style" "$ids")"
     body="${body%\}}$auth}"
     [ "$DRY" = 1 ] && { echo "  would POST $body to the VM's studio"; exit 0; }
     id="$(printf '%s' "$body" | on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-" | python -c 'import json,sys; d=json.load(sys.stdin); print(d.get("id") or sys.exit(json.dumps(d)))')"
@@ -439,9 +788,12 @@ print(json.dumps(body, ensure_ascii=False))
     ;;
 
   pull)
-    id="${1:?pull <film-id> [dest] [--all]}"; dest="${2:-$REPO_LOCAL/temp/vm-films}"
+    id="${1:?pull <film-id> [dest] [--all | --light]}"; dest="${2:-$REPO_LOCAL/temp/vm-films}"
     what=outputs; [ "${3:-${2:-}}" = "--all" ] && what="." && dest="${dest%--all}"
-    [ "$dest" = "--all" ] || [ -z "$dest" ] && dest="$REPO_LOCAL/temp/vm-films"
+    # --light: what a film chose and its small video, a few MB (studio/variety.py reads these)
+    light="sketch.json studio.json film.js vo.json score.json sfx.json paint.json outputs/film_web.mp4"
+    [ "${3:-${2:-}}" = "--light" ] && what="--ignore-failed-read $light" && dest="${dest%--light}"
+    [ "$dest" = "--all" ] || [ "$dest" = "--light" ] || [ -z "$dest" ] && dest="$REPO_LOCAL/temp/vm-films"
     mkdir -p "$dest/$id"
     on "cd $HOME_DIR/projects/$id && tar -cf - $what" | tar -xf - -C "$dest/$id"
     echo "$(du -sh "$dest/$id" | cut -f1)  $dest/$id"
@@ -469,6 +821,85 @@ print(json.dumps(body, ensure_ascii=False))
       check) on "cd $REMOTE && $envs nice -n 10 $py check" ;;
       *) die "$use" ;;
     esac
+    ;;
+
+  library-get)
+    # the other half of library-put: what a project's library holds now, to improve a member
+    # (a place, a character) outside any episode and put it back as the next version
+    use="library-get <project> <dir>"
+    project="${1:?$use}"; out="${2:?$use}"
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    mkdir -p "$out/cast"
+    on "cd $HOME_DIR/library && d=\$(ls -d */$project 2>/dev/null) && [ \$(echo \"\$d\" | wc -l) = 1 ] || exit 3; cd \$d && python3 -c \"
+import json, os, tarfile, sys
+i = json.load(open('index.json'))
+with tarfile.open(fileobj=sys.stdout.buffer, mode='w|') as t:
+    t.add('index.json')
+    if os.path.exists('cast.png'): t.add('cast.png')
+    for n, e in i['cast'].items():
+        if not e.get('deleted'): t.add('cast/%s/v%d.js' % (n, e['version']), 'cast/%s.js' % n)
+\"" | tar -xf - -C "$out" || die "no library for $project on $VM"
+    echo "$out: $(ls "$out/cast" | tr '\n' ' ')"
+    ;;
+
+  library-put)
+    # cast members written by hand (a series' places, from its episodes' film.js) into a project's
+    # library, as a finished episode's keep() would: thumbnails, the sheet, the next version
+    use="library-put <project> [--dry-run] [--replace] <cast/name.js>..."
+    project="${1:?$use}"; shift
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    flags=""; files=()
+    for a in "$@"; do
+      case "$a" in
+        --dry-run|--replace) flags="$flags $a" ;;
+        *) [ -f "$a" ] || die "no file $a"; files+=("$a") ;;
+      esac
+    done
+    [ "${#files[@]}" -gt 0 ] || die "$use"
+    [ "$DRY" = 1 ] && flags="$flags --dry-run"
+    stage="$HOME_DIR/tmp/library-put-$(date +%Y%m%d-%H%M%S)"
+    on "mkdir -p $stage/cast"
+    for f in "${files[@]}"; do on "cat > $stage/cast/$(basename "$f")" < "$f"; done
+    names=$(for f in "${files[@]}"; do printf ' %s/cast/%s' "$stage" "$(basename "$f")"; done)
+    on "sudo systemd-run --wait --pipe --quiet --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=2G -p MemoryMax=3G -p Nice=10 $UNIT_ENV $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/library_put.py --project $project$flags$names; rc=\$?; rm -rf $stage; exit \$rc"
+    ;;
+
+  actor-put)
+    # an actor pack (the folder scripts/actor-pack.py wrote: pack.json, atlas pages, check.jpg)
+    # into a project's library: each next episode gets it (studio/actor_put.py checks it first)
+    use="actor-put <project> [--dry-run] [--replace] [--name N] [--about TEXT] <pack dir>"
+    project="${1:?$use}"; shift
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    args=(); src=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --dry-run|--replace) args+=("$1") ;;
+        --name|--about) args+=("$1" "${2:?$use}"); shift ;;
+        *) [ -f "$1/pack.json" ] || die "$1 has no pack.json (python scripts/actor-pack.py --spec ...)"; src="$1" ;;
+      esac
+      shift
+    done
+    [ -n "$src" ] || die "$use"
+    [ "$DRY" = 1 ] && args+=(--dry-run)
+    stage="$HOME_DIR/tmp/actor-put-$(date +%Y%m%d-%H%M%S)"
+    on "mkdir -p $stage/pack"
+    for f in "$src"/pack.json "$src"/atlas-*.webp "$src"/atlas-*.png "$src"/check.jpg; do
+      if [ -f "$f" ]; then on "cat > $stage/pack/$(basename "$f")" < "$f"; fi
+    done
+    q=""; for a in "${args[@]}"; do q="$q $(printf %q "$a")"; done
+    on "sudo systemd-run --wait --pipe --quiet --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=1G -p MemoryMax=2G -p Nice=10 $UNIT_ENV $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/actor_put.py --project $project$q $stage/pack; rc=\$?; rm -rf $stage; exit \$rc"
+    ;;
+
+  actors)
+    # a project's actors (actor-put puts them in), or --remove <name>: its next episodes go without
+    project="${1:?actors <project> [--remove <name>]}"; shift
+    [[ "$project" =~ ^p-[a-z0-9]+$ ]] || die "not a project id: $project"
+    flags="--list"
+    if [ "${1:-}" = "--remove" ]; then
+      [[ "${2:-}" =~ ^[a-z][a-z0-9_]{0,30}$ ]] || die "actors $project --remove <name>"
+      flags="--remove $2"; [ "$DRY" = 1 ] && flags="$flags --dry-run"
+    fi
+    on "sudo systemd-run --wait --pipe --quiet --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=1G -p MemoryMax=2G -p Nice=10 $UNIT_ENV $REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/actor_put.py --project $project $flags"
     ;;
 
   replace)
@@ -524,6 +955,123 @@ rm -rf "$STAGE"
 EOF
     ;;
 
+  delete)
+    # a film deleted for good (studio/delete_film.py), asked as this machine: its copy online, its
+    # record, its folder and what else names it. Nothing is kept, so --dry-run first: it asks the
+    # studio what would go (and whether it would be refused) and removes nothing.
+    id="${1:?delete <film-id>}"
+    body='{}'; [ "$DRY" = 1 ] && body='{"plan": true}'
+    on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/delete -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '$body'; echo"
+    ;;
+
+  unbrand)
+    # a finished Free-plan film drawn again without its mark and closing (studio/unbrand.py): asked
+    # as this machine, then followed to the end. The film plays as it was until the new one is in.
+    id="${1:?unbrand <film-id> [--no-watch]}"; shift || true
+    watch=1; [ "${1:-}" = "--no-watch" ] && watch=0
+    change_on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/unbrand -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '{}'; echo"
+    if [ "$DRY" = 1 ] || [ "$watch" = 0 ]; then exit 0; fi
+    on "$TOKEN_SH; last=''; while :; do
+      d=\$(curl -s 'http://127.0.0.1:$PORT/api/films/$id?since=1000000' -H \"Authorization: Bearer \$TOKEN\")
+      s=\$(printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get(\"unbrand\"), \"branded\" if d.get(\"branded\") else \"clean\")' 2>/dev/null) || s='unreadable'
+      [ \"\$s\" != \"\$last\" ] && echo \"\$(date +%T)  \$s\"; last=\$s
+      case \"\$s\" in done*|failed*|None*) break ;; esac
+      sleep 10
+    done
+    printf '%s' \"\$d\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({k: d.get(k) for k in (\"status\",\"branded\",\"unbrand\",\"video_url\",\"download_url\")}, indent=1))'"
+    ;;
+
+  notes)
+    # a round of changes to a finished film (studio/rounds.py): its maker's notes, asked as this
+    # machine, then followed to the end. The film plays as it is until the new version is in; a
+    # round that fails leaves it untouched. The notes cross the wire as base64, so a quote or a
+    # line break in one is nobody's shell syntax.
+    id="${1:?notes <film-id> <notes.json> [--no-watch]}"; file="${2:?notes <film-id> <notes.json>}"
+    [ -f "$file" ] || die "no file $file"
+    watch=1; [ "${3:-}" = "--no-watch" ] && watch=0
+    body=$(python - "$file" <<'PY'
+import base64, json, sys, time
+notes = json.load(open(sys.argv[1], encoding="utf-8"))
+notes = notes.get("notes") if isinstance(notes, dict) else notes
+for i, n in enumerate(notes, 1):
+    n.setdefault("id", "n%d" % i)
+print(base64.b64encode(json.dumps({"key": "ops-%d" % time.time(), "notes": notes}).encode()).decode())
+PY
+    ) || die "$file is not a list of notes"
+    change_on "$TOKEN_SH; echo $body | base64 -d | curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-; echo"
+    if [ "$DRY" = 1 ] || [ "$watch" = 0 ]; then exit 0; fi
+    watch_round "$id"
+    ;;
+
+  take)
+    # a finished film's files, to change by hand on this laptop: everything a version is made of
+    # (not its videos, its record or its log), stamped with the version it was at and what that
+    # version is made of. put sends back what changed, and the studio takes it only while the film
+    # is still what the stamp says -- so a film its maker changed meanwhile is never replaced by
+    # files that did not start from it (KI-061).
+    id="${1:?take <film-id> <dir>}"; dir="${2:?take <film-id> <dir>}"
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    [ -e "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ] && die "$dir is not empty: take into a new folder"
+    at=$(on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env $REMOTE/.venv/bin/python -X utf8 studio/rounds.py $id --where" | grep '^{' | tail -1)
+    [ -n "$at" ] || die "no film $id on $VM"
+    mkdir -p "$dir"
+    skip=""; for n in studio.json events.jsonl temp notes versions library share youtube project.json journal.md outputs; do skip="$skip --exclude=./$n"; done
+    on "cd $HOME_DIR/projects/$id && tar -cf - $skip ." | tar -xf - -C "$dir" || die "the files did not come over"
+    python "$HERE/hand.py" stamp "$dir" "$at" || { rm -f "$dir/.kitcut-take.json"; exit 1; }
+    echo "change them there, preview (scripts/sketch-render.py --manifest $dir/sketch.json --stills ...), then:"
+    echo "  bash studio/deploy/ops.sh put $id $dir --summary \"what is different\""
+    ;;
+
+  put)
+    # the files changed since take, made the film's next version: laid over a copy of the film,
+    # mixed, rendered, put online and swapped in as a round is (studio/rounds.py) -- the film plays
+    # as it is until then, the version before is kept, and one that fails leaves it untouched.
+    # Refused when the film is no longer what was taken: take it again and put the changes on top.
+    use="put <film-id> <dir> --summary \"what is different\" [--no-watch]"
+    id="${1:?$use}"; dir="${2:?$use}"; shift 2
+    [[ "$id" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: $id"
+    summary=""; watch=1
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --summary) summary="${2:-}"; shift ;; --no-watch) watch=0 ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    [ -n "$summary" ] || die "--summary: one or two sentences of what is different (the film's maker reads it)"
+    list=$(python "$HERE/hand.py" changed "$dir" "$id") || exit 1
+    at=$(printf '%s\n' "$list" | head -1); names=$(printf '%s\n' "$list" | tail -n +2)
+    echo "changed since it was taken:"; printf '%s\n' "$names" | sed 's/^/  /'
+    stage="$HOME_DIR/rounds/_hand/$id"
+    # no path of the VM's goes through this shell (Git Bash rewrites one that starts with /): the
+    # studio knows where a film's files by hand are
+    body=$(SUMMARY="$summary" AT="$at" python - <<'PY'
+import base64, json, os, time
+at = json.loads(os.environ["AT"])
+hand = {"base": at["digest"], "summary": os.environ["SUMMARY"]}
+print(base64.b64encode(json.dumps({"key": "ops-hand-%d" % time.time(), "hand": hand}).encode()).decode())
+PY
+    ) || die "could not write the request"
+    if [ "$DRY" = 1 ]; then echo "  would send them to $VM:$stage and ask for the next version"; exit 0; fi
+    printf '%s\n' "$names" | tr -d '\r' | tar -C "$dir" -cf - -T - | on "rm -rf $stage && mkdir -p $stage && tar -xf - -C $stage" || die "the files did not go over"
+    said=$(on "$TOKEN_SH; echo $body | base64 -d | curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' --data-binary @-; echo")
+    echo "$said"
+    case "$said" in *'"round"'*) ;; *) die "not taken: the film is as it was" ;; esac
+    [ "$watch" = 0 ] && exit 0
+    watch_round "$id"
+    echo "if that made a version, the film has moved on: take it again before changing more"
+    ;;
+
+  versions)
+    id="${1:?versions <film-id>}"
+    on "$TOKEN_SH; curl -s 'http://127.0.0.1:$PORT/api/films/$id/versions' -H \"Authorization: Bearer \$TOKEN\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps({\"version\": d.get(\"version\"), \"versions\": [{k: v.get(k) for k in (\"n\",\"at\",\"rev\",\"kept\",\"summary\",\"round\")} for v in d.get(\"versions\") or []], \"round\": d.get(\"round\"), \"last\": d.get(\"last\"), \"words\": d.get(\"words\"), \"limits\": d.get(\"limits\"), \"error\": d.get(\"error\")}, indent=1, ensure_ascii=False))'"
+    ;;
+
+  version)
+    id="${1:?version <film-id> <n>}"; n="${2:?version <film-id> <n>}"
+    change_on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/films/$id/versions/$n/current -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '{}'; echo"
+    ;;
+
   hide|show)
     id="${1:?$cmd <film-id>}"; flag=$([ "$cmd" = hide ] && echo true || echo false)
     change_on "$TOKEN_SH; curl -s -X POST http://127.0.0.1:$PORT/api/admin/films/$id/hidden -H \"Authorization: Bearer \$TOKEN\" -H 'Content-Type: application/json' -d '{\"hidden\": $flag}'; echo"
@@ -534,6 +1082,213 @@ EOF
     echo "the VM's studio on http://127.0.0.1:$p (Ctrl+C to stop). Requests arrive from the VM's own"
     echo "loopback, so they count as 'this machine': films on the Claude login, admin routes allowed."
     exec bash "$HERE/vm.sh" ssh "$VM" -N -L "$p:127.0.0.1:$PORT"
+    ;;
+
+  prune)
+    # finished films' working pictures (studio/prune.py): what would go first, always -- it
+    # removes nothing -- then the removal in a capped unit on idle I/O, beside the films
+    use="prune [--plan] [--older-than H] [--film <id>] | prune install"
+    if [ "${1:-}" = install ]; then
+      change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q --now kitcut-prune.timer && systemctl is-active kitcut-prune.timer"
+      exit 0
+    fi
+    args=""; only_plan=0
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --plan) only_plan=1 ;;
+        --older-than) [[ "${2:-}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || die "--older-than needs hours"; args="$args --older-than $2"; shift ;;
+        --film) [[ "${2:-}" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: ${2:-}"; args="$args --film $2"; shift ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/prune.py$args"
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE $py --plan" || exit 1
+    [ "$only_plan" = 1 ] && exit 0
+    unit="kitcut-prune-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=256M -p MemoryMax=512M -p Nice=10 -p IOSchedulingClass=idle $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  backup)
+    # the mirror of the studio's home on R2 (studio/backup.py) and the database's nightly export
+    # (studio/dbdump.py): a plan sends nothing; a pass runs in a capped unit, beside the films
+    use="backup [--plan | --full] | backup status | backup verify | backup db [--plan] | backup install"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/backup.py"
+    case "${1:-}" in
+      install)
+        change_on "command -v rclone >/dev/null || { echo 'rclone is not installed: bash scripts/setup-linux.sh --studio' >&2; exit 1; }
+          bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q --now kitcut-backup.timer kitcut-backup-full.timer && systemctl is-active kitcut-backup.timer kitcut-backup-full.timer"
+        exit 0 ;;
+      status)
+        on "cd $REMOTE && $envs $py --status; rc=\$?; systemctl list-timers --no-pager 'kitcut-backup*' | sed -n 1,3p; exit \$rc"
+        exit $? ;;
+      --plan)
+        on "cd $REMOTE && $envs nice -n 10 $py --plan"
+        exit $? ;;
+      verify) py="$py --verify" ;;
+      db)
+        py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/dbdump.py"
+        if [ "${2:-}" = "--plan" ]; then on "cd $REMOTE && $envs $py --plan"; exit $?; fi
+        py="$py --upload" ;;
+      --full) py="$py --full" ;;
+      "") ;;
+      *) die "$use" ;;
+    esac
+    unit="kitcut-backup-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 -p CPUWeight=20 -p IOSchedulingClass=idle $UNIT_ENV $py"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  filmgit)
+    # films' code in their projects' git repositories (studio/filmgit.py): a plan writes nothing;
+    # a sync commits what is new and forgets the films that were deleted, in a capped unit
+    use="filmgit [--plan] [--film <id>] | filmgit --log <film-id> | filmgit install | filmgit publish"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/filmgit.py"
+    if [ "${1:-}" = install ]; then
+      change_on "bash $REMOTE/studio/deploy/install.sh --home $HOME_DIR && sudo systemctl enable -q --now kitcut-filmgit.timer && systemctl is-active kitcut-filmgit.timer"
+      exit 0
+    fi
+    if [ "${1:-}" = publish ]; then
+      # Each repository the machine has and GitHub has not: made there, private, in the films'
+      # own organisation; the machine's own key for it registered as a deploy key that may write
+      # that one repository and nothing else; and the machine pointed at it. Done from this
+      # laptop because it takes a GitHub sign-in that may make repositories there -- the machine
+      # runs people's prompts and holds no such thing. From then on every sync pushes it.
+      org="${KITCUT_FILMS_ORG:-kitcut-films}"
+      list="$(on "cd $REMOTE && $envs $py --unpublished")" || die "cannot list $VM's repositories"
+      [ -n "$list" ] || { echo "every film repository on $VM is on GitHub already"; exit 0; }
+      made=""; n=0
+      while IFS=$'\t' read -r name key; do
+        [[ "$name" =~ ^(p-[a-z2-7]{10}|w-[0-9a-f]{20}|w-other)$ && "$key" == ssh-ed25519\ * ]] || continue
+        if [ "$DRY" = 1 ]; then echo "  would publish $org/$name"; n=$((n + 1)); continue; fi
+        gh api "repos/$org/$name" --silent 2>/dev/null ||
+          gh api -X POST "orgs/$org/repos" -f name="$name" -F private=true -F has_issues=false \
+            -F has_wiki=false -F has_projects=false --silent \
+            -f description="Film code kept by the KitCut studio (studio/filmgit.py). Pictures and sound are not here." ||
+          { echo "  could not make $org/$name" >&2; continue; }
+        # GitHub refuses a key it already has for this repository: then it is there, which is the point
+        gh api -X POST "repos/$org/$name/keys" -f title="$VM" -f key="$key" -F read_only=false --silent 2>/dev/null ||
+          gh api "repos/$org/$name/keys" --jq '.[].key' 2>/dev/null | grep -qF "$(printf '%s' "$key" | cut -d' ' -f2)" ||
+          { echo "  could not register $VM's key for $org/$name" >&2; continue; }
+        made="$made $name"; n=$((n + 1))
+        sleep 0.5
+      done <<< "$list"
+      if [ "$DRY" = 1 ]; then echo "would publish $n repositories to github.com/$org"; exit 0; fi
+      [ -z "$made" ] || on "cd $REMOTE && $envs $py --set-remote$made >/dev/null && $envs nice -n 10 $py --push"
+      echo "published $n of $(printf '%s\n' "$list" | grep -c .) to github.com/$org (private)"
+      exit 0
+    fi
+    mode="--sync"; args=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --plan) mode="--plan" ;;
+        --log|--film)
+          [[ "${2:-}" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: ${2:-}"
+          if [ "$1" = "--log" ]; then mode="--log $2"; else args=" --film $2"; fi
+          shift ;;
+        *) die "$use" ;;
+      esac
+      shift
+    done
+    if [ "$mode" != "--sync" ]; then on "cd $REMOTE && $envs nice -n 10 $py $mode$args"; exit $?; fi
+    unit="kitcut-filmgit-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=384M -p MemoryMax=512M -p Nice=10 $UNIT_ENV $py --sync$args"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
+    ;;
+
+  credit)
+    # what Claude spent on each key this month and what is left of the credit key's (apikey.py);
+    # reads the ledger only
+    on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_ENV_FILE=$REMOTE/.env .venv/bin/python -X utf8 studio/apikey.py $*"
+    ;;
+
+  secrets)
+    # The machine's .env and its tunnel credential, sealed so that only the key vault can open
+    # them (studio/sealenv.py): the .env is the only file holding every key the studio uses, and
+    # it was on one disk (KI-064, KI-065). The sealed file sits in the studio's home, so the
+    # mirror carries it, and a pass of the mirror seals again whenever the .env changed. Opening
+    # (deploy/unseal.sh) asks the vault to unwrap the file's key; what is opened goes from process
+    # to process, is never written on this laptop and never printed.
+    use="secrets seal | secrets check [--sealed FILE] | secrets names [--sealed FILE]"
+    sealed_on_vm="$HOME_DIR/sealed/studio-secrets.json"
+    tmp="$(mktemp -d)"; chmod 700 "$tmp"; trap 'rm -rf "$tmp"' EXIT
+    # the sealed file itself may travel and be kept anywhere: it opens for the vault alone
+    fetch_sealed() {
+      if [ "${1:-}" = "--sealed" ]; then cp "${2:?--sealed needs a file}" "$tmp/sealed.json"
+      else on "cat $sealed_on_vm" > "$tmp/sealed.json"; fi
+      [ -s "$tmp/sealed.json" ] || die "no sealed file: ops.sh secrets seal makes it"
+    }
+    case "${1:-}" in
+      seal)
+        change_on "cd $REMOTE && STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env .venv/bin/python -X utf8 studio/sealenv.py"
+        ;;
+      names)
+        fetch_sealed "${2:-}" "${3:-}"
+        python "$REPO_LOCAL/studio/sealenv.py" --names "$tmp/sealed.json"
+        ;;
+      check)
+        # does the sealed file open, and is it the machine's .env as it is now? Compared setting
+        # by setting as checksums: the machine sends only those, and what is opened here is
+        # hashed in the same breath
+        fetch_sealed "${2:-}" "${3:-}"
+        python "$REPO_LOCAL/studio/sealenv.py" --names "$tmp/sealed.json"
+        hashes='import hashlib, sys
+for line in sys.stdin.read().replace("\r", "").splitlines():
+    k, eq, v = line.partition("=")
+    if eq and not k.lstrip().startswith("#"):
+        print(k.strip(), hashlib.sha256(v.strip().encode()).hexdigest())'
+        bash "$HERE/unseal.sh" "$tmp/sealed.json" | python -c "$hashes" | sort > "$tmp/sealed.sums" || true
+        [ -s "$tmp/sealed.sums" ] || die "the sealed file did not open (is this Azure sign-in allowed to use the key?)"
+        on "python3 -c '$hashes' < $REMOTE/.env" | sort > "$tmp/vm.sums" || die "cannot read $VM's .env"
+        python - "$tmp/vm.sums" "$tmp/sealed.sums" "$VM" <<'PY'
+import sys
+read = lambda p: dict(line.split() for line in open(p, encoding="utf-8") if line.strip())
+vm, sealed = read(sys.argv[1]), read(sys.argv[2])
+only_vm, only_sealed = sorted(set(vm) - set(sealed)), sorted(set(sealed) - set(vm))
+differ = sorted(k for k in set(vm) & set(sealed) if vm[k] != sealed[k])
+if not (only_vm or only_sealed or differ):
+    print("secrets: the sealed file opens through the vault and is %s's .env as it is now (%d settings)" % (sys.argv[3], len(vm)))
+    sys.exit(0)
+print("secrets: the sealed file opens, but is NOT %s's .env as it is now -- ops.sh secrets seal" % sys.argv[3])
+for what, names in (("only on the machine", only_vm), ("only in the sealed file", only_sealed), ("another value", differ)):
+    if names:
+        print("  %s: %s" % (what, ", ".join(names)))
+sys.exit(1)
+PY
+        ;;
+      *) die "$use" ;;
+    esac
+    ;;
+
+  restore)
+    # the studio's home back from its mirror (studio/restore.py): it only adds -- a file that is
+    # here and newer stays, nothing is removed. --plan reads the bucket and changes nothing
+    use="restore --plan | restore --all [--drill] | restore --film <id> [--from-history YYYY-MM-DD] | restore --check-drill | restore --settle"
+    envs="STUDIO_HOME=$HOME_DIR STUDIO_REPO=$REMOTE STUDIO_ENV_FILE=$REMOTE/.env"
+    py="$REMOTE/.venv/bin/python -X utf8 $REMOTE/studio/restore.py"
+    case "${1:-}" in
+      --plan|--check-drill) on "cd $REMOTE && $envs $py $1"; exit $? ;;
+      --settle) change_on "cd $REMOTE && $envs $py --settle"; exit $? ;;
+      --all) args="--all"; [ "${2:-}" = "--drill" ] && args="$args --drill" ;;
+      --film)
+        [[ "${2:-}" =~ ^studio-[0-9]{8}-[0-9]{6}-[a-z0-9]+$ ]] || die "not a film id: ${2:-}"
+        args="--film $2"
+        if [ "${3:-}" = "--from-history" ]; then
+          [[ "${4:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || die "--from-history needs a day, YYYY-MM-DD"
+          args="$args --from-history $4"
+        fi ;;
+      *) die "$use" ;;
+    esac
+    unit="kitcut-restore-$(date +%Y%m%d-%H%M%S)"
+    change_on "sudo systemd-run --unit=$unit --uid=\$(id -un) --gid=\$(id -gn) --working-directory=$REMOTE -p MemoryHigh=768M -p MemoryMax=1G -p Nice=10 $UNIT_ENV $py $args"
+    [ "$DRY" = 1 ] && exit 0
+    follow "$unit"
     ;;
 
   snapshot)

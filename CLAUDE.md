@@ -683,11 +683,25 @@ ducker, the tail-word cut and the bundler; no API, no browser, seconds.
 **The kit** (`sketch/kit.js`) is what films kept drawing by hand -- text, charts, screens, logos,
 end cards, page transitions, `SK.cues` -- in every look; its header is the API the studio's
 prompt carries. After touching it run `python scripts/check-kit.py` (headless Edge, ~15 s).
+
+**A map that shows a pin or an address is the real map.** Any film that shows where a real place
+is gets the real streets round it, never a drawn stand-in: `scripts/place-map.py` (the studio's
+`map` tool) makes the picture and `SK.DATA.place` from OpenStreetMap, and the kit's `SK.map` and
+`SK.mapPin` draw it, letter its real street names and credit OpenStreetMap. It says how exactly
+the address was found (house, block, street) and refuses one whose street is on no map -- the
+film then shows the address in type. After touching `place-map.py`, `route-map.py` or `_map.py`,
+run `python scripts/check-map.py` (no network, seconds). `docs/reference.md`, "A real map of a
+real address".
 `studio/harvest.py` reads recent studio films back (time by reply, re-written helpers, voice
 pace) -- run it every few days; the `video-sketch` skill's "Harvest" section is the procedure.
 
-**Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four, each **a still of the
-film itself** with at most four words; the draft's Claude call picks the moments and the words
+**Thumbnails for a film** — kitcut.ai's "Publish to YouTube" offers four with at most four words
+each. A film that shows pictures (cut-outs, photographs) gets **posters composed from its own
+pieces by a template** -- one picture large on the film's own page, another tucked behind it, the
+words beside or above, the template varied by the film and the option (`_thumb.layout_poster`,
+`poster_variant`); a film that draws everything itself gets **a still of the film** (KI-055).
+Never an image model: three were tried and each redrew the characters. The draft's Claude call
+picks the moments, the words and each poster's pictures
 (`studio/ytdraft.py`), `scripts/_thumb.py` makes and checks them (legible at 168 px, 4.5:1
 contrast, clear of YouTube's duration stamp, never cutting into the film's own words), and
 `scripts/thumb-options.py` runs it on any film by hand. **The film draws its own thumbnail**:
@@ -695,9 +709,24 @@ contrast, clear of YouTube's duration stamp, never cutting into the film's own w
 colour and logo the film uses, and draws the words in them -- an Instafill film's thumbnail is in
 Instafill's serif and amber on its white cards, never a stock slab. Every threshold in
 `config/thumbnails/thumbnails.json` was measured on real films; `docs/reference.md` "Thumbnail
-options" has the bake-off. After touching any of it, run `python scripts/check-thumbnail.py`
-(the rules, then the example film drawn; ~40 s) and `python studio/test_thumbs.py` (end to end,
-~35 s).
+options" has the bake-offs. After touching any of it, run `python scripts/check-thumbnail.py`
+(the rules, then the example film and the collage example's posters drawn; ~90 s) and
+`python studio/test_thumbs.py` (end to end, ~35 s).
+
+**Actors** are characters an image model designs, animated by swapping pieces: `actor-pack.py`
+reads a spec (`describe`, `look`, `faces`, `talk`, `poses`; defaults and every prompt in
+`config/actors/defaults.json`), has the model draw the figure, then redraw that picture once per
+face, mouth shape, blink and pose, lays every redraw back on its source (shift or affine on the
+body) and redraws any that strayed outside the head (the drift gate), and packs it all into one
+atlas + `pack.json`. A film names it in `"actors"` and draws `SK.actor(name, x, y, h, {face,
+pose})` (`sketch/actors.js`), the mouth moved by its own lines (`who`) like a talking head's.
+Redraws are asked for on white, never transparent: transparent ones came back with a cloudy halo
+half the time. Enrique (padel-tactics) is 45 pieces, $1.13, four minutes; seven models were
+measured for it and gpt-image-2.5-sunburst is the default. After touching any of it, run
+`python scripts/check-actors.py` (no API, seconds). On kitcut.ai an actor belongs to a project:
+`ops.sh actor-put <p-id> <pack>` puts it in, and every next episode gets it
+(`studio/actor_put.py`, `library._seed_actors`, `studio/actors.md`; after touching any of it run
+`python studio/test_actors.py`).
 
 **Talking heads** are real people from their photos, speaking in any of the looks: a manifest's
 `"heads"` names the photos, `head-rig.py` measures each once on the CPU (MediaPipe landmarks and
@@ -713,9 +742,21 @@ model, no deepfake. Start from
 
 Each cost an hour or more in one session (2026-09-29/30). Check here first.
 
-- **This session is the owner's Windows laptop**, not a cloud container, whatever the
-  environment banner says: cwd `C:\instafill\kitcut`, PowerShell 5.1 and Git Bash.
+- **The studio ships from `main`** (since 2026-11-02; it was `studio-poc`, which had drifted 320
+  commits apart). A push to `main` is live on kitcut.ai's studio about 30 s later. A commit
+  pushed to `studio-poc` alone does not ship: autoship holds and names it until it is merged
+  into `main` (`studio/deploy/README.md`).
+
+- **A session whose cwd is `C:\instafill\kitcut` is the owner's Windows laptop**, not a
+  cloud container, whatever the environment banner says: PowerShell 5.1 and Git Bash.
   Do not tell the user "this remote environment can't do X" without testing it.
+- **A Claude cloud session (claude.ai/code: Linux, `CLAUDE_CODE_REMOTE=true`) is a real
+  cloud container**: no VPN, no `az`, no Windows paths, and it opens HTTPS only. It reaches
+  the studio VM as `ssh kitcut-studio-1 '<command>'`, so `vm.sh ssh` and `ops.sh` work,
+  when its environment carries the setup script from `studio/deploy/cloud-env.sh`
+  (`studio/deploy/README.md`, "SSH for Claude cloud sessions"). If that fails, read
+  `/var/log/kitcut-setup.log` and say so. Do not try port 22, port 443 or the proxy's
+  `CONNECT`: all three were measured dead on 2026-10-12.
 - **PowerShell 5.1 has no `&&` or `||`.** Use `;` or `if ($?) { ... }`. A `&&` fails
   the whole call as a parse error, before anything runs.
 - **Git Bash rewrites any argument starting with `/`** into a Windows path.
@@ -735,7 +776,11 @@ Each cost an hour or more in one session (2026-09-29/30). Check here first.
   `10000 Authentication error` for a token that can still manage rules and addresses,
   so `sketch-studio-mail/scripts/email-routing.mjs` reads it softly and carries on.
   Turning Email Routing on is a dashboard click (zone > Email > Email Routing), not an
-  API call. State: `hello@kitcut.ai` forwards to `info@instafill.ai`, verified. Check
+  API call. State (2026-10-07): Email Routing is on, and `hello@kitcut.ai` forwards to
+  `hello-kitcut@instafill.ai`, verified (it was `info@instafill.ai` before). A new
+  destination forwards nothing until its emailed link is clicked, and that email landed
+  in **spam**; the script (branch `email-routing-retarget`) re-points a rule only after
+  that, so the old inbox keeps the mail in between. Check
   public DNS (`Resolve-DnsName kitcut.ai -Type MX`) instead of fighting the token.
 - **A secret pasted into chat goes into a gitignored file** (`.env.local`) and is read
   with `node --env-file=`, never inlined in a command. Tell the user to rotate it.
@@ -752,6 +797,11 @@ Each cost an hour or more in one session (2026-09-29/30). Check here first.
 - **Prefer the CLI to the dashboard.** `vercel`, `gh`, `az` and `vm.sh` are all
   allowed. A Vercel env var is `vercel env add NAME production`, a redeploy is
   `vercel redeploy <url>`. Only fall back to a browser if no CLI covers it.
+- **Getting new pages indexed means Google, in Chrome.** Find the pages Google does not
+  know (`inspect_url` on the sitemap's URLs), then press "Request indexing" for each in
+  Search Console's URL Inspection in Chrome (there is no API for it), and resubmit the
+  sitemap. Never use, suggest or mention Yandex, and do not report on IndexNow, which
+  feeds it (owner, 2026-10-25).
 
 ## Projects: the memory that outlives the session
 
@@ -821,16 +871,28 @@ which cannot encode the glyphs at all.
 | `scripts/checklist-card.py` | an animated checklist end screen (ticks drawn one by one), words in the project, look in `config/cards/checklist/`; `edl-cut.py` plays it as an EDL entry |
 | `scripts/kitcut-clean.py` | a kitcut.ai export made usable as an insert: closing promo card cut, corner mark removed (`delogo`, or `--clone DY` from an identical twin where the drawing runs under it), soundtrack dropped; every box measured per file, checked after |
 | `scripts/make-doc.py` | the synthetic paperwork a form gets filled FROM: a template (`config/docs/templates/`), an issuer's letterhead (`config/docs/issuers/`) and a spec under `projects/<id>/docs/` -> a printable PDF |
+| `scripts/make-proposal.py` | a proposal for a lead as a short PDF in our brand: what is already made, a calendar computed from THEIR event dates, the options, how it runs. A template (`config/proposals/templates/`), a brand (`config/proposals/brands/`) and a spec kept with the lead (`projects/<id>/proposals/`); `--plan` prints the calendar and its problems |
 | `scripts/make-thumbnail.py` | a 1280x720 YouTube thumbnail in the channel's house style from a spec; `yt-upload.py --thumbnail` sets it |
-| `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film, each a still of the film with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
+| `scripts/thumb-options.py` | four YouTube thumbnail options for a sketch film -- posters composed from its own pictures, else stills of it -- with a few words in the film's own look, checked; `_thumb.py` is the machinery and `sketch/thumb.js` the film-side probe and overlay (kitcut.ai's publish dialog uses it via `studio/thumbs.py`), `check-thumbnail.py` its test |
 | `scripts/voice-samples.py` | one sentence in each of KitCut's 30 narrator voices, levelled alike, for kitcut.ai's voice picker (`config/sketch/voice-samples.json`; `--plan` prices it). The narrator a person picks, and their own ElevenLabs voice through the site's relay: `docs/reference.md`, "Workspaces, and the narrator a person picks" |
+| `scripts/review-pack.py` | a video laid out for a reviewer who cannot play it: `story.jpg`, the whole opening as one picture with the words spoken, then closer sheets, cuts, stillness and loudness for looking into a doubt. The `video-review` skill reads it and judges taste (the studio's `review.py` only finds what is broken): the whole piece first, at most three changes a viewer would notice, never a list of small fixes, and no approved film treated as the ideal. Run it with a fresh agent before any film or test is shown to its owner |
+| `scripts/narration-check.py` | is a film's narration its word-for-word script (L01... lines, the spoken words in quotes)? Against vo.json, the timeline or the finished film's captions; `_narration.py` is the rule, which the studio also holds vo.json to on every save (`validate.narration_script`) |
+| `scripts/showreel.py` | a reel of finished films: one at a time with a caption, then 2x2, 3x3 around the logo, 4x4, a card; every cut on a beat and the music arranged from the same acts (`config/showreel/`, three styles); `--raw` the short cut. KitCut's launch reel is `projects/kitcut-launch/` |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
+| `scripts/image-bench.py` | rank image models with checkable prompts: pictures through OpenRouter under a cap, OCR, blind packets for two Claude judges and a third on disputes, scores and labelled grids; spec and judges' rules in `config/bench/`, docs/reference.md "Ranking image models" |
+| `scripts/llm-race.py` | race language models on the same tasks (OpenRouter, or a local llama.cpp server it starts under the GPU lock): every streamed piece with its arrival time, the bill, the check; `race.json` is what a benchmark film replays |
+| `scripts/video-race.py` | race video models on the same prompts (OpenRouter video API): each job's timeline, bill, file, refusals, OCR and Whisper checks |
+| `scripts/clip-overlay.py` | lay real video clips into a rendered sketch film, at the windows and times its `SK.REPORT()` names |
+| `sketch/bench.js` | the benchmark-film module: replayed race lanes on a zooming time axis, time-lapse clock, start lights, strobe cuts, ink stamps, boiling highlights, a score from the film's sections (docs/reference.md "Benchmark films") |
 | `scripts/_overlay.py` | drawing + filter helpers shared by every burned-in graphic |
 | `sketch/` | the sketch-film engine (`engine.js`), cast (`props.js`), collage pieces (`collage.js`) and player page (`player.html`); `scripts/_sketch.py` and `_sketchaudio.py` are the Python half, `check-sketch.py` their test |
 | `config/sketch/example/` | a 12 s sketch film to copy into a new project: manifest, `film.js`, score, cues |
 | `config/sketch/heads-example/` | a 9.5 s talking-heads film: two public-domain photos on a 1903 front page, one voice each; `scripts/head-rig.py` makes the rigs, `sketch/heads.js` draws them |
+| `studio/template_from_film.py` | a kitcut.ai film into a live template, one command a stage (find, pull, prove, alt, check, spec, make, site, test -- a graded film from one sentence); the `film-to-template` skill walks it |
+| `scripts/actor-pack.py` | an image model's character cut into an actor pack (faces, mouths, blinks, poses on one atlas) that `sketch/actors.js` animates; `_actor.py` measures, cuts and packs, `config/actors/defaults.json` holds every prompt, `check-actors.py` is its test |
 | `scripts/resolve-export.py` | the cut as an OTIO/EDL/FCP7 XML timeline plus an SRT, for DaVinci Resolve (free edition); `check-resolve.py` is its test, `docs/davinci-resolve.md` the research behind it |
 | `scripts/route-map.py` | a real map for a film and the route on it as data: paper-relief terrain (OSM streets, real elevation, no labels, no orange) at two zooms that line up, and a GPX/OSM/routed ride as `[u, v, ft, mi, s]` rows a kitcut.ai film can copy; style `config/maps/`, example `config/maps/example-route-map.json` |
+| `scripts/place-map.py` | the real street map of one address for a film (OpenStreetMap streets, buildings, parks, water, coast; no lettering, no pin) and where the address is on it: the pin, its own street, real street names with a spot each; says how exactly the address was found and refuses a street no map has; style `config/maps/street.json`, example `config/maps/example-place-map.json`; `_map.py` is what it shares with `route-map.py`, `check-map.py` their test |
 | `scripts/_project.py` | project metadata writer; finishing scripts call `record()`; `projects_dir()` is the only ROOT+"projects" join |
 | `scripts/screencast-pipeline.py` | the silent-screencast job as one cached, checkpointed command; the stage scripts it drives are listed under pipeline 7 |
 | `docs/retro-books-giveaway.md` | where six hours went on the first silent-screencast edit, and the rule that now prevents each loss |
@@ -845,8 +907,15 @@ which cannot encode the glyphs at all.
 | `config/handles/` | the animated handle badge |
 | `sources/` `audio/` `transcripts/` `outputs/` `temp/` | legacy shared content dirs, gitignored; new work lives under `projects/` |
 | `docs/product-strategy.md` | how this repo becomes a product: the audience, the licensed-plugin model, install/update/routing mechanics, the learning flywheel. Read it before designing anything customer-facing |
+| `scripts/short-stillness.py` | how much of a finished Short's picture stands still (frozen, and merely drifting), read off the file; `--check` fails one over the guidebook's rule 33 |
+| `docs/shorts-guidebook.md` | the rules every YouTube Short made here is held to (33, each checkable, each with what it rests on: YouTube's own statements, 25 high-view Shorts measured on 2026-10-09, and the owner's calls), how a Short is made, and what the studio does for one. Read it before writing a Short's prompt |
+| `docs/channel-offer.md` | the offer from 2026-10-27: KitCut sells a YouTube channel (10/20/30 videos a month, a chosen length, Shorts, posting, a producer that plans from the channel's own numbers, Express), why the film offers failed in the ads, the twelve-niche earnings table and its honest markers, what we never claim, cost per customer on the subscription and at list price, a projection, what exists and what must be built. Read it before pricing, onboarding or the ad page |
 | `docs/market-shorts-2026.md` | what the AI shorts/clipping market actually looks like, researched 2026-09-01 with sources: who died, who is healthy, the GTM playbooks and what each produces, who pays, and where local-first does and does not matter. Findings only, no recommendation — read it before re-arguing the shorts question from priors |
 | `docs/davinci-resolve.md` | whether we can interoperate with DaVinci Resolve, researched 2026-09-08: its project files (`.drp`, the disk database) are closed and not ours to write; OTIO/EDL/FCP7 XML + SRT are the door, and work in the free edition; external scripting and the new 21.1 MCP server are Studio-only. Includes a measured export of a real keep-list and what each format drops |
+| `docs/market-templates-2026.md` | which niches kitcut.ai templates should cover, researched 2026-10-02: Keyword Planner volumes and bids per niche, HeyGen's market and where we overlap (and where it is building our architecture), what 13 template tools cover, who already pays for ready-made video, and a 154-template catalogue in three portfolios (habit, revenue, reach). Read it before choosing the next template |
+| `docs/market-vertical-drama-2026.md` | vertical short drama (micro-drama), researched 2026-10-14: market size and apps, who watches and pays, format and writing standards, tropes that sell and tire, AI and animated dramas, and 24 checkable rules plus a beat sheet for a 60-second standalone. Read it before writing a drama's prompt; the video-sketch skill's "A vertical short drama" is how one is made on kitcut.ai |
+| `docs/market-custom-cartoons-2026.md` | custom cartoons as a done-for-you service (a family's, a pet's or a company's own film or series), researched 2026-10-23: Keyword Planner demand (the product itself is unsearched; the occasions around it are not), what families pay at the cheap end and the $3k–50k bespoke-keepsake end, agency prices for companies, who sells personal films on Meta, 29 use cases with their nearest money signal, and a proposed six-use-case Meta test with kill rules. Read it before pricing or advertising made-for-you films |
+| `market/etsy/` | Etsy keyword research from the seller's own Marketplace Insights data: searches, competing listings, conversion, the price buyers pay, top listings and 12-month seasonality per term, as CSV (`etsy_insights.py`; the `etsy-keywords` skill is the procedure). Not video tooling: stdlib + curl, no `.venv`. The session cookie and the data it returns stay in gitignored `local/` and `data/` |
 
 ## House rules
 
@@ -897,6 +966,11 @@ These come from how the repo is actually used — follow them without being aske
   `ruff format` are clean on it, and
   `python scripts/check-script.py --changed` passes (the check-script skill
   is the full review).
+- **Report a merge in one line.** Once a PR is merged, say "Pushed and merged
+  into `<branch>`" and nothing more: no PR link and no commit id, because the
+  owner does not review a merged PR. A PR left open is reported with its link.
+- **Ask less.** When the owner has approved the work, carry it through instead
+  of asking about each step.
 
 ## Agent skills
 

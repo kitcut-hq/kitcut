@@ -1,0 +1,50 @@
+{
+ "_about": "The spec of kitcut.ai's pool-party-invitation template (studio/templates.py make --spec): what it is, what the film keeps of its sample (keep, generic), the short words to watch for (watch), and its author's notes to Claude. Its film is projects/pool-party-invitation (local: the sample is a real child's party and photo). v1 (2026-10-02): a kitcut.ai film (studio-20260930-173158-pqxyhi) with every fact of its party moved into content.json, drawn pixel-identical to the original at 19 moments.",
+ "title": "Pool party invitation",
+ "description": "A 30-second invitation to a child's birthday pool party, drawn in crayon and narrated by a bubbly kids'-TV-host voice. The birthday child waves from the diving board while their age and their photo in a life ring pop up, cannonballs into the pool, then paddles past floaties, a beach ball that bonks them and a giant cake on a raft. It ends on a clean invitation card rising out of the water, with the child's photo, the date and the time.",
+ "author": "KitCut",
+ "look": "drawn",
+ "frames": [
+  "16:9"
+ ],
+ "caps": [
+  "grounds"
+ ],
+ "limits": {
+  "images": 6
+ },
+ "moments": [
+  1.5,
+  5.0,
+  7.8,
+  10.6,
+  12.4,
+  14.9,
+  16.3,
+  18.2,
+  22.2,
+  24.6,
+  26.8,
+  29.5
+ ],
+ "narration": true,
+ "sound": "files",
+ "keep": [
+  "_about",
+  "copy",
+  "palette"
+ ],
+ "generic": [
+  "Hey, friends!",
+  "POOL PARTY!",
+  "{name} is turning {age}!",
+  "Come splash with us",
+  "You're invited!"
+ ],
+ "watch": [
+  "child.name"
+ ],
+ "identity": [],
+ "example": "Mia is turning 6! Pool party at our place, 14 Oak Lane, Sunday June 14, 11 AM-2 PM. Her photo is attached.",
+ "brief": "A 30-second narrated invitation on one clock that hangs off the narration (six lines), drawn in crayon on the blush ground: one backyard pool seen side-on, the camera sliding left to right. Stop 1, the diving board (line 0, ~0.5-3.6 s: the greeting and 'who's turning <age>?' -- the child waves, copy.hello writes on, the big age number pops on the age word; line 1, ~4.0-8.2 s: the name -- the photo in a life ring pops on it -- and 'pool party', the rainbow theme title on 'pool'). Line 2 (~8.6-13.3 s): bubbles with a swimsuit and goggles on 'swimsuit' and 'goggles', the board bounces harder from 'grab', the jump leaves .72 s before 'splash' and the cannonball lands on it. Between lines 2 and 3 the child bobs up in a donut float and the camera paddles to stop 2. Line 3 (~13.7-18.6 s): the flamingo pops up on 'floaties', beach balls drop on 'beach' (one bonks the child .45 s later), the cake raft (the age on it) slides in on 'giant', CAKE! on 'cake'. Line 4 (~18.9-25.4 s): .45 s before it starts the camera slides to the card, which rises out of the water; the title spells on, copy.line writes on at 'come', the date on the weekday, the time on the hour, the place lines just after the time. Line 5 (~25.7-28.2 s): the ribbon and confetti on 'invited', two more bursts on 'see'; the card holds to 30 s. The film is always 30 s.\n\nTHE NARRATION is vo.json: six lines by a bubbly, giggly kids'-TV party host (its style and voice stay unless asked). Rewrite each line for the new party, keeping the count and about the same length so every scene keeps its time: 0 the greeting and who is turning <age>; 1 the child's name and the pool party (keep 'pool'); 2 swimsuit, goggles, splash; 3 floaties, beach balls, a giant birthday cake; 4 starts with 'Come', then the date with its weekday first and the time said clearly ('from eleven to two'), and the place in a few words when there is one; 5 'You're invited!' and see you at the pool. Every cue in film.js is w(line, word, fallbackSeconds) on the recorded words. The words that name the party are worked out from content.json in film.js's SAY: the name's first word, the age as a word ('seven'), the date's first word (the weekday) and the start time's hour as a word ('eleven'); when the narration says them otherwise (a nickname, another language), write the words it says into SAY. When a rewritten line drops one of the other cue words ('pool', 'grab', 'swimsuit', 'goggles', 'splash', 'floaties', 'beach', 'giant', 'cake', 'come', 'invited', 'see'), point that cue at the word that now carries the beat. For another language translate the lines, copy and the dates, and set SAY and the cue words to the language's words.\n\nCONTENT (content.json, SK.DATA.content; its _about lists every field). child: name (up to ~16 characters reads big; longer is fitted smaller), age (a whole number: the tee, the big number, the cake, the title), photo (a picture key). when: date ('Sunday, June 14' style, weekday first, up to ~24 characters) and time ('11:00 AM–2:00 PM' style with an en dash, up to ~18). where: place and address, each \"\" when not given (a party at home often has neither; never invent one); either adds a line under the time and the card closes up to make room. copy: hello, theme, title ('{name} is turning {age}!'), line, invited -- kept unless the person asks otherwise or the film is in another language, each up to ~22 characters (fitted when longer). palette: party (six bright colours: flags, balloons, letters, confetti, floats, the card's frame), card_line, card_time; may follow a theme the person names (keep them bright and distinct).\n\nTHE CHILD is cast/kid.js (SK.cast.kid), a front-facing doodle kid: redraw it from the person's photo -- hair shape and colour (the back of the head, the bangs, COL.hair and hairDk), skin (COL.skin, cheek), glasses (the sample's yellow pixel sunglasses: drop them for a child who wears none, or draw their real ones), the clothes' colours (COL.tee, shorts, shoe) -- and rewrite its about. Keep its size (about 440 units tall, origin between the feet), its draw options and its poses, so the jump, the float and the bonk still fit. The tee shows the age (film.js passes it as age). THE PHOTO: the attached photo of the child cut out of its background (cut_people), face centred, head and shoulders, as child.photo; it is drawn round in the red-and-white life ring on a pale yellow disc at stop 1 and on the card.\n\nSOUND: score.json and sfx.json are files the film keeps (music and effects, kept unless asked). The sfx cues are in seconds on the sample narration (the pops on the age and the name, the boings of the board, the whoosh and splash of the jump, the bonk, the card's splashes, the confetti); after the narration is recorded the studio moves each cue with its line, so leave them be unless a beat moves within its line."
+}

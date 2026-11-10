@@ -25,6 +25,16 @@ Score notation -- an event list, each one of:
    "kit": {"kick": "x...x...x...x...", "snare": "....x.......x...", "hat": "x.x.x.x.x.x.x.x."}}
       step chars: x = hit, X = accent, o = soft, . = rest
 
+A series' kept sounds -- `sounds.json`, beside the score (studio/library.py keeps it between
+episodes) -- are played by name, so a bell or a theme sounds the same in every episode:
+  {"sounds": {"bell": {"about": "her collar bell", "cue": {"fx": "chime", "db": -24, "args": {}}}},
+   "themes": {"main": {"about": "her stately theme", "events": [{"inst": "bassoon", "notes": ..}]}}}
+  in sfx.json   {"t": 3.2, "sound": "bell"}  (any other key of the cue overrides the kept one's)
+  in score.json {"type": "theme", "theme": "main", "at": 16}  (at: a beat or a list of beats;
+                optional "transpose", and "only": [instruments] to play part of it)
+  A theme's events are "notes" events, their beats counted from 0; expand_sounds() turns both
+  into ordinary cues and events before anything is rendered.
+
 Every volume -- vel, a note's velocity, v0/v1, swell, drum_gain -- is a gain from 0 to 1.5 (real
 scores stay under 1); sketch-audio.py refuses a score with one outside that. The mix then holds
 the music at least 8 dB under the narration wherever it speaks (voice_gate), whatever the score.
@@ -158,6 +168,77 @@ def parse_notes(spec):
     return out
 
 
+SOUND_NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
+
+
+def expand_sounds(score, cues, kit):
+    """score.json and sfx.json with a series' kept sounds (sounds.json, the kit) played by name
+    turned into ordinary events and cues: (score, cues). Raises ValueError naming a sound or a
+    theme the kit does not have."""
+    kit = kit if isinstance(kit, dict) else {}
+    sounds, themes = kit.get("sounds") or {}, kit.get("themes") or {}
+
+    def have(d):
+        return ", ".join(sorted(d)) or "none"
+
+    out = []
+    for c in cues or []:
+        if isinstance(c, dict) and "sound" in c:
+            s = sounds.get(c["sound"])
+            if not isinstance(s, dict) or not isinstance(s.get("cue"), dict):
+                raise ValueError(
+                    "sfx cue at %ss: sounds.json has no sound %r (have: %s)"
+                    % (c.get("t", "?"), c["sound"], have(sounds))
+                )
+            base = {k: v for k, v in s["cue"].items() if k not in ("t", "times", "sound")}
+            mine = {k: v for k, v in c.items() if k != "sound"}
+            args = {**(base.get("args") or {}), **(mine.pop("args", None) or {})}
+            c = {**base, **mine, **({"args": args} if args else {})}
+        out.append(c)
+    if not isinstance(score, dict):
+        return score, out
+    events = []
+    for e in score.get("events") or []:
+        if not (isinstance(e, dict) and e.get("type") == "theme"):
+            events.append(e)
+            continue
+        th = themes.get(e.get("theme"))
+        if not isinstance(th, dict) or not isinstance(th.get("events"), list):
+            raise ValueError(
+                "score theme event: sounds.json has no theme %r (have: %s)"
+                % (e.get("theme"), have(themes))
+            )
+        ats = e.get("at", 0)
+        only = e.get("only")
+        for at in ats if isinstance(ats, list) else [ats]:
+            for x in th["events"]:
+                if only and x.get("inst") not in only:
+                    continue
+                y = dict(x)
+                y["shift"] = float(x.get("shift", 0)) + float(at)
+                y["transpose"] = x.get("transpose", 0) + e.get("transpose", 0)
+                events.append(y)
+    return {**score, "events": events}, out
+
+
+# what a film with no music may not play either: a pitched note is music by another name
+TONAL_FX = ("sample", "chime")
+
+
+def no_music(score, cues):
+    """A film with no music (the manifest's audio.music: false): the score with no events, and
+    the cues without the pitched ones (TONAL_FX). -> (score, cues, what was left out), the last
+    as {"events": n, "cues": [fx names]} for the caller to print. Unpitched sounds stay."""
+    kept = [c for c in cues or [] if not (isinstance(c, dict) and c.get("fx") in TONAL_FX)]
+    out = {
+        "events": len((score or {}).get("events") or []),
+        "cues": sorted(
+            c["fx"] for c in cues or [] if isinstance(c, dict) and c.get("fx") in TONAL_FX
+        ),
+    }
+    return {**(score or {}), "events": []}, kept, out
+
+
 # the loudest any volume in a score may be: across 33 scores the largest was 0.95
 GAIN_MAX = 1.5
 
@@ -275,13 +356,14 @@ def score_events(score):
         typ = e.get("type", "notes")
         if typ == "notes":
             tr = e.get("transpose", 0)
+            shift = float(e.get("shift", 0))  # a kept theme's beats, moved (expand_sounds)
             for b, ms, d, v in parse_notes(e["notes"]):
                 for m in ms:
                     ev.append(
                         (
                             e["inst"],
                             m + tr,
-                            b,
+                            b + shift,
                             d,
                             v if v is not None else e.get("vel", 0.5),
                             {k: e[k] for k in ("swell", "humanize") if k in e},
@@ -419,6 +501,14 @@ def make_ir(sec=2.3, seed=3, damp=5500):
 
 def reverb(x, ir):
     return np.stack([signal.fftconvolve(x[c], ir[c])[: x.shape[1]] for c in range(2)])
+
+
+def vo_stereo(vo, ir, dry=False):
+    """The narration as the mix hears it: a touch of the music's room (ir, a 2.3 s hall by
+    default), or none at all for a film whose vo.json asks for a dry voice ("dry": true -- a
+    close, voice-message read, where that room was heard as an echo on a stage)."""
+    st = np.stack([vo, vo]) * 0.98
+    return st if dry else st + reverb(np.stack([vo, vo]) * 0.05, ir) * 0.6
 
 
 # ------------------------------------------------------------------ synth building blocks
@@ -906,8 +996,14 @@ def voice_gate(music, voice, margin_db=8.0, win=1.0, hop=0.25, release=0.6, rate
 
 
 # ------------------------------------------------------------------ master
-def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11):
-    """Two-pass EBU R128 to `dst` (24-bit WAV). Returns the measured input stats."""
+def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11, lowpass=None):
+    """Two-pass EBU R128 to `dst` (24-bit WAV). Returns the measured input stats.
+
+    `lowpass` (Hz), the manifest's "master": {"lowpass": 15000}, filters ahead of both passes. A
+    soundtrack dense with synthesised clicks (a benchmark film's ticks) masters clean and then
+    overshoots by 4-7 dB once AAC encodes it (frontier-race, 2026-10-25: -3.3 dBTP master, +4.2 in
+    the mp4); 15 kHz took the same master to -1.3 at 256 kb/s."""
+    pre = "lowpass=f=%d," % int(lowpass) if lowpass else ""
     r = subprocess.run(  # noqa: PLW1510 -- loudnorm's analysis pass reports on stderr; exit code is not the signal
         [
             "ffmpeg",
@@ -915,7 +1011,7 @@ def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11):
             "-i",
             src,
             "-af",
-            "loudnorm=I=%s:TP=%s:LRA=%s:print_format=json" % (lufs, tp, lra),
+            pre + "loudnorm=I=%s:TP=%s:LRA=%s:print_format=json" % (lufs, tp, lra),
             "-f",
             "null",
             "-",
@@ -945,7 +1041,7 @@ def loudnorm(src, dst, lufs=-14.0, tp=-1.5, lra=11):
             check=True,
         )
         return j
-    af = (
+    af = pre + (
         "loudnorm=I=%s:TP=%s:LRA=%s:measured_I=%s:measured_TP=%s:measured_LRA=%s:measured_thresh=%s:offset=%s:linear=true,aresample=%d"
         % (
             lufs,

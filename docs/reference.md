@@ -2929,6 +2929,112 @@ document beside the same number in the filled form and have it actually match.
 That shot -- not the fill itself -- is what separates "it filled something in"
 from "it filled in the right thing".
 
+## A proposal on the lead's own calendar: `make-proposal.py`
+
+A lead who has seen a demo does not need the tool described again. They need to
+see what would be published and on which day, set against the dates they
+already live by, and what it would bring them. `make-proposal.py` prints that as
+a short PDF in our brand, with the lead's own colours marking only what is
+theirs on the calendar.
+
+* a **shape** -- a template under `config/proposals/templates/` (`campaign`),
+* a **look** -- a brand under `config/proposals/brands/` (`kitcut`),
+* and **words** -- a spec in the lead's own folder, `projects/<id>/proposals/`.
+
+```powershell
+python scripts/make-proposal.py --list
+python scripts/make-proposal.py --spec config/proposals/example/devdays.json --plan
+python scripts/make-proposal.py --spec projects/<id>/proposals/campaign.json --html-out projects/<id>/proposals/plan.html
+python scripts/make-proposal.py --spec projects/<id>/proposals/campaign.json --pdf --preview
+```
+
+**Show the HTML first.** Without `--pdf` the script writes one HTML page, the
+sheets stacked with a gap between them; open it in a browser and let the owner
+look before anything is printed. The first proposal went straight to PDF and
+its calendar had to be thrown away.
+
+**Eight kinds of page, each optional, printed in the order the spec lists
+them:** `cover`, `ready` (what is already made), `audience` (their numbers),
+`loop` (the wheel: a video about someone, they post it, their audience sees the
+event), `options` (the sizes of the campaign), `channels` (place, shape, what
+goes there, impressions per video), `timeline`, `process`.
+
+**The calendar runs from top to bottom: a row for every date, a column for
+every plan.** `timeline.plans` are the columns, `timeline.posts` the videos,
+`timeline.marks` the lead's own dates. A post is `{"date": ...}` or hangs off
+the event (`days_before`, `days_after`), and `in` names the smallest plan that
+has it; every bigger plan has it too, because the plans are sizes of one
+campaign. The page shows a dot in each plan's column on the days that plan
+publishes, so "what do I get in B that A does not have" is answered by looking
+across a row. Empty dates are drawn on purpose: the gaps are what a rhythm
+looks like. A first version ran the weeks left to right with a row per plan,
+and nobody could read off it which plan to take.
+
+**That page is as tall as its rows.** Every other sheet is 13.333in x 7.5in;
+the calendar is the same width and one sheet long, because a calendar that
+reads downward should not be cut where a screen happens to end. Chromium takes
+a second page size through a named `@page`, and the script computes the height
+from the rows (`ROW` in the script, which the template reads back as CSS
+variables so the two cannot disagree).
+
+**`--plan` is the free mode.** Every post with its resolved date, weekday, days
+to go and plans, the number of posts each plan adds up to, and the problems a
+rendered page hides: a post outside the dates shown, a post on a weekend, two
+posts of one plan on one day, a plan with nothing on the calendar. It exits 1
+on any of them, and `--pdf` refuses to print a calendar that has one.
+
+**The spec owns every string**, so the language is the spec's. `lang` picks
+the plural rule for "days to go" (three forms for Ukrainian, Polish and the
+other Slavic languages, two otherwise) and `strings` carries the weekday names
+and the few labels the script writes itself.
+
+**Numbers on the `audience` and `channels` pages are read, not recalled.**
+Follower counts come off the public pages on the day (a plain `curl` with a
+browser user agent reads LinkedIn company pages and most profiles; Instagram
+gives its count only to a crawler user agent), and each per-video estimate
+names the published study it is a median from. The bars of `audience` are
+drawn to scale: when their page is a five-hundredth of their partners'
+audience, the sliver is the finding. Tickets and sponsors are not forecast --
+honest inputs give a small direct number that the first weekly report would
+contradict -- so the page says each video gets its own link and the numbers
+are checked weekly.
+
+**The print is checked three ways.** One sheet per section: `.page` has a
+minimum height, not a fixed one, so a section that does not fit becomes a
+second sheet and fails the count, where a fixed height would clip it and say
+nothing. Every page must carry its own title. And no face but the brand's may
+be in the file: Chromium embeds a variable font as an unnamed Type 3 face, so
+any *named* font in the PDF is a fallback.
+
+**Both fonts are local files.** The first proposal came out in Segoe UI: the
+brand named a Google Fonts stylesheet, and the font had not arrived when
+Chromium printed. kitcut.ai's own `Inter.woff2` and `Caveat.woff2` are Latin
+subsets, so a proposal in Ukrainian needs the full `fonts/Inter-VF.ttf` and
+`fonts/Caveat-Cyrillic-VF.ttf` anyway.
+
+**Pictures are cropped to fill.** The cover has three slots (the first and
+third square, the second 16:9), the cards of `ready` are square and the
+examples of `loop` are 16:9. A wide still in a square card loses its sides:
+pad it to a square in the film's own background colour first. Do not let one
+person be the face of every still.
+
+**A multi-day date is a band, not a bar.** A mark with `to` says its name and
+range on the first day and tints its days in that column. Short stubs of a bar
+under the tag, tried first, were read as a rendering fault.
+
+**No prices by default.** An option card prints `price` only if the spec gives
+one; the owner took prices out of the first proposal.
+
+**A lead's spec is not tooling.** Names and the lead's stills stay in
+`projects/<id>/proposals/`, which git ignores for new projects; the committed
+example is a made-up conference. With `"project": "<id>"` in the spec the PDF
+is recorded in that project's `project.json` like any other deliverable.
+
+**Example films for a proposal** are free-form films with the facts on top:
+`ops.sh film "<prompt>" --seconds 35 --unlisted --attach photo.png --attach
+logo.png` uploads the pictures first, and they reach the film as `upload1..N`
+in the order given, so the prompt names them by number.
+
 ## A KitCut film as an insert: `kitcut-clean.py`
 
 A film exported from kitcut.ai carries KitCut advertising that must never
@@ -3009,13 +3115,52 @@ detected card still wins if it comes earlier.
 The cleaner way is not to have the mark at all: KitCut's owner can turn it off
 for an account.
 
-## Thumbnail options: four moments of the film, made like YouTube's (`thumb-options.py`, `_thumb.py`)
+## A filing's own page as a picture: `sec-crops.py`
 
-kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. Each is **a
-moment of the film itself**, made the way YouTube thumbnails are: the film's own titles and labels
-left out of the frame, its subject pushed in large on one side, and at most four big words on the
-other -- the first option the video's main message -- in the film's title type and outline, with
-its logo on options 1 and 3. No stock art, no generated imagery.
+A research film about a company that just filed (an S-1, a 10-Q) is strongest
+when it shows the filing itself: the income statement as printed, the paragraph
+with "50.1% of the total voting power". Two things block an ordinary screenshot.
+EDGAR answers a headless browser with "Undeclared Automated Tool", so the file
+is downloaded with a declared user agent (`--ua "<org> research <email>"`, the
+SEC's own rule; `--save` keeps it). And Workiva-built filings, most large
+S-1s, are absolutely positioned: each printed page is one `div` 792pt tall and
+each line one `div` with a `top:`, so cropping by element returns slivers.
+
+`sec-crops.py` cuts the one page that holds a passage out of the file (Anthropic's
+S-1 was 14 MB, 421 pages), shoots it whole at 3x in headless Edge, and crops by
+the positions the HTML states. A crop is `name=start words|end words`: the first
+line holding the start words, through the first line at or below it holding the
+end words, each phrase on one printed line. Positions are summed down the open
+elements, because a table is a positioned block whose rows carry their own
+`top:` relative to it: read alone, the "Net loss" row of a summary table sat
+above its own heading and matched nothing. The bottom edge stops 1.5pt under
+the next line's top, or a sliver of its capitals shows along the edge.
+
+```powershell
+python scripts/sec-crops.py --htm projects/<id>/research/s1.htm --find "Net loss"
+python scripts/sec-crops.py --htm projects/<id>/research/s1.htm --list --crop "income=Consolidated Statements of Operations Data|Net loss"
+python scripts/sec-crops.py --htm projects/<id>/research/s1.htm --out projects/<id>/logos/src/<n> --crop "income=Consolidated Statements of Operations Data|Net loss" --crop "votes=The LTBT is intended to operate|will not have any economic rights"
+```
+
+`--list` and `--find` render nothing. A filing that is not Workiva-style (no
+792pt page divs) is refused with the reason; crop it by element with a browser.
+The crops are evidence, not a deliverable, so nothing goes in `project.json`.
+First used for film 32 (Anthropic's S-1, 2026-10-26): eight crops, each shown
+filling the frame in the film and in its Short.
+
+## Thumbnail options: posters from the film's own pieces, else four moments of it (`thumb-options.py`, `_thumb.py`)
+
+kitcut.ai's "Publish to YouTube" offers four thumbnails, and the person picks one. A film that
+shows pictures -- cut-out characters and props, photographs -- gets **posters composed from those
+pictures**: one of them large (somebody from the waist up, an object whole) on the film's own
+page, another tucked in behind it, and at most four big words in the film's title type and outline
+or on its label strips, with its logo on options 1 and 3 (see "A poster" below). A film that draws
+everything itself gets **a moment of the film**, made the way YouTube thumbnails are: the film's
+own titles and labels left out of the frame, its subject pushed in large on one side, and the words
+on the other. Either way the first option is the video's punch line on a dark box over the frame
+the film drew ("The punch line" below, after the channel's best video), a Short's four are all
+punches at its own frame, and nothing is stock art or generated imagery: every pixel is the film's
+own drawing.
 The studio makes them (`studio/thumbs.py`, see `studio/README.md`); the machinery is
 `scripts/_thumb.py`, and this CLI runs it on any finished sketch film:
 
@@ -3032,7 +3177,12 @@ python studio/test_thumbs.py                                                # en
 A concept is `{"at": s, "words": "Can't *sleep*?", "layout": "headline|card|panel",
 "place": "left|right|top|bottom"}` -- the writer gives headline, card, panel, headline (an older
 draft's `slab` is read as `card`; its `still` takes the free layout and is asked for words; the
-still is now only the last fallback); one word may be starred for the film's accent colour. Output: `thumb-N.jpg`
+still is now only the last fallback); one word may be starred for the film's accent colour. For a
+film with pictures the writer is asked for `{"at", "hero", "with", "words"}` instead: `hero` and
+`with` name the pictures the poster is built on, from a list of the film's painted pictures with
+what each was painted as (`ytdraft.ASK_POSTERS`, `pieces_text`); a layout is still kept in hand
+for a concept no poster can be made for, and a concept without a hero (every draft written before
+posters) takes the pieces of its moment's own frame. Output: `thumb-N.jpg`
 (1920x1080, well under YouTube's 2 MB), `sheet.jpg` (side by side) and `feed.jpg` (at YouTube's
 360/246/168-px sizes, dark and light).
 
@@ -3064,7 +3214,18 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
   logo as a round paper badge, a glow, the camera's push and slide -- already laid out in Python.
   A still's time picks the pass: `t` the film alone, `1000+t` the thumbnail, `2000+t` its letters
   white on black, `3000+t` everything it added white on black (grain and vignette off for the two
-  masks), `4000+t` the clean picture alone. One browser run draws every option's three passes.
+  masks), `4000+t` the clean picture alone, `5000+t` the stage (below). One browser run draws
+  every option's three passes.
+- *The stage and the pieces* (posters): with `stage` on an option, and on the `5000+t` pass, the
+  film draws nothing but its ground and what lies flat on it -- the whole of its `draw()` is
+  hushed, and only a sheet of paper as large as 45% of the frame (a collage film's page), the dots
+  printed on it (`SK.halftone`) and a newspaper under it all (`SK.newsprint`) draw after all. The
+  `5000+t` pass notes each page's box and colour (`boxes.json`, key `P<t>`). On top, an option's
+  `scene` lists pieces back to front, each drawn the way the film draws its own: a cut-out with
+  the shadow paper casts (`SK.cutout`), a print (a picture with a ground of its own, its middle,
+  with a paper border), a starburst or disc of paper (`SK.burst`). The `4000+t` pass also notes
+  every picture a film draws by hand (`c.drawImage(SK.IMG.x)` in a helper of its own): a product
+  film framed its photographs that way and the probe saw none of them.
 
 **How an option is made.**
 1. *Stills* come from a copy of the film's manifest without its `tail`: a Free film's "made with
@@ -3114,9 +3275,45 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
    `thumb.js` holds each line to the width Python planned, so a page that draws a font wider
    trims it rather than letting it leave its box.
 8. *Checks* on the finished picture through the letters and footprint passes (outlined letters
-   read against their outline); *fallbacks*
-   (headline -> headline with its glow -> card -> still; panel -> card -> still; card -> still)
-   until every option passes.
+   read against their outline, and each letter against its own ring: a stack of strips sets dark
+   words on a light strip and light on a dark one); *fallbacks*
+   (poster -> the poster with its words set the other way -> headline -> ...; headline -> headline
+   with its glow -> card -> still; panel -> card -> still; card -> still) until every option passes.
+
+**A poster** (a film that shows pictures; `film_pieces`, `poster_heroes`, `layout_poster`). Steps
+1-4 are the same; then, in place of *compose* and *layout*:
+
+- *Pieces*: every picture of the film's that is not its logo and is at least 240 px -- `cut` when
+  it has a transparent ground (set as it is), else a print; `being` when what it was painted as
+  (`paint.json`) names somebody, `figure` when that somebody stands whole and the picture is tall
+  (shown from the waist up, so the face is the size a thumbnail needs); `mark` for a brand's mark
+  by its name, `lettered` for a picture nobody described that OCR finds full of words (a flyer):
+  the last things a poster is built on, and never its second piece.
+- *Who it is built on*: the writer's `hero` and `with` when the film has them; else, of the pieces
+  in the moment's frame, somebody before an object, one the options before have not used, with the
+  largest thing that is not a figure beside it; else (no piece on screen at that moment) a piece no
+  option has taken, the ones the film shows most first -- never a print it lays across the frame.
+- *The stage*: the `5000+t` picture, pushed in until the film's page fills the frame and 3% past
+  its torn edge (a collage film lays its pages on a mat; at 168 px the band of mat is a frame round
+  a smaller picture).
+- *Two templates*, read off channels that draw rather than film: **side** -- the hero on one side
+  (a figure 1.62-1.85 frames tall with its head 5% from the top; an object fitted to 46% x 80% and
+  turned), the other piece tucked half behind it, the words stacked in up to three lines on the
+  other side; **band** -- the words in one or two lines across the top, the hero under them (a
+  figure 1.9 frames tall: head and shoulders), off the bottom edge. Somebody beside somebody is a
+  second figure nearly as large. Behind the hero, a starburst, sun or disc of the film's paper in
+  one of the film's own colours, the one furthest from both the page and the hero.
+- *What varies* (`poster_variant`, from the film's key and the option's number, so one film always
+  gets the same four and another film another four): which template leads, the hero's side, how
+  close a figure stands, how the words lean (-3 to +1.5 degrees), the paper shape behind the hero,
+  and which one option (2 or 3) sets its words on strips. A poster keeps its template and its
+  second piece unless the words come out 1.25x (1.18x) larger the other way.
+- *The words*: the largest cap height (300 down to 110 px) that fits; in the film's outline when
+  it has one, else its ink where it reads on the page as drawn (sampled from the stage, not the
+  page's nominal colour); or a line to a strip of the film's label paper, the starred word's line
+  on a strip of another of its colours. A dash ends a line, it never starts one. A line in a
+  script written right to left is set from the right, and measured joined where Pillow can shape
+  it (KI-056). The logo is a small badge bottom-left, the corner opposite YouTube's stamp.
 
 **The rules** (`config/thumbnails/thumbnails.json`, each with its source there):
 
@@ -3129,7 +3326,10 @@ panels and logo are drawn by the film's own engine, in the film's own type and p
 | film's own words | words on the picture touch none; a card, panel or glow hides a line whole (>= 90%) or not at all; <= 40 px otherwise | "On for everyone" set over an "AI MODEL UPDATE" label read as a collision; a half-hidden "Month-e" reads broken, a covered chip does not |
 | layouts | headline, card, panel, headline; the still only as a fallback | four options are only a choice if they differ, and a picture with no words is not a thumbnail |
 | the film's own words | left out of the picture under the thumbnail's (34 px and up), with the discs and cards they leave empty | one message: a card saying "Від чого залежить зарплата?" sat over the film's own heading saying the same |
-| cap height | 110-250 px at 1080p | 96-200 read as a caption on a slide |
+| cap height | 110-250 px at 1080p (to 300 on a poster) | 96-200 read as a caption on a slide |
+| a film with pictures | posters, never frames, while a poster can be made | a frame is laid out for motion: its subject is small and its layout shows (2026-10-05) |
+| a poster's pieces | the film's own files, at most 2.1x their pixels; the hero and one more | nothing is redrawn; three things to look at with the words and the logo |
+| a poster's words under a burst | never without an outline; 7% of the height with one; whole under strips | white on an orange burst measured 3.26:1 |
 
 **Measured** (2026-09-29, 8 studio films -- three crayon, a clean app film, a blueprint, a dark
 wine film, a photographic one and a painted Ukrainian one -- from Claude's own concepts; the
@@ -3215,6 +3415,190 @@ film the subject is guessed (KI-036), and a panel can cut it at the frame's edge
 busy town leaves a headline no clean place, and it takes the quietest; a film that draws its
 titles with its own pen keeps them (KI-038).
 
+**What the second review changed: posters** (2026-10-05, the same channel's episode 9, a
+six-minute collage film). "I don't like what I see here", and of the next attempt, "all bad. We
+must keep the style... it maybe doesn't have to be AI. We could easily render by a template. And
+the template could be dynamic, slightly modified each time."
+- *Why a frame could not be fixed.* A frame is laid out for motion and narration: on this film the
+  characters stood 164-296 px wide in 1920 and a card, a chapter strip and a heading filled the
+  rest. Leaving the words out left their empty cards; the furthest push (1.5x) left the subject
+  small. Four options, four slides with a caption.
+- *Why not an image model.* GPT Image 2.5, Nano Banana Pro and Nano Banana 2 (OpenRouter), given
+  two stills and a brief, composed what a designer would -- the girl large on one side, the words
+  on the other -- and spelled the Ukrainian right, for $0.05-0.14 a picture. They also redrew the
+  girl. The film's own style is the point; refused.
+- *What channels that draw do* (their own thumbnails, 2026-10-05; sources in
+  `config/thumbnails/thumbnails.json` `poster._templates`): two skeletons cover most of them --
+  words stacked on one side and one subject on the other (TED-Ed), or two or three words across
+  the top and one subject under them, off the bottom edge (Kurzgesagt, The Infographics Show).
+  At most three things to look at (Paddy Galloway); a median of four words, in capitals with an
+  outline or a box on most (Thumbnail Bench 2026, 11,223 thumbnails); a logo small or absent, a
+  series held together by its skeleton and its type. Nobody documents how a series is varied, so
+  the variation here is ours: template, side, closeness, lean, the paper behind the hero.
+- *So a poster is composed, by a template, from the film's own pieces* -- the design above.
+  Nothing is redrawn: the cut-outs are the film's files, the page is the film drawing its own
+  page, the type and the strips are the film's.
+- *Measured*, on six studio films with pictures (two Ukrainian clay episodes, an engraving
+  collage, a Haitian Creole promo, a product film of photographs, Persian road works): 24 options,
+  24 posters, none fell back to a frame; caps 120-260 px (10.5-22.8 px at 168 wide, median 160 px
+  where the frames they replace were set at 110-140); contrast 4.86-12.84:1; 12.5-16.8 s a film
+  with its stills made. The first run had 7 of 24 fall back: 4 at moments with no picture on
+  screen, 3 whose words did not read on their page.
+- *What it found on the way*: the legibility check read a stack of two strips as 1.4:1 (one
+  median ring for dark-on-light and light-on-dark words); a line of Persian was set first word
+  left; a dash could start a line; a burst reached under words with no outline (white on orange,
+  3.26:1); "a tall sheaf of wheat, standing" was taken for a standing figure and cut at the
+  waist; a flyer somebody gave a film was tucked in as a second piece; a figure tucked beside a
+  figure was a doll at her elbow. On the studio's machine the first real set came out in lower case: the film's biggest title style was 79.97% capitals, because its closing sentence is set in that colour in sentence case, so a type's case is now everything the film sets in it; and its writer built three of four posters on objects until it was told a face comes first.
+- *What is still weak*: a film that draws everything itself (crayon, clean) has no pieces and
+  still gets frames (KI-055); who is "somebody" is read from the words a picture was painted
+  from, so a picture nobody described is an object (KI-057); a print whose own edges fade keeps a
+  smoky rim; on a Windows laptop joined scripts are measured unjoined and set smaller (KI-056).
+
+### A question or a quote (2026-10-14)
+
+The owner asked for every thumbnail to carry "a short catchy question or quote" -- the short,
+one-word-coloured text kept as it was, only its meaning changed -- and for the picture to show its
+subject finished: some were picked mid-draw, or showed a hero that did not fit the words.
+
+- **The words** (`ASK_THUMBS`, `ASK_POSTERS`, and share.py's two) are each a short question the
+  film answers, ending in its question mark, or a short quote of the narration, word for word, in
+  quotation marks (\u201c\u201d, \u00ab\u00bb, \u201e\u201c or straight double quotes; single ones are
+  apostrophes too often). Still at most 4 words and 32 characters, one starred.
+- **Held to it** by `check_concepts(..., said=)` (`ytdraft.check_thumbs` passes the narration):
+  words that are neither, a quote the narration does not say (`quoted`: its words in order, case
+  and punctuation aside), or worded thumbnails all of one kind when the film says anything, are
+  problems the writer is asked once more about; what still breaks the rules is put right from the
+  film as before (`repair`). A film with no narration may have questions alone. A hand-written
+  concept (`thumb-options.py`, `said=None`) is held to its length only.
+- **The title box** (below) carries the option's own question or quote, set whole with its mark
+  (`title_parts`), and the video's title only when the option's words are neither.
+- **The moment:** the writer is told to pick one where the subject is finished (every line and
+  colour drawn in, not appearing, not half off the frame) and is what its words are about; a
+  poster's hero is one that shows what its words are about. `settle` then counts every candidate
+  moving no more than `settle.still_motion` (0.008, or the stillest one) as still and takes the
+  most drawn of them, where it took the stillest: a crayon line boils, so a finished drawing never
+  scores 0 while a pause half way through can (`check-thumbnail.py`: "the finished drawing, not
+  the pause half way"). The threshold sits between the settled frames' median movement (0.0054)
+  and the moving ones' (0.03) in the bake-off; it was not measured on its own.
+- Drafts written before keep their picks: the draft key names the words' ask, not the
+  thumbnails', so nothing is rewritten (or paid for) until a film's draft is next written.
+
+### The title in a box (`layout_title`, design yt-5)
+
+One of the four options (config `title.options`: 2 since 2026-10-22, when option 1 became the
+punch line below; 1 and 2 before) is **the video's own title on a whole frame of the film**: heavy capitals in the film's title type, in a box of the film's accent with a
+hard dark shadow, in a top corner. The owner sent a thumbnail of this kind as the format to offer
+(a painted padel court, "PADEL TACTICS" on a red box top left, "EVERYTHING, IN 6 MINUTES" small
+beside it) and asked for the text to be the video's name or very close to it (2026-10-09).
+
+- **The words** are the title as the draft wrote it, cut by `title_parts`: up to its first break
+  (a colon, a dash, a bracket, the end of a sentence), and through the second when the first part
+  is a word or two ("Padel: Tactics and Tricks (Racket sports...)" sets "PADEL TACTICS AND
+  TRICKS"). What follows the break goes small on a dark strip beside the box, or under it, when it
+  is 40 characters or fewer and a place clear of the frame's own words exists; else it is left
+  out. A title, or first part, over 44 characters is not set this way: the option is made from its
+  moment's own words, as before (`FALLBACK["title"]`).
+- **The picture** is the frame at the option's moment with the film's own words left out and
+  nothing pushed in: the scene as the film drew it.
+- **The colours** are the film's: the more saturated of its two accents for the box, and whichever
+  of white and the film's darkest colour reads better on it for the letters; the accent is then
+  moved away from the letters until they read at 6.5:1 as colours. Thin hand type measures under
+  its colours' ratio once drawn (white on rust, 5.3:1 as colours, read 4.45:1), and darkening a
+  lime accent until white read on it made it olive, so a lime box takes navy letters. A film whose
+  accent is nearly grey gets the reference's red with white letters.
+- **The corner** is the one where the box hides the least, top left first, never bottom right
+  (YouTube's duration stamp), at the largest capitals (170 down to 100 px) whose box hides no more
+  than 8% of the frame's subject and cuts through none of the frame's own words (one may lie
+  under it whole). On a frame drawn on a flat ground "the subject" is everything that is not
+  ground (`drawn_map`); saliency read an empty half of paper as busier than the half with the
+  laptop in it. A painted frame is read by saliency.
+- **Checks** are the ones every option passes: cap height at 168 px, contrast as drawn, the
+  margins, the stamp, the film's own words. A box whose letters miss the contrast bar once drawn
+  is tried once more as `title+deep` (its fill moved `title.deep_margin`, 1.5, further from them)
+  before the option gives the box up: "STILL WAITING?" in Caveat read 4.49:1 on kc-local's Linux
+  Chromium and over 4.5 on Windows (2026-10-14), a near miss from rasterising.
+
+Measured 2026-10-09 on two films, eight options: the painted padel film (words drawn in ways the
+declutter pass does not find, so chips and source lines stay in the frame) set the title on three
+moments of four and fell back on the fourth, a frame crowded with labels; the hand-drawn example
+set all four. `thumb-options.py --title "..." --title-box all` draws it on every option of any
+film; `--title-box config` as the site offers it. Known weak: a frame with its subject in the
+middle has no empty corner, and the box then covers part of it at the largest size that fits.
+
+### The punch line on a dark box (`layout_punch`, design yt-6)
+
+Option 1 (config `punch.options`) is **the video's punch line, two to five words, very large on a
+dark box over the frame as the film drew it**. Every option of a film that is not 16:9 (a Short) is
+one, made at the film's own frame (1080x1920). The owner named the model on 2026-10-22: "thumbnails
+with text on top. short catchy title. as we did for https://youtu.be/yrfpNa2HCzU" -- the channel's
+best video (Yandex, 16k views, 95% from YouTube search).
+
+**What the reference is**, measured off it at 1280x720: "Yandex hit, / bots *quiet*", four words in
+two lines, sentence case in the film's heavy sans; caps 76 px (0.105 of the height, 10 px at 168 px
+wide); a box of the film's dark paper (#1E1C19) edged about 3 px in its amber (#FAC622), corners
+about 12 px, 52% of the width and 36% of the height, upper left; the words cream, the last one amber;
+under it the Cloudflare Radar chart with its drop, its source tag, the film's BREAKING bar and
+closing question, pushed in 1.2x. The box covers the chart's header and leaves its drop in view. The
+word that brought the views is the first one: "yandex" was the top search term (1,574 views).
+
+**It was an accident.** The studio's own record of that draft: option 1 was asked as a headline,
+could not be set as one, nor with a glow, and fell to the card layout at the smallest caps (110 px).
+The film's own card is its dark paper edged in its accent, so the card looked like that. Remade with
+the release of 2026-10-22 from a fresh draft, the same film got "Why did *bots* vanish?" (the
+question-or-quote rule, 2026-10-14, leaves no room for "Yandex hit"), again by fallback. On the
+Anthropic IPO research film (studio-20261021-224924-xcvyhz) the same release offered two options
+of four with no words at all and two headlines at the smallest size over half-erased charts. A
+Short got no options at all (since 2026-10-08).
+
+**What it does now:**
+- *The words* are a short title, `punch.min_words`-`max_words` (2-5) words and 32 characters, a
+  statement as a headline puts it or a question, never a quote, naming first who or what the film
+  is about -- the name a viewer types into search. The writer is asked for it as the first
+  thumbnail (`ASK_THUMBS`, `ASK_POSTERS`) and held to it by `check_concepts(..., punch=[1])`; the
+  other three keep the question-or-quote rule and its mix. An older draft keeps its words: its
+  first option's question or quote becomes the punch. Words with no star get one on their last word
+  that counts (`punch_parts`).
+- *The picture* is the frame as the film drew it: its own labels, sources and headings stay, as in
+  the reference (a research film's evidence is words, and the words-out pass left half-erased
+  charts behind). Nothing is pushed.
+- *The colours* are the film's (`punch_look`): the box its darkest colour (near black when it has
+  none that dark), the words its lightest, the starred word and the edge its most saturated accent
+  lifted until it reads on the box; the reference's amber for a film whose accent is grey. On the
+  reference film's palette this gives the reference's own colours.
+- *Where it goes* (`punch_map`, `layout_punch`): the largest caps (200 down to 110 px; 170 to 80 on
+  a Short) whose box hides no more than 15% of what must stay in view -- the frame's subject
+  (`drawn_map`) plus, weighted as much again, the marks the film drew to point at its evidence (its
+  circles and arrows: what the words-out pass leaves out that is no line of words). The first
+  version set its box straight over the amber ring round the chart's drop. The box may hide the
+  film's small print and labels, whole or cut like a sticker over a page (each cut line costs
+  `cut_cost`), never cuts a heading (an OCR line 60 px and up), stays out of YouTube's stamp, and
+  leans up and left, where a feed is read from (`top_bias`, `left_bias`).
+- *A Short*: letters between 12% and 76% of the height (`safe.tall_band`: a Short's tile is cut
+  nearer 2:3 in places and its title lies over a phone tile's foot), no stamp corner. YouTube began
+  taking a Short's own thumbnail in July 2026, Partner Program channels first; the API's support for
+  it was not documented when this was built. No share picture is made for a Short.
+- *Fallbacks*: a punch that cannot be set falls to its picture with the film's words out
+  (`punch+clean`), then a card. And every worded layout now tries a punch before it gives up its
+  words (`FALLBACK`): a picture with no words is not a thumbnail.
+- The title box moved to option 2 (`title.options`).
+
+**Measured** 2026-10-22 on kc-local, four films, fresh drafts with the new ask (16 options):
+- the Yandex film: option 1 "Yandex Bots Went *Quiet*" on the chart at its moment, box upper left
+  over the chart's header, the ring and the drop in view (caps 110, contrast 10.0:1) -- the
+  reference's picture, words and box, with its searched name back first;
+- the Anthropic research film: "Anthropic's *$2 trillion* IPO" (caps 120); options 3 and 4, which
+  had no words, now fall to punches; 4 of 4 options have words (2 of 4 before);
+- an S&P 500 Explained Short and a Padel Tactics Short: 8 of 8 punches at 1080x1920 (caps 80-140,
+  12.4-21.8 px at 168 px wide, contrast 5.4-11.8:1); before, none.
+- a set of options took 26-52 s on kc-local while another job held it at load 30-50.
+
+**Known weak:** the box is not pushed in with the camera, so the evidence under it is as small as
+the film framed it (the reference was pushed 1.2x by accident of the card layout's compose); on a
+dense chart the least-hiding place can still be the bars (the Anthropic film's option 1 hides 13%
+of the frame, most of it bars); a long first word in a wide sans leaves a Short's box at 100 px.
+`thumb-options.py --punch all` draws it on every option of any film.
+
 ## Share title and image
 
 Every finished film on kitcut.ai gets a public page of its own (`kitcut.ai/v/<short>/<slug>`),
@@ -3251,6 +3635,15 @@ where only `share` is set -- then holds what the site reads:
 `Ukrainian`). `image` and `thumb` are left out when the picture could not be made or copying online
 is off (the site then shows `card.jpg`); the files stay in `outputs/`. `GET /api/films/{id}` answers
 `share` = `{title, description, language, image, thumb}` for a film that has one.
+
+**A frame of the film as the thumbnail.** `python studio/share.py --film <id> --frame 2`
+(`ops.sh share <id> --frame 2` on the VM) makes `thumb.jpg` from the film's own frame at 2 s --
+the frame as it is at 1280x720, a film that is not 16:9 whole in the middle over a blurred stretch
+of itself -- copies it online under a new name and sets `share.thumb`. The words and `image`, the
+link preview, stay as they were; no call is made and it costs nothing. The share keeps the time as
+`frame` (not part of what `GET /api/films/{id}` answers), so a later remake of the share puts the
+frame back over the drawn thumbnail. `--frame off` drops it and copies the drawn one again. A time
+past the film's end, or a film with no share yet, is refused.
 
 **It never fails a film.** It starts as a background task beside the moments sheet once the film is
 `done`; a failure is logged as `SHARE <id> failed: ...` and noted on the record as `share_error`,
@@ -3540,7 +3933,10 @@ python scripts/check-sketch.py                                                # 
 
 Start a film by copying `config/sketch/example/` to `projects/<id>/` (the scripts write
 `audio/ outputs/ temp/` next to the manifest). The example runs end to end for free: its
-voice is edge-tts.
+voice is edge-tts. An edge voice reads faster with `"settings": {"rate": 12}` in `vo` (percent, edge's own rate
+control, not a resample; it is in the take's fingerprint, so a new rate records the lines again). A
+`403 Invalid response status` from edge is an outdated `edge-tts` package: 7.3.1 answers again
+(2026-10-29).
 
 ### The pieces
 
@@ -3548,6 +3944,7 @@ voice is edge-tts.
 |---|---|
 | `sketch/engine.js` | the renderer: strokes that boil, cel fills, write-on text, camera, flight paths, paper, grain; `SK.setStyle('crayon' \| 'clean')`; the ground, `SK.setGround(name)` (paper, white, kraft, sky, mint, butter, blush, night, chalkboard, blueprint: the paper, its grain and the text colours that read on it, `C.text` `C.textSoft` `C.accent` `C.accentText`), or `ground: (t) => name` in `SK.film`; backdrops that cover whatever the camera shows: `SK.sky`, `SK.band` (ground, hills, waves, grass; returns `edge(x)`), `SK.stars` |
 | `sketch/collage.js` | the collage pieces, a module a film opts into (`"modules": ["collage"]`, loaded after the props): cut-out pictures, torn sheets, tape labels, headlines, stamps, bursts, halftone dots, ransom letters, marker lines, masking tape, a newspaper backdrop, groups, and the in/out motion they share; `SK.setStyle('collage')` (see "Collage films") |
+| `sketch/captions.js` | the narration's words in the picture, a module a film opts into (`"modules": ["captions"]`): it wraps `SK.film`, cuts each line of the voice timeline into cards at its punctuation (4 words on a tall frame, 5 on a square, 8 on a wide one), and draws the card being said over everything -- white on a dark card, the word being spoken in yellow -- low in the frame but above what a phone's buttons cover on a 9:16 film. `SK.captionBox()` is the band it stays in, `SK.captionCards()` the cards and their times, `SK.CAPTIONS = {on: false}` turns it off. For a film that goes where a soft subtitle track is not shown (a YouTube Short) |
 | `sketch/space.js` | a little 3D, a module a film opts into (`"modules": ["space"]`): a perspective camera (`SK.view3`), faces drawn with the ordinary 2D engine and laid onto 3D quads (`SK.face3`), boxes (`SK.box3`), lit flat polygons (`SK.poly3`) and blurred or smeared layers (`SK.fx`) (see "Motion-design films") |
 | `sketch/props.js` | the cast: ticket character, seated person with poses, a standing/walking/sitting kid (`P.kid`, also the grown-up at s ~1.4), paper plane, laptop, table, lightbulb, rocket, padlock, coin, stamp, browser window, thought bubble, confetti, architectural houses, phone, window (cracks), street siren, delta-wing drone, missile, stopwatch, debris; scenery: tree (round, pine, bare), bush, cloud, sun, moon (full, crescent), mountain, building |
 | `config/sketch/grounds/` | every ground and three places built from the backdrops, one a second: render its stills after changing any of them |
@@ -3561,6 +3958,16 @@ voice is edge-tts.
 Studio's `studio/outro.js` holds the last frame and draws over it); sketch-render renders `secs`
 more, and sketch-audio ends the film's sound at the film's end as always, then plays `audio`
 after it, as loud as the narration. `poster_t` stays in the film.
+
+**Rendering a film a second time, beside itself.** A manifest's `"work": "<folder>"` (relative
+to the manifest) is where the tools WRITE: `audio/`, `outputs/` and `temp/` go under it, while
+everything the manifest names is still read from the manifest's own folder. Sketch Studio uses it
+to take a film's closing off after the fact (`studio/unbrand.py`): a copy of the manifest with no
+`tail` and `"work": "temp/unbrand"` renders next to the finished film, which stays whole until the
+new one is. Its sound is not mixed again: `sketch-audio.py --from-mix audio/mix_pre.wav` cuts the
+film's own un-mastered mix to the manifest's length and masters that, so nothing is synthesised,
+no voice is asked for, and the film sounds as it did -- the closing was appended after the film's
+own fade, so cutting at the film's end removes exactly it.
 
 **A cast of recurring characters** is the manifest's `cast`: a folder (`"cast": "cast"`) whose
 `<name>.js` files each run in their own scope after props.js and before film.js, and register one
@@ -3605,21 +4012,47 @@ whimsical 40 s crayon film, and a 60 s clean real-estate film for a brand.
 
 ### The voice: `sketch-vo.py`
 
+**One voice, said right (2026-10-01, the Leo series).** Three things now keep a narration in its
+own voice:
+
+- *A refused line is read again in the same voice without the direction* (`gemini_plain`), twice,
+  before the backup voice reads it. Gemini's prompt filter refused "Like a team!" and "I'm a big
+  boy!" with the film's style and read them every time without it; 14 lines of 6 episodes had gone
+  to the backup voice, another person mid-film.
+- *A broken take's last retry goes without the direction* (`stretched`): a voice that reads its
+  direction aloud does it on every try with it.
+- *`say` in vo.json* (`{"varenyky": "va-REN-ih-kee"}`) is what the voice is given; the captions,
+  the scoring and the word times keep the script's spelling (`said`). Spell a word the way an
+  English reader would say it: "varenyky" as written made Gemini change voice on that one word.
+
+A direction that gives a character a voice of its own ("Leo's lines: higher, brighter") makes one
+narrator sound like two; a series that wants one voice says so in its brief.
+
+**Re-voicing a finished film.** `python scripts/vo-retime.py --manifest <sketch.json> --before <old
+timeline.json> --write` moves every sfx.json cue with the words around it after the narration was
+recorded again (the picture follows the words by itself; sound cues are in seconds). Re-voicing the
+eight Leo episodes moved words by up to 5 s. On the studio the re-voiced film goes back as its next
+version: `ops.sh take <id> <dir>`, re-voice and re-time there, `ops.sh put <id> <dir> --summary
+"..."` (the studio-vm skill, "Reworking a finished film by hand"). A film's folder on the VM is
+never written into (KI-061).
+
+
 Per line: N takes (cached by a fingerprint of text + voice + model + settings, so an edit
 re-renders only that line), each cut at the silence before a throwaway tail word, scored by
 Whisper against the script, the best one picked (accuracy, then a clean cut, then the take
 nearest the median length) unless the line names `"pick"`. Lines are placed at their `start`
-or after the previous line plus `gap`; word times come from the ElevenLabs character
+or after the previous line plus `gap`, plus the line's own `"pause"` when it has one (seconds of
+quiet before it: the beat a gag or a view needs without words; it costs no recording, and on the
+studio the film grows to fit, `studio/README.md` "The length is a target"); word times come from
+the ElevenLabs character
 alignment, minus `[audio tags]` and the tail. Writes `audio/vo/timeline.json` and
 `outputs/<slug>.srt/.vtt`.
 
-A line's `"gap_after"` overrides `gap` for the pause after that line only. A screenshot film's
-pauses are where the picture acts -- the click on send, a screen coming in -- so they differ line by
-line; five projects (agent-batch-filling, flat-to-fillable, team-roles, agent-weekly-forms,
-agent-merge-pdf) each kept a `layout.py` that rewrote every `start` from a hand table of pauses.
-Leave `start` off and put the pause on the line instead: a re-recorded line then moves everything
-after it, with no second pass. `--plan` estimates the same layout from word counts, and the last
-line's end against `duration` is printed (and warned when it runs past).
+A screenshot film's pauses are where the picture acts -- the click on send, a screen coming in --
+so they differ line by line. Five projects (agent-batch-filling, flat-to-fillable, team-roles,
+agent-weekly-forms, agent-merge-pdf) each kept a `layout.py` that rewrote every `start` from a hand
+table of pauses. Leave `start` off and give the line its `"pause"` instead: a re-recorded line
+then moves everything after it, with no second pass.
 
 `"hotwords"` go to Whisper as its initial prompt, so a brand name is heard as one word
 instead of costing its take a lower rank.
@@ -3642,7 +4075,11 @@ audio, the line, the hotwords, the language and the scorer), so a re-recording s
 what changed. `SKETCH_SCORER` (the machine) or `vo.whisper` (the film) picks who listens:
 a local faster-whisper model, or `openrouter:<model>` -- a transcription model OpenRouter
 serves, scored `--jobs` at a time, needing `OPENROUTER_API_KEY`, and falling back to local
-Whisper for a take the service fails. The studio uses `openrouter:openai/whisper-large-v3`
+Whisper for a take the service fails. The fallback is one model in the process and one take
+through it at a time, however many threads fall back at once, and a service that refuses the
+key itself (HTTP 401, 402, 403: out of credit, over the key's own limit) is asked once in a
+run, not once a take (KI-066: five threads each built a `large-v3`, 12.5 GB, and the studio's
+VM froze). The studio uses `openrouter:openai/whisper-large-v3`
 (Groq). OpenRouter drops a transcription prompt, so the hotwords reach only Azure's
 `microsoft/mai-transcribe-2`, as a phrase list. Compare scorers on a finished film with
 `scripts/vo-scorer-bench.py --reference large-v3`: agreeing with the film's own scorer proves
@@ -3692,6 +4129,72 @@ slipped into Russian forms). Gemini through OpenRouter is the same model and the
 filter, so it is no backup. Voice cloning on OpenRouter (Mistral Voxtral, Fish Audio) was
 not reachable with the key's allowed providers; MAI 2 Flash has no cloning endpoint there.
 
+### A narration written word for word: `narration-check.py`
+
+A research film's script is written and checked against its sources before the film is made:
+every number in it was read on its source's page, and the film must say those lines, all of them,
+in order. Its form (`scripts/_narration.py`): an id at the start of a line -- `L01`, `- L01.`,
+`**L01**:` -- then the spoken words in double quotes, on that line or indented under it, up to the
+next id, heading or unindented paragraph; stage directions in `*italics*` are left out, quotes
+inside them included. Three such lines make a document a word-for-word script.
+
+```powershell
+python scripts/narration-check.py --script projects/<id>/facts/<film>-script.md --list
+python scripts/narration-check.py --script <doc.md> --vtt https://media.kitcut.ai/films/<id>/film.vtt
+python scripts/narration-check.py --script <doc.md> --vo <film>/vo.json     # or --timeline
+```
+
+It compares words, not punctuation: case, commas, dashes ("sixty-one" = "sixty one") and `[voice
+tags]` are the voice's. A script line said as several narration lines in a row passes (one over
+the voice's 300 characters has to be); one narration line holding two script lines does not, since
+the pause between them is lost. Measured on the Anthropic IPO film (2026-10-22): the full film's
+captions are its 72 lines word for word; its pilot's captions show L07 missing, the line the pilot
+dropped because the studio's prompt then said a script's words "may be cut to fit".
+
+**In the studio** a word-for-word document is found among a film's attachments
+(`validate.narration_script`), and `attached_note` tells Claude it is the narration, every line,
+the film as long as they take. `validate.problems(film, "vo.json")` holds vo.json to it on every
+save, so the tools wait while a line is missing, reworded, added or joined -- but only over the
+stretch vo.json covers (`_narration.check`): a pilot of L01 to L08 passes, and what is left out at
+either end is said after the recording (`validate.verbatim_note`). A narration under 30% of whose
+words follow the script is another text (a translation) and is not held to it. The script's
+length sets the line cap (twice its lines). `studio/test_verbatim.py` covers it.
+
+### A research film's documents and sources, checked: `research-check.py`
+
+When an agent writes a research film's three documents unattended (`docs/autonomous-research-
+films.md`), nobody re-reads its pages; on film 31 that re-read found six wrong numbers. These checks
+use no AI; they find what does not add up, and the agent fixes it (`scripts/_research.py`):
+
+```powershell
+python scripts/research-check.py --fact doc1.md --chart doc2.md --script doc3.md
+python scripts/research-check.py --fact doc1.md --sources [--skip 20]
+```
+
+- **Every number the narration says is a number of the fact sheet.** Numbers are read as they are
+  said ("sixteen point three billion", "a hundred and eleven billion", "sixty-one and a half",
+  "2,061") and as they are written ("$16.3B", "~30x", "1.5 trillion"); years and the small counts of
+  speech are skipped; a hedged rounding ("about eight hundred thousand" for 810,000, within 3%) is
+  fine. It is coarse on purpose: it catches a number from nowhere, not one near another fact (film
+  31's "almost sixty times" passed beside a 61.5).
+- Every fact-sheet table row has a label, a source and, unless an ESTIMATE, a url and a quote; a
+  table without url and quote columns is named once. "The film must not say" bullets that begin with
+  a quoted phrase are searched for in the narration, however its numbers are said. Every chart value
+  is on the fact sheet (a "$ billion" column scales its cells; the first column names the row).
+- `--sources` reads each row with a url and a quote on its page, 20 a run: a plain fetch (the SEC
+  gets `_web.DECLARED_UA`), then the page tool's browser for a page that refuses it. found / close /
+  number (the quote is not there, its number is) / missing / unreadable. On four real rows: the 10-Q
+  quote found, an invented quote missing, a paraphrase "number", in 16 s.
+- On film 31's own documents (written before url and quote columns existed): one spoken number not
+  on the sheet (L63's "a hundred and forty billion", the sheet has the 129-141 band unscaled), ten
+  chart values the sheet lacks (the ranking's market values, two of our own estimates), and ten
+  tables without url and quote columns.
+
+The studio serves both to the MCP: `POST /api/research/check` `{fact, chart, script}` and `POST
+/api/research/sources` `{fact, skip}` or `{sources: [{url, quote, number}], skip}` (the token, two at
+a time, 110 s), which `check_research` and `check_sources` on kitcut.ai/mcp call.
+`studio/test_research.py` covers it with no network.
+
 ### The soundtrack: `sketch-audio.py`
 
 Stages: fetch any missing instrument notes (FluidR3 GM, MIT, into
@@ -3702,6 +4205,51 @@ two-pass `loudnorm` to -14 LUFS / -1.5 dBTP. `--levels` prints music / ducked / 
 voice RMS per 2 s, which is how the balance is judged without listening; `--stems` writes them
 out. Every run also writes `audio/balance.json` (the same table, and what the voice gate did),
 which is what Sketch Studio's `sound` tool shows Claude.
+
+**A film with no music: `"audio": {"music": false}`.** Said once in the manifest and obeyed
+whatever the score holds: no score event is played and no pitched cue either
+(`_sketchaudio.TONAL_FX`: a sampled note, a chime), since a pitched note is music by another
+name. The voice and the unpitched sounds are mixed and mastered as ever, and `--plan` prints what
+was left out. It runs after a series' kept sounds are spelled out, so a kept bell goes too. A
+score file is still required; an empty `"events": []` is a valid one. Why it exists, and the
+rest of what a YouTube Short needs: `docs/shorts-guidebook.md`.
+
+**A video laid out for a reviewer: `review-pack.py`, and the `video-review` skill.** The studio's
+reader (`studio/review.py`) finds what is broken and is told never to judge taste. Whether a film
+is good is a second review, done by a fresh agent following `.claude/skills/video-review/`, and
+`review-pack.py` is what that agent reads. `story.jpg` comes first: the opening as one picture, a
+frame every two seconds with everything said in those two seconds under it (`--lines
+<film>/audio/vo/timeline.json`), so that the reviewer judges the whole before any part, and can
+lay it beside the same sheet of a film the owner has named as a model. The rest is for looking
+into a doubt: the first 30 s four frames a second, the whole video a frame a second, each hard cut
+of the opening as six frames, the file's first frame, and `pack.md` with the cuts and the shots
+between them, the slow and still stretches (short-stillness's bars, on the whole frame), loudness
+second by second and the narration's pauses. `--list` prints the counts and writes no pictures.
+The skill's review is a verdict on the whole (show it, not yet, wrong idea), at most three changes
+each big enough for a viewer to notice, and plain mistakes; no scores and no list of small fixes.
+It was written twice. On 2026-10-12 a reviewer reading one frame a second passed an opening its
+owner rejected on sight. On 2026-10-13 six reviewers armed with four frames a second and a bar of
+numbers each returned two small timed fixes and none asked whether the opening was the right one;
+the owner asked for a reviewer with common sense that sees the entire picture, and said that a
+film they had approved was never an ideal to measure against. Three things about the numbers: two cuts under 0.4 s apart are one (type
+slamming in after a cut reads as a second cut); a dissolve is not a cut; and stillness is not a
+verdict on a wide film (the most watched tactics explainer measured is still for 83% of its
+opening, because it draws on a plain page). `benchmarks.md` in the skill holds six reference
+openings measured with it.
+
+**Does a Short's picture stand still: `short-stillness.py`.** A wide film may hold a diagram
+while the narrator explains it; a Short may not (the guidebook's rule 33). The script reads a
+finished file at five frames a second, looks only at the picture's band (`--box top,bottom` as
+shares of the height; the default, 0.08 to 0.66, is everything above the caption band, because the
+caption cards change with every word and would hide a frozen picture behind them), and counts the
+share of that band's pixels that moved by six grey levels or more since the frame before. Two
+bars: **still**, under 0.4% changed, and **slow**, under 3%. The second exists because a slowly
+drifting background passes the first on its own, with nothing a viewer would call movement on
+screen (the case `check-sketch.py` builds in memory). `--check` exits 1 over 5% still or a slow stretch
+longer than 3 s. Measured on the five padel Shorts it was written for (`--box 0.19,0.68`, a title
+block above the picture left out): 49 to 65% still and 72 to 80% slow as first cut from the wide
+film, 0% and 1 to 7% once rebuilt. It is read at 135 x 240 so that grain and compression are
+not counted as movement. `check-sketch.py` holds the arithmetic on pictures made in memory.
 
 **The voice gate** is the backstop the ducker is not: the ducker follows the voice but trusts
 the score's own level, so a score written too loud buries the narration however well it
@@ -3743,13 +4291,49 @@ swoosh_soft, tick, chime, siren -- a softened civil-defence wail), `"sample"` (a
 airflow that follows a moving object's speed and screen position, from the film's
 `automation` tracks (`sketch-render.py --automation` writes them).
 
+**Kept sounds** (`sounds.json`, beside the score). A series sounds like itself when its bell, its
+"sad trombone" and its theme are the same in every episode, so they are kept by name, the way the
+cast is: `{"sounds": {name: {"about", "cue"}}, "themes": {name: {"about", "events"}}}`, a cue
+being one sfx.json cue without `t`, a theme a list of `"notes"` events with beats from 0.
+`{"t": 3.2, "sound": "bell"}` in sfx.json plays one (its other keys override the kept cue's;
+`args` merge); `{"type": "theme", "theme": "main", "at": 16}` in score.json plays a theme (`at` a
+beat or a list, optional `transpose`, `"only": [instruments]` for part of it).
+`_sketchaudio.expand_sounds` turns both into plain cues and events before anything renders, and
+refuses a name the kit lacks, naming the ones it has. In the studio only a project's episode may
+write `sounds.json`; the library seeds it from the series and keeps what the episode added or
+changed (`studio/README.md`, "A series"). `check-sketch.py` and `studio/test_sounds.py` cover it.
+
+**A project's brand** (`SK.BRAND`). An episode of a project with a brand (`studio/brandkit.py`,
+`studio/README.md` "A project's brand") has `brand/brand.js` first in its manifest's
+`head.scripts`: `SK.BRAND = {name, colors: {primary, accent, background, text, ...}, palette,
+fonts: {headline, headlineWeight, body, bodyWeight}, logos: {primary: 'brand_logo', on_dark,
+on_light, mark, ...}, logoInk, tagline}`, `SK.KIT.font` set to the body face, and
+`SK.BRAND.logoFor(bg)` -> `{logo, plate?}`: the on-dark or on-light version when there is one,
+else the primary, on a plate when its own colour has under 3:1 contrast with `bg`. Its faces are
+in the manifest's `fonts` (`brand/fonts/...`) and its logos in `images`. `_thumb.clean_manifest`
+and the cast sheet keep a film's own head scripts ahead of theirs, so a film reading `SK.BRAND`
+draws in its thumbnails too.
+
+**A project's style** (`SK.STYLE`). An episode of a project with a style (`studio/stylekit.py`,
+`studio/README.md` "A project's style") has `style/style.js` first in its manifest's
+`head.scripts`, ahead of a brand's `brand/brand.js`: `SK.STYLE = {line, layout, palette, colors:
+{ground, ink, accent, other}, fonts: {title, body, accent, titleWeight, ...}}` and `SK.KIT.font` set
+to its body face (a brand's `brand.js`, loaded after it, wins). Its faces are in the manifest's
+`fonts` (`style/fonts/...`). Its pictures are `style/style.jpg` (the main one), `style2.jpg`...,
+which `paint.json`'s `style_ref` names, as a list when there are several, when the project paints
+from them (below).
+
 ### The paintings: `sketch-paint.py`, and choosing a painter with `paint-compare.py`
 
 A painted film animates pictures made by an image model. The manifest's `paint` block (inline,
 or `"paint": "paint.json"`) lists them as `{"name", "prompt", "ref"?}`, with one `style` line
 in front of every prompt and a no-lettering, no-border suffix behind it. Each becomes
 `images/<name>.jpg` and joins the manifest's `images`, so `film.js` draws it with
-`SK.image(name, x, y, w)`. Paintings are cached by a fingerprint of backend, model, style,
+`SK.image(name, x, y, w)`. A `style_ref` (a project's style picture beside the manifest, or a list
+of up to 4) goes in with every painting and cut-out, first, told to set the style alone (never the
+layout, objects, people, words or how full the picture is), and an image's `ref` follows; the
+studio sets it, with the painter, the style line and the quality, from the film's `paint_route`
+(`film.paint_pins`). A model with room for fewer references gets the style pictures first. Paintings are cached by a fingerprint of backend, model, style,
 prompt and reference; `max_images` caps a film's total (Sketch Studio sets 8).
 
 Pictures a person gave the film (`inputs/upload1.png`, `inputs/pic_logo.png`, …) join `images`
@@ -3764,13 +4348,54 @@ Backends:
   nearest it, 2K or the nearest size below, and JPEG where offered. `quality` is sent only to
   models that have the setting (OpenAI's). The price comes back with each picture.
 - **`muse`**: the same backend pinned to `meta/muse-image`, the studio's painter. It is served
-  but missing from the catalogue, so it gets the settings it always got (2K, 16:9, PNG) and
-  answers 1920x1280 whatever ratio was asked. It costs about $0.01 a picture and takes 15-30 s.
+  but missing from the catalogue, so it gets the settings it always got (2K, the film's ratio,
+  PNG) and up to 8 reference pictures, which the catalogue does not list either
+  (`UNLISTED_REFS`; 2026-10-30: a line-up of one style picture and 7 characters came back with
+  all 7 right, and at 10 pictures one was painted twice and one left out). It costs about $0.01 a picture and takes 15-30 s.
 - **`gemini`**: Vertex AI.
 
 `ref` names a painting already made. It goes in as a reference picture (`input_references`,
 a data URL) wherever the model takes one, and is how a character stays the same from scene to
-scene. Muse takes no reference, so it paints the second scene from the words alone.
+scene. Muse takes them too (`UNLISTED_REFS`) and is not billed for them: $0.01 a painting
+either way. A film painted before Muse took them keeps its fingerprints, so nothing repaints by
+itself.
+
+`ref` may also name one of the film's project pictures, `pic_<name>`
+(`inputs/pic_<name>.png|jpg|webp`, seeded by `studio/library.py`). The picture is sent as it
+is and never painted.
+- The usual chain: a cast sheet painted from `pic_<name>`, then each scene painted from the
+  cast sheet. The characters stay the same through the film, and they are the project's own
+  people.
+- An image made from a picture is painted in the first batch, with the images that have no
+  `ref`. The scenes made from it follow in the second batch.
+- Its fingerprint carries the picture's content, and it is worked out before the others' wherever
+  it stands in the list. A new picture repaints it and every scene made from it.
+- The name must be `pic_` and a library name, and the file must resolve inside the film's
+  `inputs/`. Another name, a path or a link out is refused, by `sketch-paint.py` and by
+  `studio/validate.py`.
+- A picture the person attached, `upload<n>`, may be a `ref` too, but only when they marked it
+  "How we draw this" (`style` in `inputs/roles.json`). A picture marked `scene` never is.
+
+`redo` (a folder beside the manifest, the studio's for a sharper version: `studio/rounds.py`)
+holds drafts, `<name>.jpg|webp`. An image with a draft there is painted from it alone, with the
+`REDO` lead (the same picture, finished: nothing added, moved or removed), in the first batch,
+and cached under the key it has without `redo`.
+- A film without a picture `ref` is planned, ordered and cached exactly as before. One old quirk
+  stays because of that: a scene listed before the painting it names is keyed without that
+  painting's fingerprint.
+- `gpt-image-2.5-flare` takes up to 16 reference pictures (OpenRouter's catalogue, 2026-10-26),
+  so the studio's `gpt` paint route uses it.
+
+A project's painted characters (`studio/library.py`, "Painted characters" in `studio/README.md`)
+are pictures of the same kind: `cast_<name>`, from `inputs/cast_<name>.*`.
+
+`ref` may be a list of up to 4 (`MAX_REFS`): several characters in one painting, each its own
+picture, sent in order.
+- Its lead says so: `KEEP_REFS`, or `STYLE_AND_REFS` after a style picture.
+- Its fingerprint keys each reference as a single one would be.
+- An image made from pictures alone goes in the first batch. One that names a painting waits for
+  the second.
+- A one-name `ref` is sent, worded and keyed exactly as before.
 
 **Choosing a painter.** `paint-compare.py` paints one paint block with several models side by
 side.
@@ -3799,13 +4424,80 @@ available for the selected model`. On 2026-09-26 the kitcut key permitted only
 meta, azure, openai and typesafe. So Seedream, Qwen, FLUX.2, Recraft, Riverflow and Gemini all
 refused, even though they are in the catalogue at a price. `--plan` cannot see that setting;
 paint one scene per model before trusting a price.
+On 2026-10-25 it served the October bench's eight models (OpenAI, Google, ByteDance, Microsoft,
+xAI) but still refused Black Forest Labs, Alibaba, Recraft, Tencent and Krea, so FLUX, Qwen-Image,
+Recraft and Krea could not be benched.
+
+**Ranking image models: `image-bench.py`.** This is the same idea as `paint-compare.py`, turned
+into a scored test. A bench spec (`config/bench/*.json`) gives models, one aspect, resolution and
+quality, and prompts whose facts can be checked. Each check is one of:
+- `ocr_contains`: the words are read off the picture by RapidOCR, normalised, and must match
+  exactly, letter for letter but not space for space: RapidOCR runs words together on lettering
+  that has the space ("EVERYFRIDAY", "10AM"), and in the October run that was 10 of its 11 fails;
+- `ocr_none`: there must be no text at all;
+- `judge`: one yes/no question for a Claude reader. This is the decomposed-checklist method
+  (TIFA/DSG, GenEval 2's Soft-TIFA) that the literature finds agrees best with people. The
+  judges' instructions are `config/bench/judge.md`: blind letters, "no" when unsure, a count in
+  the note, and hidden is not missing.
+
+The steps, each resumable:
+- `--plan`: price from the catalogue.
+- `--run --cap`: make the pictures. It records the spend the API reports, the seconds and the
+  size.
+- `--ocr`.
+- `--packets`: for each prompt, the pictures under shuffled letters, with the key kept apart, so
+  judges never see model names.
+- `--reconcile`: two judges' answers from `verdicts_a/` and `verdicts_b/` are merged; a third
+  judge's answer from `verdicts_c/` settles each disagreement. It writes `agreement.json` (raw
+  agreement, Cohen's kappa, the dispute counts, and OCR against the judge on the same text facts)
+  and `disputes.json` (every disagreement with all three answers and notes, and whether it is
+  settled).
+- `--score`: `scores.json`, a table per model and ability (seconds as a true median), and
+  labelled by-prompt grids for publishing.
+
+The October 2026 run (`projects/image-bench-2026-10/`): 8 models x 12 prompts, 96 pictures,
+$4.31 (1K square, quality medium where a model has the setting). Two Claude Opus 5.5 judges
+answered every check blind and agreed on 95.7% of 304 answers (kappa 0.72); a third settled the
+13 disputes. Final: Seedream 5 Flash and Grok Imagine 2.0 47 of 48; GPT Image 2.5 Sunburst and
+Flare, Seedream 5 Pro and Nano Banana Pro 45; MAI-Image 2.6 and Nano Banana 2.1 44. Every model
+failed the piano keys. The judges are not yet calibrated against people, so a one- or two-check
+gap is noise. The scores feed the blog's test articles (kitcut.ai/blog, 25 October 2026); the
+design and the evidence behind it are in `docs/market-image-video-models-2026.md`.
+
+**Ask about what the picture shows, never about what it hides.** p08 asked "does every visible
+hand have five fingers"; in a natural photo of hands at a piano no hand shows all five. One judge
+answered "cannot tell, so no" for all eight pictures, the other "no defect, so yes", and that one
+check made 8 of the run's 13 disputes. The third judge was told what the brackets in the question
+already said: a finger hidden by the angle is not a missing finger. Write such checks as a defect
+question ("does any hand show an extra, fused or impossibly placed finger?") and keep that rule in
+the judge's instructions.
+
+**People, not objects.** The next spec puts people in nearly every prompt: portraits across
+ages, hands doing something, two or more people with attributes to bind, a person holding a sign,
+the same person across scenes, and the counting prompt done with people ("exactly three people at
+a table"). The same applies to anything published from a run (cover, reel poster, first figure)
+and to video tests (a person talking, walking, holding identity across a shot). This is the
+owner's call (2026-10-25): the October spec had only three people prompts (p06, p08, p09), and
+its fruit-plate counting prompt became the reel's poster. People are also where the models
+differed: every model passed counting, layout and colour binding, and the spread was in hands
+and anatomy.
 
 ### The picture: `sketch-render.py`
 
 Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
 `outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
 without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
-loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+loop: 18 stills in 8.6 s. With `--probe STEP` a stills run afterwards plays the whole film
+once more every STEP seconds WITHOUT painting it (`sketch/probe.js`, put ahead of the film's
+code in that page only): every call made through a cast object (`SK.cast.x.fn(...)`) is a
+named scope, the canvas calls inside it are counted instead of drawn, and what each drew --
+its box on the frame, the squash of its transform, how much of it the clip it was called in
+hides -- is saved as `report.json` beside the stills (the format is at the top of probe.js).
+About 10 ms a frame; a film that will not fit 30 s is read at a coarser step, whole.
+`studio/motion.py` reads it (`events`): the same character on screen twice for a moment, a
+body cut by what it is inside, squashed through flat, a colour laid over the whole frame.
+By hand: `python studio/review.py --folder projects/<id> --machine`. The video is rendered by
+opening the page in headless Edge/Chrome
 (`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
 and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
@@ -3939,6 +4631,40 @@ Sol announcement. **Every request the page makes is intercepted** (`Fetch.reques
 failed unless `_web.public_url` passes its host, so a page cannot make the browser reach a
 private address either; the final URL is checked again before anything is kept.
 
+**A source page, photographed the way a research film shows it** (2026-10-22, from the Anthropic
+IPO film, whose nine source pictures took a laptop, a hand-run browser and PIL crops to make):
+
+```powershell
+python scripts/web-grab.py --manifest <film>/sketch.json --page <article> --name yahoo --keep header --keep h1
+python scripts/web-grab.py --manifest <film>/sketch.json --page <filing> --name tenq --size 1000x1080 --keep "text=fair value of our"
+python scripts/web-grab.py --manifest <film>/sketch.json --page https://x.com/<who>/status/<id> --name post
+```
+
+- `--keep` crops to the parts named -- CSS selectors, or `text=<words on the page>` for the
+  smallest *block* holding them (a paragraph, a cell, a heading: the first version took the word's
+  own span and gave a 202x126 sliver of a 10-Q) -- the box round all of them plus 24 px, photographed
+  at up to 2x so it is about 1920 wide and stays sharp when a film zooms in, then trimmed of the
+  plain ground round it. Whatever is pinned to the window and lies over the kept parts (Gallup's
+  header, which shrinks and stays when the page scrolls, sat across its headline) is hidden for the
+  photograph unless it is one of them; the page is scrolled back to the top first.
+- A cookie or consent dialog is accepted as a reader would (the consent managers' own buttons, then
+  a button saying "Accept", "I agree", "Got it" inside something about cookies), and one it cannot
+  reach (drawn in a frame of its own) is hidden. Never a login, a paywall or a newsletter.
+- A post on X is photographed through `platform.twitter.com/embed/Tweet.html?id=<id>`, which shows
+  it whole and signed out, cropped to its `<article>`.
+- Requests to the SEC carry `_web.DECLARED_UA` ("KitCut research hello@kitcut.ai"): EDGAR answers a
+  browser's own User-Agent with "Undeclared Automated Tool". `_web.ua_for` is the list.
+- A filing reads better in a narrower window (`--size 1000x1080`): at 1920 its paragraphs are one
+  long line each.
+- `web/<name>.json` gains `clip` (what part, at what scale) and `blocks`: every heading and
+  paragraph in the photograph with its box in the photograph's px -- the boxes `SK.read` pushes
+  the camera onto, so a film never guesses a line's place from the picture.
+
+`studio/test_web.py` covers it offline (the X address, the declared User-Agent, the crop's
+arithmetic) and on a local page in the browser (a cookie dialog accepted, a pinned bar hidden, the
+headline's place). The studio's `page` tool takes `keep`, and a long film may take a page every
+30 s of its length (12 at least, 30 at most: `tools.web_limit`).
+
 **Only the public internet.** The fetching machine may sit on a private network, and in the
 studio the URL is chosen by a stranger's prompt. `_web.py` resolves the host and refuses any
 address that is private, loopback, link-local (169.254.169.254, the cloud's metadata service),
@@ -4047,6 +4773,199 @@ python scripts/route-map.py --manifest projects/<id>/route-map.json             
 Worked example: `projects/pedal-network-ride/` (local), the LA Tech Week ride from Santa Monica
 Pier up Sullivan Fire Road, made on kitcut.ai from these attachments with `npm run film -- make`.
 
+**`--film`: one route for one film, framed by itself** -- what the studio's route tool runs (the
+ride-replay template; studio/README.md, "Templates"):
+
+```powershell
+python scripts/route-map.py --film spec.json --out-image images/route_map.jpg --out-data route.json [--cache <dir>]
+```
+
+The spec is `{"gpx": <path>, "start_at", "finish_at"}` (a recording cut to where the event starts
+and ends) or `{"points": [<name or [lat, lon]>, ...], "mode": "bike"|"foot"}` (routed along real
+roads and trails by routing.openstreetmap.de), plus `places` to locate and `units`. The map frames
+itself: the route plus a quarter of its size (at least 2 km) on every side, at the sharpest zoom
+under 32 MP; the terrain is fetched one zoom above the map's at most (a long route's z15 mosaic
+passed OpenCV's 32767-pixel limit). The sea is found by itself (the deepest point the terrain
+knows, when it is under sea level, closes the OSM coastline). A route with no clock of its own gets
+one -- 20 km/h on a bike, 8 on foot, 9 % slower for every 1 % of grade, a quarter faster down -- so
+a replay still dwells on the climbs. `route.json` is `{image, w, h, m_per_px, bounds, units, timed,
+loop, rows, marks: {start, climb, top, finish}, places, stats}`; the top is the highest point and
+the climb starts at the last point within a tenth of its height of the low before it.
+
+**Place names go through Nominatim, and it is strict.** "Golden Gate Bridge Welcome Center" is not
+on OSM (the tool says to give `[lat, lon]`); "Rynok Square, Lviv" first answered the Rynok Square of
+Stryi, 60 km away. So: up to five answers in English, the one whose address names the query's last
+part wins, the nearest to the place before it next; a place more than 150 km from the one before,
+or a route spanning more than 400 km, is refused with the reason.
+
+### A real map of a real address: `place-map.py`
+
+**The rule: a map that shows where a real place is -- a pin, an address, "find us here" -- is the
+real map of that place.** A film's viewers live there, and a ruled grid with a pin on it reads as a
+fake the moment they look for their own street (the open house template drew exactly that until
+2026-10-06: two green ovals, a grid, one line lit as "the host's street"). A map that is an idea
+and not a place -- a metro diagram of a programme, a treasure map in a story -- is still the
+film's to draw.
+
+`place-map.py` makes the real one from OpenStreetMap: the streets, buildings, parks, water and
+coast of the blocks round one address, a square picture with the address at its centre, and a data
+sheet saying where everything is on it.
+
+```powershell
+python scripts/place-map.py --at "2601 NE 29th St, Fort Lauderdale, FL 33306" --list   # what it matched, how exactly, what is there; draws nothing
+python scripts/place-map.py --at "..." --out projects/<id>/outputs/map [--radius 800 --px 3200 --tone dark --tint "#b5532a"]
+python scripts/place-map.py --manifest projects/<id>/place-map.json                    # the same from a manifest, recorded in the project
+python scripts/place-map.py --film spec.json --out-image images/place_map.jpg --out-data place.json [--cache <dir>]   # the studio's map tool
+```
+
+**The picture carries no lettering and no pin.** The film letters the street names in its own type
+and drops its own pin, so the map sits in the film's look; `tone` (light or dark), `tint` (the
+film's own colour) and `colors` (any surface outright) make it the film's. Widths in the style
+(`config/maps/street.json`) are METRES on the ground, so a street keeps its real width at any
+scale. A tint is first made as light as the surface it tints, so it changes a surface's hue and
+never its lightness: a brand's navy mixed straight in turned every house to slate.
+
+**How exactly the address was found is part of the answer** (`pin.match`, and the tool's own
+words), because a pin that claims more than is known is the fake map again:
+
+| match | what is known | what the film may show |
+|---|---|---|
+| `house` | the building or address point itself is on OpenStreetMap | the pin is the house |
+| `block` | the street is; the number is placed along it from its address range (Nominatim's own ranges, or the US Census geocoder for a US address) | the pin stands on the street, right to a house or two |
+| `street` | only the street | the pin marks the street: letter it, point at no house |
+| `place` | a named place (a venue, a park) | the pin is the place |
+| `point` | the `[lat, lon]` given | as given |
+
+Measured on a listing whose page publishes its own coordinates (11501 Buckingham Rd, Austin): the
+`house` match landed 3 m from them. A number that answers as "place / house" on a WAY is not a
+mapped house -- the way is the street -- so it is `block`, not `house`. **An address whose street
+is not on the map is refused** (`no map: ...`, which the studio's map tool looks for): the first
+sample, a model home in a subdivision still being built, has a street neither OpenStreetMap nor
+the Census knows, and a pin on bare land is a worse lie than no map. The film then shows the
+address in type. An answer must be in the town the address names: "Stuart, FL 34997" is never
+allowed to answer Stuart, Iowa.
+
+**`place.json` (SK.DATA.place)**: `{image, w, h, m_per_px, bounds, pin: {u, v, lat, lon, match,
+found, street, street_short, on, lines}, streets: [{name, short, kind, u, v, a, len, alt, own}],
+areas: [{name, kind, u, v}], look, ink, credit}`. u and v are fractions of the picture; `pin.lines`
+is the address's own street as lines (a film lights it); each street has a spot on a straight
+stretch long enough for its name, the angle it runs at there, and up to three spare spots (`alt`)
+well apart -- a film frames the map its own way, and the first spot may be off its frame or under
+a card. `short` is the name the way a map letters it ("SW Flagler Ave"). `look` and `ink` are what
+the map is painted in and an ink that reads on it.
+
+**The film draws it with two kit pieces** (`sketch/kit.js`): `SK.map(x, y, {s, own, names, clear,
+namesT, credit})` puts the address's own spot at (x, y), lights its street, letters the names
+(none under a `clear` box, none across another, each fading out before the frame's edge cuts it)
+and letters `© OpenStreetMap` on the frame itself; `SK.mapPin(x, y, {t, col})` drops the pin. It
+returns `m.at(u, v)`, `m.ll(lat, lon)` and `m.cover`, the least scale that still fills the frame
+from there. The default picture is 4000 px for 1000 m to each edge: a film rarely puts the pin in
+the middle (a card takes the other half), and the far edge then decides how far out the map can be
+shown.
+
+**The sea needs only the coastline's direction.** OSM draws a coastline with the land on its left.
+The lines cut the frame into regions, and each region takes the side most of its shore says it is
+(`sea_mask`): no "where is the open sea" point, and a river mouth with both banks in frame, a bay
+with islands and a marina all come out right (the St. Lucie at Stuart, the Ferry Building's piers).
+Lakes and wide rivers are polygons, their holes cut out even-odd.
+
+**Overpass.** One query for the whole map, cached by its text; a few blocks answer in 1-3 s
+(2.5 MB for a dense square kilometre). The mirror is on a short leash (`_map.overpass`): on
+2026-10-06 it accepted connections and said nothing, and each turn it was given cost three
+minutes while the main server answered the same query in under a second. A driveway and a parking
+aisle per house turn a neighbourhood to hatching, and a sidewalk mapped as its own way doubles
+every street: both are skipped (`roads.skip`).
+
+After touching `place-map.py`, `route-map.py` or `_map.py`, run `python scripts/check-map.py` --
+the precision rules, the right-town rule, the sea, the names and one whole map of a made-up town,
+asking nobody; a few seconds. Map data (c) OpenStreetMap contributors (ODbL): a film that shows
+the map credits OpenStreetMap on it.
+
+### Every place of one kind in a city: `dot-map.py`
+
+"Look how many coffee shops there are" needs proof, and a search proves nothing: Google Maps
+shows twenty pins at a time. `dot-map.py` asks OpenStreetMap for every place carrying a tag
+(`amenity=cafe`, `amenity=pharmacy`, `shop=bakery`) inside a city's real boundary and draws each
+as a dot over the city's land, water and main roads, so the city's shape comes out of the places.
+
+```powershell
+python scripts/dot-map.py --area "Kyiv" --tag amenity=cafe --list        # match, count, busiest names; draws nothing
+python scripts/dot-map.py --manifest projects/<id>/<name>.json           # area (name or relation id), tags, px, tone, out
+```
+
+It writes `<name>-base.jpg` (the city with no dots), `<name>.jpg` (every dot drawn) and
+`<name>.json` (the count, the busiest brand-or-name values, the OSM data's timestamp, and every
+dot as `[u, v]` fractions of the picture, nearest the centre first), so a film can show the bare
+city and let the dots arrive in its own time. Style: `config/maps/dots.json` (light and dark
+tones, road widths, dot size), sizes in pixels at 1920 wide. Measured 2026-10-13 for the
+Ocheretyne coffee-shop episode: Kyiv (relation 421866) has 2,136 places marked `amenity=cafe`;
+Aroma Kava is the most frequent name (31). That is what volunteers have mapped, not a census
+(Pro-Consulting counted about 2,500 coffee shops in 2024), so a film says "marked on
+OpenStreetMap". Water and roads are queried for the whole picture, not only the city, and a
+busy Overpass retries several times on a city this size (about a minute the first time,
+cached after).
+
+### Official data on real imagery, as layers a film stacks: `geo-layers.py`
+
+A data Short ("every oil well in Los Angeles", "every earthquake since 1990", "half of
+California lives in the red") needs the real place under the real records, and the film must
+be able to reveal the data a layer at a time. `geo-layers.py` renders, per view of a manifest,
+one base picture and one transparent PNG per layer, all the same size and aligned pixel for
+pixel (Web Mercator), plus `sheet.md`: each view's bbox, each layer's record count, and named
+places as `u, v`. The studio is told to stack them, never redraw them.
+
+```powershell
+python scripts/geo-layers.py --manifest projects/<id>/geo-<film>.json --list    # zoom, tiles, sizes, records per layer; fetches nothing
+python scripts/geo-layers.py --manifest projects/<id>/geo-<film>.json [--only <view>] [--preview]
+```
+
+Bases, each with the credit the film must show:
+
+| base | what | when |
+|---|---|---|
+| `s2` | Sentinel-2 cloudless **2016** (EOX, CC BY 4.0; later years are NC-SA, so not those) | a state, a county, a coast: it has the sea |
+| `naip` | USDA NAIP aerial photos, 0.6 m, one export (max 4000 px a side), public domain | streets and roofs: a neighbourhood, a school, an island |
+| `imagery` / `relief` / `topo` | USGS The National Map tiles, public domain | `imagery` stops at z16 and paints open sea black; `relief` serves no tile at z9 (measured), so pin `zoom` to 10 |
+
+Layers: `points` (a JSON list or GeoJSON; `lon`/`lat` field names, `where` equality filters,
+`min` thresholds, `in_file` id lists, `radius_by` a magnitude), `polygons` (fill and/or
+stroke, `glow`). A view may `focus` on a polygon (everything outside dimmed) and set `sea` to
+repaint near-black sea pixels in one colour. The source data stays in the project's gitignored
+`sources/`; prepare derived files (a census band, a decade split) with a small script beside
+the manifest.
+
+First use, 2026-11-07, `projects/ca-data-shorts/`: CalGEM WellSTAR (24,333 well records in LA
+County; the `WellSTAR/Wells/MapServer/0` layer answers 5,000 records a page), USGS ComCat
+(M2.5+ since 1990, three-year windows stay under its 20,000-row cap), 2020 Census tracts from
+TIGERweb (`Tracts_Blocks/MapServer/10` carries `POP100` and `AREALAND` with the geometry, so no
+join). Point-in-building against LA County's 2023 outlines (`GISNET_Public/MapServer/434`,
+multipoint queries of 250 wells) is slow and a quarter of the calls failed: treat any count
+from it as a floor.
+
+### More pictures than a film may carry: `picture-sheets.py`
+
+A kitcut.ai film takes six pictures (`studio/uploads.py MAX_IMAGES`); a research episode wants
+twenty -- source pages, posts, logos. `picture-sheets.py` packs them into sheets, each picture
+cropped (optionally) and scaled to a width and laid in shelves, and writes `sheets.md`: every
+picture's key and its rectangle `[x, y, w, h]` in its sheet, plus a six-line `SK.part(sheet, rect,
+cx, cy, width)` helper the prompt hands the film word for word (it is `ctx.drawImage` with a source
+rectangle; `SK.image` draws only whole pictures).
+
+```powershell
+python scripts/picture-sheets.py --spec projects/<id>/<name>-sheets.json --list   # sizes and each picture's scale
+python scripts/picture-sheets.py --spec projects/<id>/<name>-sheets.json          # the sheets, sheets.md, sheets.json
+```
+
+A sheet is JPEG (stepped down to fit 4 MB, under the site's 4.4 MB upload limit) or, with
+`"png": true`, a transparent PNG for logos. `--list` flags a picture shrunk below 0.6 of its width:
+small type in a screenshot stops being readable. First use: the Ocheretyne coffee-shop episode, 23
+pictures in five sheets (`projects/ocheretyne-economics/episodes/research-coffee/coffee-sheets.json`).
+
+Two things that cost time there. Wikimedia Commons' `Okko Logo.svg` is the Russian streaming
+service, not Ukraine's OKKO petrol stations (`Logo OKKO.jpg`, filed under "Logos of companies of
+Ukraine"): check a logo's categories before using it. And a news page's crop must leave out its
+side columns and language links, which carry unrelated headlines.
+
 ### How long a film takes
 
 Machine time for the 60 s film, from its run logs (`--timings` prints them):
@@ -4079,7 +4998,17 @@ the cast, the voice/audio/render pipeline and the traps already paid for.
 Bundles engine + props + film + fonts + images + voice timeline + mastered MP3 into
 `outputs/<slug>.html` (one file, plays offline) and `outputs/artifact/<slug>.html` (the same
 without html/head/body, for claude.ai Artifacts). `--stills` and `--sheet` are the review
-loop: 18 stills in 8.6 s. The video is rendered by opening the page in headless Edge/Chrome
+loop: 18 stills in 8.6 s. With `--probe STEP` a stills run afterwards plays the whole film
+once more every STEP seconds WITHOUT painting it (`sketch/probe.js`, put ahead of the film's
+code in that page only): every call made through a cast object (`SK.cast.x.fn(...)`) is a
+named scope, the canvas calls inside it are counted instead of drawn, and what each drew --
+its box on the frame, the squash of its transform, how much of it the clip it was called in
+hides -- is saved as `report.json` beside the stills (the format is at the top of probe.js).
+About 10 ms a frame; a film that will not fit 30 s is read at a coarser step, whole.
+`studio/motion.py` reads it (`events`): the same character on screen twice for a moment, a
+body cut by what it is inside, squashed through flat, a colour laid over the whole frame.
+By hand: `python studio/review.py --folder projects/<id> --machine`. The video is rendered by
+opening the page in headless Edge/Chrome
 (`html-to-image.py`'s browser finder, so no Node and no Playwright): the page draws each frame
 and POSTs its raw pixels to a local server here, which pipes them into ffmpeg with
 `_encode.video_args`. The mux uses `-t`, never `-shortest` (see the gotchas), asserts the
@@ -4312,6 +5241,20 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --sound-dat
 python scripts/sketch-audio.py  --manifest projects/<id>/sketch.json
 ```
 
+**A narrated template: the narration, its word times and its sound files go with it.** The birthday
+invitations (`config/templates/birthday-party-invitation*`, `pool-party-invitation*`, 2026-10-02) were
+parents' kitcut.ai films with a narrator, made template-ready the same way -- every fact of the party
+(the child's name and age, the photo, the place, the date and time) moved into `content.json`, proven
+pixel-identical to the original at 19-20 moments and checked with a long made-up name and a two-digit
+age -- but their sound stays files: `score.json` and `sfx.json` as Claude wrote them, the cues in
+seconds on the sample's narration. A film from one rewrites the lines and records its own;
+`vo-retime.py --by-line` then moves every cue with its line (the lines keep their place, not their
+words). Cues that name the party's words (the name, the age said as a word, the weekday) find them
+from the content (`said()` / `SAY` in film.js) and fall back to the sample's seconds. Spec keys:
+`"narration": true`, `"sound": "files"`, `"watch": ["child.name"]`. The sample is a real child's
+party, so its content and photo stay in the local project; only the code, cast and spec are
+committed. `studio/README.md` "Templates" has the studio side.
+
 **A copy to post: `sketch-render.py --web`.** The browser-encoded master of a 1080x1080 60 fps
 film runs ~31 Mbps (26 s: 110 MB). `--web` writes `<slug>_web.mp4` beside it through `_encode`,
 capped at 8 Mbps (`WEB`; a manifest `web` block overrides): 25.6 MB, VMAF 98.3 against the master.
@@ -4341,6 +5284,75 @@ python scripts/sketch-render.py --manifest projects/<id>/sketch.json --stills 2,
 python scripts/sketch-render.py --manifest projects/<id>/sketch.json --preview narration
 ```
 
+### Benchmark films: a measured race replayed (`llm-race.py`, `video-race.py`, `clip-overlay.py`, `sketch/bench.js`)
+
+A benchmark film shows a race nobody else publishes: the same task sent to several models (or one
+model in two setups) at the same moment, every streamed piece or job status kept with the second
+it arrived, then replayed on screen from those timestamps. The leaderboards publish other
+people's numbers (`docs/market-llm-leaderboards-2026.md`); a race we run is a number only we have.
+The format came from a 58 s music-only X film of Nemotron 3.5 Bolt with DFlash off and on.
+
+**Language models: `scripts/llm-race.py`.** A manifest (`race.json`) names models and tasks with a
+check each (`regex`, `answer`, `python` against a hidden tests file); `--plan` prices it, `--summary`
+rebuilds race.json (per model and task the median run, every run, the median run's compacted
+stream). Each wave sends every lane at once. Runs keep the provider, every piece as `[t, "r"|"c",
+text]`, usage with reasoning tokens and OpenRouter's billed `cost`. A local model is a lane with
+`base_url` and `serve` (the script takes the GPU lock, starts the server, warms it, samples the
+card's memory, records llama-server's `timings` with `draft_n`/`draft_n_accepted`, stops it);
+`"replay_thinking": true` and `"replay_step": 0` keep a local model's thinking and each token's
+own time, so speculative decoding's bursts show. Set one reasoning effort on every model and say
+so: OpenRouter's defaults differ (Kimi K3.1 Pro max, Opus 5.5 and Grok 4.7 high, GPT-6.1 Sol and
+Gemini 4 Argon medium; Anthropic's docs give Opus medium). An account's allowed-providers setting
+can refuse a model (404 "No allowed providers"): that is the owner's setting, not ours.
+
+**Video models: `scripts/video-race.py`** does the same through OpenRouter's video API (submit,
+poll every 2 s, download): each job's status timeline, the billed cost, what was delivered, and
+checks a machine can score: `ocr` (RapidOCR 4 frames a second: pass if any frame reads the word,
+plus the share that do) and `speech` (Whisper: every phrase heard). A refused job is a result
+(`failed`, `fail_pick`: when, and the provider's words). A sketch film cannot play video, so it
+leaves windows and returns placements from `SK.REPORT()` (any stills run saves report.json);
+**`scripts/clip-overlay.py`** lays the clips in (trimmed, looped or held, scaled to cover) in one
+encode, a clip's sound at `audio_db` or matched to `audio_lufs`, the mix low-passed and limited.
+A film may sit in a folder of its own inside its project (projects/<id>/ad-a/): the clips' `src`
+is relative to that folder, and the render is recorded on projects/<id>. Nothing the film drew
+inside a window survives the clip, so a caption card or a label meant to sit OVER the footage is
+named in the report as `"over": [{x, y, w, h, t0, t1}]`: boxes of the film's own frame put back on
+top while the clips are open (rectangles: keep them tight; the Meta ads' `shared/channel-ad.js`
+works each caption card's box out the way `sketch/captions.js` lays it).
+
+**The look: `sketch/bench.js`** (`"modules": ["kit", "bench"]`, screen-pixel drawing).
+`replay(lane)` turns a race.json lane into `at(raceT)` (hidden thinking spread over the thinking
+time, both ending on the measured totals); `timeMap` is the race clock (1x, then a time-lapse);
+`lane()` draws a racer as a bar on a shared time `axis()` that zooms out as the clock passes its
+end, so one long thinker squeezes the rest to slivers; `big: 'tokens'` makes the lane's big
+number its tokens so far (five copies of one race clock say nothing). From a frame-level study of
+the reference: `strobe` (a cut is one frame of the next scene, three blank frames, then it
+settles; scenes composed on their first frame), `stamp(..., {ghost: true})` (one faint frame, then
+the ink is down), `highlight` (a marker blob that boils 12 times a second behind a hero number),
+`settle` (per-run dots that land on their bar), `startLights`, `pushKeys`, and `music(sections)`, a
+score from the film's own sections for `SK.film({sound})`.
+
+**Measured on 2026-10-25** (local projects nemotron-8gb, frontier-race, video-race and their
+-short versions):
+- Nemotron 3.5 Bolt E4B on an RTX 3070 8 GB, llama.cpp b11856 prebuilt CUDA 12.8: off 89-93 tok/s
+  on every prompt; DFlash math 251 (2.75x, 74% of guesses kept), code 156, chat 116; 3.6 / 5.4 GiB.
+  Greedy text with the drafter differs slightly (llama.cpp #25618): compare speed, not words.
+- Five flagships at effort high, 5 runs: all right every run; Sonnet 5.5 fastest on every task and
+  tied with GPT-6.1 Sol for the smallest bill; Grok 4.7 thought 4-6 min on the hard question and
+  ran up the biggest bill despite the lowest output price.
+- Six video models, 36 jobs: Seedance 2.5 refused a dance prompt twice ("the output audio may
+  contain sensitive information", unbilled) and made it with `generate_audio: false`; Veo 3.1 Fast
+  once wrote KITTCUT; all six said the line; Grok Imagine Lite fastest and cheapest, Veo 3.1 13x it.
+
+**Traps.** AAC at 192 kb/s overshot a clean -3.3 dBTP master of synthesised clicks by up to 7 dB:
+these films master with `"master": {"lowpass": 15000, "tp": -3.5}` and encode at 256k. `python -I`
+drops the script's folder from sys.path, so a tests file cannot import its `solution.py`: checks run
+`-E -s`. Verify a brute-forced answer by hand and run the tests file against a reference solution
+first (one expected value was wrong). A clip's placement only carries the keys `place()` copies:
+`audio_lufs` was once dropped and the listen segment went silent. A reviewer (video-review skill)
+said NOT YET on every first cut and was right each time: an unfair hook comparison, dead holds,
+like-for-unlike bars, text under the next row's clips.
+
 ### The kit: what every film was drawing by hand (`sketch/kit.js`)
 
 A module every studio film carries since 2026-10-01 (`film.CAPS["kit"]`, first in every look's
@@ -4368,7 +5380,7 @@ and listed 1,476 hand-built components; the ones that recur across unrelated fil
 | screens | `window`, `phone`, `chat`, `cursor` + `cursorPath`, `ripple`, `button`, `field`, `toast`, `code`, `icon` (41 kinds) | cursors 29; four separate icon sets |
 | brand | `logo`, `endCard`, `palette`, `contrast`, `readable` | logo plates and end cards in 8+ |
 | light | `glow`, `particles`, `pulse`, `flash`, `dim`, `spotlight` | glows 21, particle systems 29 |
-| scenes, camera | `pages` (slide push wipe iris whip fade cut), `shots` (paintings under their own camera, kept inside the picture), `breath`, `screen`, `safe` | SK.scene used by none: every collage film rebuilt the same page carousel; every painted film the same shot list |
+| scenes, camera | `pages` (slide push wipe iris whip fade cut), `shots` (paintings under their own camera, kept inside the picture), `breath`, `read` (a real page read under its own camera), `screen`, `safe` | SK.scene used by none: every collage film rebuilt the same page carousel; every painted film the same shot list |
 | paths | `S.len`, `S.at`, `S.cut` | 5 films re-derived arc length |
 
 **Faces.** Crisp text defaults to Inter, which has no Cyrillic: the kit's font string falls back to
@@ -4384,6 +5396,27 @@ has no kit.js.
 
 **Proving it.** `studio/bakeoff/kit.json`: six real prompts of those days at 30 s, made by the
 studio before the kit and with it. Results are in `docs/studio-speed.md`.
+
+**`SK.read`: a real page, read** (2026-10-22). Research films show their sources -- a headline, a
+filing, a post -- and the narrator reads lines off them. Every such film had written its own page
+camera (the Starlink film's `pageCameras`, 50 lines), and the Anthropic IPO pilot still cut a
+headline at the frame's edge while it was read and left a one-card table small in empty paper.
+`SK.read(img, x, y, w, h, o)` is that camera once: at rest the page fills its window's width (94-97%,
+a slow push and drift, never past the window's sides; `fit: 'whole'` sits it whole), and each
+`focus` `{t, t1, at: [x, y, w, h], mark}` eases onto that box with all of it inside 86% of the
+window's width and 72% of its height -- zooming no closer than `z` (2.6x the rest) or `sharp` (1.6
+world units a picture px, where it would blur) -- marks it (underline, circle, highlighter box),
+holds with a slow pull and eases back. The window is centred on the page where the page is the
+bigger, so no edge of the page shows while it is read. The boxes come from the page tool's
+`blocks`. The gallery's tenth page reads a made-up page (`doc_page.png`).
+
+The glitch reader is told about it twice: probe.js now records the film's large pictures (`p`:
+upload*, web_*, pic_*, 900 px or more, not a logo, what shows of each on the frame), and
+`motion._small_pictures` notes the largest picture on screen when it is under 42% of the frame's
+width and 55% of its height for 2 s or more ("upload4 ... shown at most 34% of the frame wide");
+`studio/prompts/review.md` says a page shown to be read counts as words the story needs, so too
+small to read or its read line cut by the edge is a must, and that a photograph of a person shown
+small is not a fault.
 
 ### Harvest: reading the films back (`studio/harvest.py`)
 
@@ -4486,8 +5519,8 @@ Measured (2026-09-28): 17 cut-outs for the example film at medium quality, $0.19
 ($0.0107-0.0137 each), 78 s of wall clock four at a time; one repaint $0.011. Tested both ways
 on three subjects (an engraved freezer, a photographed cone, an engraved portrait): Flare's
 alpha and Muse-on-white keyed by `matte_white` both came out clean enough that the border hid
-any difference. Flare takes 16 reference pictures; Muse takes none but has the most detail per
-dollar. One cut-out of 17 came back with a white paper shape painted behind it (an engraving
+any difference. Flare takes 16 reference pictures; Muse (which was thought then to take none:
+it takes 8, `UNLISTED_REFS`) has the most detail per dollar. One cut-out of 17 came back with a white paper shape painted behind it (an engraving
 of barley); "drawn alone with nothing behind it" in the prompt fixed it.
 
 **Fonts** (`fonts/SOURCES.md`): Abril Fatface (headlines), UnifrakturMaguntia (mastheads),
@@ -4731,6 +5764,120 @@ python scripts/speaker-loops.py --page <film>.html --video <film>.mp4 --outdir <
     --cycle cycle --trim-in 0.2 --only crayon,papercut,news,woodcut,watercolour,popart,courtroom,chalk,sticker,felt,knit,peg,sock
 ```
 
+### Actors: characters an image model draws, animated by swapping pieces (`actor-pack.py`, `sketch/actors.js`)
+
+A character designed by an image model, played in a sketch film like a paper cut-out puppet: the
+model draws the figure once and then redraws *that picture* with one change at a time -- each face
+it pulls, each mouth shape on the faces that talk, a blink, each pose -- and the film swaps those
+pieces, its mouth moved by its own voice. The look is the model's own (texture, shading,
+painting); what it cannot do is anything nobody drew (a walk cycle, a new angle), so the pack
+draws the moves a film keeps needing up front. A character drawn in code (`sketch/props.js`, a
+film's `cast/*.js`) is the other road: any pose, at the price of a simpler look.
+
+```powershell
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --plan        # what it needs, what it costs
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json               # 3 candidates -> design/sheet.jpg, then stops
+#   set "pick": 1 in the spec (the one to keep), then:
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --cap 3 --jobs 6
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --retake face:angry
+python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --pack-only   # re-cut, free
+python scripts/check-actors.py                                                      # the self-test
+```
+
+**The spec** names the character (`name`, `describe`) and overrides any default in
+`config/actors/defaults.json`, where every prompt lives: the look (`look`: explainer, storybook,
+editorial, papercut; or `style`), the model, the faces, which faces talk, the mouth shapes, the
+poses, the gates. `faces`, `talk` and `poses` take default names or `{name: "the change"}` for
+new ones (Enrique's poses say which hand holds the paddle). `design` starts from a picture already
+made instead of drawing candidates. The pack is written beside the spec in `<name>/`.
+
+**What it draws** (Enrique, 2026-10-17: 45 pieces, 4 min 19 s, $1.13 with the three design
+candidates, at $0.023 a picture): the base; 8 faces; 4 mouths (small, open, round, wide) and a
+blink on each of the 4 talking faces; 10 poses; and for each pose whose head has turned, mouths
+and a blink of its own. A face or a mouth is redrawn from the picture it changes (a happy mouth
+from the happy face), so the pieces stack: base, then face patch, then mouth patch, then blink.
+
+**The gate.** Every redraw is laid back on its source -- a phase-correlation shift, and an ECC
+affine refined from it on everything but the head (MAI's redraws come back 2.5 % larger and moved
+16 px, Grok's ~1 % larger) -- and whichever fit leaves less change outside the head is kept.
+*Drift* is that change outside the head as a share of the figure's area; the head is the top 30 %
+of the figure (`head`), found from the base alone so a redraw cannot widen its own allowance.
+Over the gate (2.5 % for a face, 1.5 % for a mouth, 1.2 % for a blink) the redraw is drawn again,
+up to `retakes` times, and the steadiest kept. Enrique's 35 gated redraws all came back at
+0.0-0.3 % on the first try.
+
+**Redraws are asked for on white, never transparent.** Only the base is drawn on a transparent
+background (where the model has one). Measured on gpt-image-2.5-sunburst: half the transparent
+*redraws* came back with a cloudy half-transparent halo round the figure (drift 40-160 %, every
+retake wasted), while the same redraws on white, from the base laid on white, keyed off cleanly at
+0.0-0.3 %. Changes are compared on white for the same reason: the base's alpha is the model's and a
+redraw's is keyed, and comparing those counts antialiasing as change.
+
+**Poses** keep their own feet and are scaled so the head matches the base's (template matching
+over 0.8-1.25x). Where the base's head is found in a pose with a score of 0.8 or more, the pose
+looks out of the picture and the front faces, mouths and blinks are laid on it (`face_at`);
+otherwise it is "turned" and gets `pose_mouths` (open, round) and a blink drawn from it. A pose
+whose colours are unlike the base's (`same` < 0.6) is warned about: the model drew somebody else.
+
+**Which model** (padel-tactics `films/05-history/character/ai/README.md`, the same brief through
+seven models, drift on face edits): gemini-3-pro-image 0.4-0.9 % at $0.136 a picture (no
+transparency), gpt-image-2.5-sunburst 0.4-1.8 % at $0.019 (real alpha: the default),
+mai-image-2.6 0.2-1.7 % once fitted, grok-imagine-image-2.0 0.2-1.2 % once fitted but 57 s a
+picture, gpt-image-2.5-flare 0.9-3.5 %, gemini-3.1-flash-image 1.5-3.4 %, muse-image unusable
+(it takes no reference: a different character every picture). FLUX 3, Seedream 5, Qwen Image 3
+and Recraft 4.1 were refused by that OpenRouter account's allowed providers.
+
+**The pack** (`pack.json`, `PACK_VERSION` 1, and `atlas-<n>.webp`, 4096 px pages, WebP q92 with
+alpha: Enrique is one 4085x3594 page, 1.4 MB): `figure` {w, h, feet, height, head} in pack pixels
+(the figure is scaled to `pack.height`, 1400 px, enough for a 2x close-up at 1080p); `pieces`
+{id: page, sx, sy, w, h}; `faces` {name: piece, x, y, mouths {shape: piece, x, y}, blink};
+`poses` {name: piece, w, h, feet, face_at | mouths, blink}; `report` (each piece's drift and fit).
+`check.jpg` puts every face, mouth, blink and pose together the way the player will, labelled with
+its drift: look at it before using a pack. `state.json` keeps what each picture was drawn from
+(model, prompt, reference), so a rerun draws only what changed and `--retake` draws one again.
+
+**In a film**: `"actors": {"enrique": "actors/enrique"}` in the manifest (the pack's folder).
+sketch-render inlines `SK.ACTORS` and the atlas pages (`SK.IMG['actor:<name>:<n>']`), loads
+`sketch/heads.js` (for `SK.talk`) and `sketch/actors.js`, and gives every voice line its speaker
+and mouth track as for talking heads (a line's `who`, `vo.cast`) -- with one difference: a line
+with no `who` is never given to a film's only actor, as it is to its only head. An actor is a
+character in a narrated film, and the first test film moved Enrique's mouth on the narrator's line
+because of that fallback (2026-10-18). Then
+`SK.actor(name, x, y, h, {face, pose, mouth, who, blink, flip, tilt, squash, steps, alpha})`
+draws it standing on x, y, the figure h tall; it returns its box and its head's box.
+The mouth is chosen on twos from the voice: shut under 0.15 open, round when the voice is
+puckered (`wide` < -0.3), wide when it is spread and open, small under half open, else open. The
+blink runs on a clock seeded by the name. A face that has no mouths (laugh, shocked) holds while
+its speaker talks: cue it between lines. `padel-tactics/films/05-history/actor-test/` is an
+18-second example (five lines, a narrator's line that leaves his mouth shut, a face and a pose on
+each cue word): 61 s to render on a CPU.
+
+`pack.json` carries `about` (the spec's `describe`) and each pose's own words, for whoever writes
+the film -- the studio hands them to Claude.
+
+**In the studio (kitcut.ai)**: an actor belongs to a **project**, like its pictures, and is put
+in by hand -- no film makes one, and the site has no button for it yet:
+
+```bash
+bash studio/deploy/ops.sh actor-put <p-id> <pack folder> [--dry-run] [--replace] [--name N] [--about TEXT]
+bash studio/deploy/ops.sh actors <p-id> [--remove <name>]
+```
+
+`studio/actor_put.py` (what those run on the VM) takes `pack.json`, the atlas pages and
+`check.jpg` -- never the raw pictures or the spend log -- after `library.read_pack` has checked
+that every piece its faces and poses name is on a page it holds, that its pages are its own, and
+that the whole is under 32 MB (a project holds 4). It finds the project's library off one of its
+episodes, so a project needs one finished episode first. Each next episode
+(`library._seed_actors`) gets the pack in `actors/<name>/`, the manifest's `"actors"`, the
+`actors` capability (`film.CAPS`: `heads.js` and `actors.js` in its engine copy), a line per
+actor in the first message (who it is, its sheet, its faces, which it speaks in, its poses and
+which are turned) and `studio/actors.md` in its system prompt -- which only a film with actors
+carries, so every other film's prompt is byte for byte what it was. Claude may Read the pack and
+never write it. `studio/test_actors.py` holds all of it, a render included.
+
+**Not yet**: `sketch/thumb.js` does not see actors when it looks for a thumbnail's pictures, and a
+person cannot add an actor from the site or the MCP (only an operator can, above).
+
 ### Sketch Studio: a prompt box that makes a short film (`studio/`)
 
 A prompt-to-film web app on this engine, set up with `pip install -r requirements-studio.txt`:
@@ -4866,7 +6013,9 @@ prompt pasted in. Each side brings what only it has:
 - **The site brings the channel's voice.** With the `youtube.readonly` scope it already holds, it
   reads the channel's latest uploads (titles, descriptions, tags; KitCut's own earlier posts left
   out, so a pasted prompt cannot teach the voice). It posts them to
-  `POST /api/films/<id>/youtube/draft` `{"channel": {"id", "title", "handle"}, "recent": [...]}`.
+  `POST /api/films/<id>/youtube/draft` `{"channel": {"id", "title", "handle"}, "recent": [...]}`;
+  for a film in another language (`localize.py`) also `"language"` (its words and thumbnails are
+  written in it) and `"fresh": true` (no fallback on an earlier draft).
   Nothing of them is stored on either side.
 - **The studio brings the film.** `material()` reads the narration with each line's times
   (`audio/vo/timeline.json`), who it was made for (film.js line 1) and the maker's note under it,
@@ -4993,6 +6142,178 @@ left, a voice gone, a plan that cannot use it, a blocked account.
    come back. Stop works on a waiting film at once.
 - Tests: `check-sketch.py` (the relay's headers, the classification with no body leaked, exit 75,
   the per-take rows), `test_server.py` (`paused()`: waiting, not final, Continue, cancel, expiry).
+
+#### Vertical short dramas: what ten of them measured (2026-10-15)
+
+Ten standalone 60-second 9:16 dramas, each in its own look, made on the production studio from a
+screenplay prompt with generated casting portraits as People (procedure: the video-sketch skill,
+"A vertical short drama"; industry rules: `docs/market-vertical-drama-2026.md`).
+
+| | |
+|---|---|
+| Making a film | 17-26 min (median 21), one at a time on kc-local |
+| A notes round | 8-10 min each; all ten got one after a fresh review (film 8 only for one plain mistake), none needed a second |
+| The studio's recorded cost of a film (run on the Claude login) | $0.38-0.74 |
+| Portraits | gpt-image-2.5-flare via `sketch-paint.py`, about $0.01 a role |
+| Length | 68, 74 and 72 s from 119-138 spoken words with "slow" voice directions; 60-65 s from 86-111 words once the brief asked for a brisk delivery |
+
+What the people-styles did (`config/heads/looks.json`, measured on these portraits): felt, crayon,
+sticker, woodcut and pop art drew the person in the medium; courtroom and paper cut-out kept a
+photographic face under a stylised edge (fixed in studio-poc d7768a6 by one sentence: the face is
+drawn in the medium too, with no photographic skin or light); watercolour and wooden peg still
+draw a near-photo face. A rig has one expression, so every reaction a drama turns on is a painted
+picture. The painted look's painter (muse) was thought then to take no reference picture, so a
+character painted twice drifted unless one fixed description was pasted into every prompt; it
+takes them since 2026-10-30, and a `ref` keeps the character.
+
+## Shorts cut from a finished episode: `episode-short.py`
+
+A series episode (Duchess, Leo: two to six minutes, 16:9, crayon) holds several 40-60 second
+moments that work as YouTube Shorts on their own. `scripts/episode-short.py` cuts one from the
+episode's finished master, with nothing redrawn and nothing paid for:
+
+- the episode cropped to a **4:5 window** (864 px of its 1920, so the cast and the DIGNITY meter both
+  fit), scaled to the full 1080 width at y=336, over a blurred, darkened copy of itself; a manifest
+  may widen it to **1:1** (`"picture": {"aspect": [1, 1], "y": 380}`) for a two-hander whose cast
+  stand far apart, or a scene with a prop beside them (the Queen and Duchess, the bus and the camel);
+- a **camera** that holds or pans the window: `"camera": {"x": 0.5, "keys": [[t, x], ...]}`, x the
+  window's centre as a share of the episode's width, t in the Short's own seconds, smoothstep between
+  keys. Most Shorts need two to six keys;
+- a **headline** on a card in the top band, in the film's own paper, ink and accent (its sketch.json
+  `player` block) and Balsamiq, shrunk until it fits in two lines;
+- **captions** word by word from the episode's own word timings (`audio/vo/timeline.json`), no
+  transcription: `config/presets/cartoon-short.json`, white with an ink outline, the spoken word in
+  yellow, centred near 75% of the height (guidebook rules 24-27);
+- **segments** named by quoting the narration (`from_text` / `to_text`, cut in the gap between two
+  words, `pad_out` holds the picture after the last word); a quote said twice is refused, use a
+  number (`from` / `to`) there. Joins get a 30 ms audio fade. Cuts never run past the episode's end.
+
+The folder it writes (`sketch.json` with a 9:16 frame at 30 fps, `outputs/film.mp4`, poster, vtt)
+is what `studio/import_film.py` takes, so a Short becomes a film of the series' project and is
+published through the site's queue like an episode (`film.mjs youtube ... --no-draft --title
+--description-file --tags`: no studio draft, so no Claude call).
+
+```powershell
+python scripts/episode-short.py --manifest m.json --list           # segments, cut gaps, length
+python scripts/episode-short.py --manifest m.json --stills 0,20,46  # finished frames, no encode
+python scripts/episode-short.py --manifest m.json --src <episode folder> --out <dir>   # render
+python scripts/short-stillness.py <dir>/outputs/film.mp4 --box 0.19,0.72 --check   # rule 33
+```
+
+A 60 s Short renders in about 25 s on kc-local (2.6x realtime, NVENC).
+
+**What 28 Shorts from 25 episodes taught (2026-10-29):**
+
+- **Look at the 1 fps sheet of the render, every time.** 20 of 28 needed a camera fix after the
+  first render: a character half out of the window, the thing the line is about (a camel, a bug,
+  the box) cut off, and once (Leo 10) the speaker not in frame at all while he spoke, because he
+  hid behind Dad's leg at the far left. None of that shows in the stillness check, which passed all 28.
+- **Pan to a character, not with a fast one.** A cat bouncing round the room moves faster than any
+  pan a viewer can follow; following it cut the meter in half. Hold the window and let her cross it.
+- **Pick the gag, then cut to it.** The best Shorts are one bit of the episode played out whole
+  (the zoomies, the hiding game, the barber's chat), sometimes opened with the series' line and
+  joined to its payoff. A beat that only works with the scene before it (a suitcase scan without
+  the scan) is dropped, not cut short.
+- Frame 0 is what the feed shows first: a rear-view mirror or an empty map reads as nothing. Start
+  a second later, on the character.
+
+**Upload limits.** An unverified channel takes about ten uploads a day; the rest fail with "daily
+upload limit" and stay failed in `youtube_queue`. They go again when set back to `queued` (a
+day later, ten at a time). Verifying the channel (youtube.com/verify) lifts the cap and allows
+custom thumbnails.
+
+**As a kitcut.ai option (design, not built).** "Make Shorts" on a finished film's Studio page:
+
+1. *Pick:* one Claude call reads the film's timeline (lines with their times) and its 1 fps
+   motion sheets, and proposes 2-6 Shorts: segments as quotes, a headline, a title, and camera
+   keys from the probe's positions of the cast (`sketch/probe.js` already records what is drawn
+   where), so the window follows whoever is speaking.
+2. *Check:* render each at 960 px, run the stillness check, and have the reviewer (`review.py`)
+   read the 1 fps sheet with one question: is the speaker and the thing named in frame? One fix
+   turn moves keys, as was done by hand here.
+3. *Show:* the proposals as frame strips with their headline and length; the person keeps, drops
+   or edits the quotes; nothing costs credits until they press Make (a Short is 25 s of GPU, so
+   price it at a small flat number of credits rather than per second).
+4. *Make and schedule:* each kept Short becomes a film of the project (as `import_film.py` does
+   now), and "Schedule all" spaces them on the channel's calendar at its pace, ten uploads a day
+   at most on an unverified channel, the rest held and sent the next day by the site's own cron.
+
+The cheap parts exist (cutting, captions, import, publishing); the new work is the picking call,
+the camera from the probe, and the page.
+
+## A showreel out of finished films: `showreel.py`
+
+A reel that shows what was made: films one at a time, each with a one-line caption, then a 2x2,
+a 3x3 around the logo and a 4x4 of films all playing, then a card. Built for KitCut's launch
+(`projects/kitcut-launch/`), generic for any set of films: the films are addresses
+(`media.kitcut.ai/films/<id>/film.mp4` or a local path), the look is `config/showreel/*.json`,
+the music `config/showreel/music/*.json`.
+
+```powershell
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --raw --list
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --raw --fetch
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --frame 15
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive --raw
+python scripts/showreel.py --manifest projects/<id>/showreel.json --option drive
+```
+
+**Everything is in beats.** An act is `solo` (one film full frame, its `caption`), `grid` (rows
+of clip keys; `@logo` is the brand tile) or `end`, each `beats` long at the option's bpm. A
+grid forms over `grid.reflow_beats` before its downbeat (cells shared with the act before move,
+new ones pop in staggered), so it LANDS on the beat. Solo-to-solo is `cut` (a punch-in),
+`whip` (a horizontal slide with motion blur) or `zoom` (push and dissolve), per option.
+
+**The music is arranged from the same acts**, which is why it cannot drift off the cut: a
+style's `layers` are note patterns (the `_sketchaudio` notation) laid over the acts they name
+(an act name or a kind: `solo`, `grid`, `end`), with per-act `gain`; a run of solo shots is one
+section, every grid restarts the progression on the tonic; `gap_before` silences drums and bass
+for `gap_beats` before each grid (the drop holds its breath); `hits` land on act starts (a stab,
+a timpani roll from `at: -2`); `sfx` places the transitions' sounds (`cut`/`whip`/`zoom`, a
+riser `at: -4` with `sec_beats: 4` into each `grid`, a `cell` pop per arriving film, the `end`).
+A raw cut changes the acts' lengths and the music follows. Three styles ship: `drive`
+(electronic, A minor, 120), `pop` (marimba and glockenspiel, C major, 124), `cinema` (piano,
+strings, horn, timpani, D minor, 100).
+
+**Mastering is a gain and a look-ahead limiter, not loudnorm.** loudnorm drops into its
+dynamic mode whenever the true-peak target binds (any kick), and that flattened an 8 dB build
+from the solo shots to the grids into 2 dB. A soft clipper instead came back from the AAC
+encoder 4 dB over full scale (its overtones). The limiter reduces gain ahead of each peak of
+the 4x-oversampled signal; measured on the three launch cuts: 0 clipped samples after AAC, the
+build kept (about -21 dB under the solos, -15 dB under the 4x4, per 2 s).
+
+**A held note lasts 3.1 s at most**: every FluidR3 GM sample here is that long, so a closing
+chord written for 16 beats stopped after three seconds and the end card held in silence (the
+first full cuts). A hit event's `repeat: {every, until, decay}` strikes it again every `every`
+beats, each softer. `--remux` puts new music under an existing render with the picture
+stream-copied, so a sound-only fix costs seconds.
+
+**What the reviews of the launch reel taught** (three fresh reviewers, 2026-10-23): open on
+the picture, never a fade from black (a site may use frame 0 as the preview); say what the
+product is in the middle of the reel, not only on the end card (`tile.line` on the 3x3's logo
+tile) and keep the end card to about 4 s; place each solo caption where the film draws nothing
+(`caption_at`: top-left, top-right, bottom-left, bottom-right), since films carry their own
+name plates and subtitles; and never show a tall film as a strip in a small cell: `grid_fit:
+cover` with a `focus` fills the cell, `place_x` moves it off centre in its own solo shot so
+the caption has a clear side. An option may change how long its acts hold (`beats`).
+
+**Films keep playing as they move.** A clip's playhead runs while it is on screen; one that
+leaves full frame for a cell carries on where it was; `jump: {act: seconds}` sends it to
+another moment when that act starts forming (the reflow hides the cut); a film that would reach
+its last second wraps to `loop` (default `in`), and `--list` prints every wrap so a jump can be
+added. Tall films take `fit: contain` (whole, on a blurred bed of themselves).
+
+**Pieces, not whole films.** `--fetch` cuts only the windows the plan plays (rounded to a
+quarter second, so a small retiming reuses them) at the reel's frame rate into
+`sources/showreel/`; the render reads them back at the smallest size each stage needs
+(1/4, 1/3, 1/2 or the full width), so a 4x4 decodes sixteen 480 px streams, not sixteen
+1080p ones. A 32 s raw cut at 960x540 renders in under a minute here; the frame is composited
+in numpy/OpenCV and piped to the encoder `_encode` picks.
+
+**Choosing the moments** (what the launch reel did): a contact sheet per candidate film (24
+frames), then a 4 fps strip with a motion number per frame of the windows that looked right,
+then `--frame` at each act. Mean absolute frame difference finds the still stretches but not
+the good ones: crayon films "boil" (5-10 every second) and the collage look moves on twos
+(1-2), so read the strip, not the number.
 
 ## Projects: one folder and two files per video
 
@@ -5984,3 +7305,28 @@ rather than shipping. A rebuild into a copy that
 already has its `.venv`/`.git` is allowed, so iterating does not cost a
 reinstall.
 <!-- /dev-only -->
+
+## Importing a film made outside the studio: what changed (2026-11-07)
+
+Learned putting comic-studio's *A Silent Voice* (a 5:43 vertical film, not a sketch film) on kitcut.ai with
+`studio/import_film.py`:
+
+- **Any finished MP4 can come in** as a sketch-film folder made beside it: `sketch.json` (`slug`, `title`,
+  `description`, `duration`, `fps`, `frame` `[1080, 1920]` for 9:16; the record's `frame` comes from it, the
+  pixels may be smaller), `outputs/<slug>.mp4`, `outputs/<slug>_poster.png`.
+- **Encode the master at 5 Mbps or less on the render machine first.** `media.make_web` copies a master at or
+  under `WEB_MBPS` (5.5) as the web copy and re-encodes anything heavier where the import runs, i.e. the laptop.
+- **`--vm` is out of date.** The studio no longer runs on an Azure VM (`kitcut-studio-1` is gone; `vm.sh` finds no
+  address): its home is `/srv/kitcut/studio` on the home server. After the import, copy
+  `temp/import-home/projects/<id>/` into `/srv/kitcut/studio/projects/<id>/` (tar over ssh as the studio's user)
+  and check `studio.json` reads `state: done`. `import_film.py --vm` should learn that host.
+- **Share text.** The film page's description is the record's `share.description`, used only when `share.title`
+  is set too (the site's `publicShare` drops a share without a title); otherwise it is the made-film line
+  ("Claude Opus 5.5 wrote, animated, narrated and scored it from one prompt"), which is false for an import. Set
+  both on an imported film's `studio_runs` record. The `/v/<short>/<slug>` page shows the change at once; `/film/<id>`
+  after its cache.
+- **Public is the gallery and KitCut TV, not search:** every film made since `NOINDEX_FROM` (2026-10-27,
+  `lib/filmmeta.js` in the site) is noindex, listed or not.
+- **A project can be made without the site** (the KitCut connector was down): a `projects` document with the
+  fields the others have (`_id` `p-` + 10 letters/digits, `user_id`, `org_id`, `name`, `brief`, `look`, `seconds`,
+  `from_account_cast`, `keep`, `watermark`, `created_at`, `updated_at`, `archived_at: null`).

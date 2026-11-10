@@ -17,7 +17,12 @@
       0.15
     ],
     "bar_frac": 0.03,
-    "_source": "No official spec. Practitioner rules (thumix.com/blog/youtube-thumbnail-safe-zone, ytdetective.com): ~5% margins, keep text out of the bottom-right ~15% where the duration stamp sits, and the bottom ~3% where the watched-progress bar sits."
+    "_source": "No official spec. Practitioner rules (thumix.com/blog/youtube-thumbnail-safe-zone, ytdetective.com): ~5% margins, keep text out of the bottom-right ~15% where the duration stamp sits, and the bottom ~3% where the watched-progress bar sits.",
+    "tall_band": [
+      0.12,
+      0.76
+    ],
+    "_tall_band": "A Short's options are 1080x1920 at its own frame. YouTube shows a Short's thumbnail 9:16 in a shelf but nearer 2:3 (some say 3:2) on other surfaces, and lays the Short's title and views over the foot of a phone's tile (relevantaudience.com and ppc.land on the July 2026 rollout of custom Shorts thumbnails): the letters stay between 12% and 76% of the height. There is no duration stamp on a Short's tile."
   },
   "feed": {
     "smallest_w": 168,
@@ -120,6 +125,8 @@
     ],
     "probe": 0.2,
     "min_detail_frac": 0.6,
+    "still_motion": 0.008,
+    "_still_motion": "Frames that move no more than this (or than the stillest one) all count as still, and the most drawn of them is taken: a drawing that pauses half done and then goes on is taken finished (the owner, 2026-10-14: some thumbnails were not fully drawn). 0.008 sits between the settled frames' median movement and the moving ones' 0.03 in the bake-off below; not measured on its own.",
     "_why": "A frame is settled when the film looks the same 0.2 s either side of it: a crossfade, a line still drawing itself or a camera move all differ there. Among the settled ones, a thin frame (a scene not drawn in yet, a fade) loses to a fuller one.",
     "_measured": "Same bake-off: YouTube-like frames at 25/50/75% of the film caught it moving (mean difference over +-0.2 s above 0.03) 10 times in 24; the settled frames 6 in 32, median movement 0.0149 -> 0.0054."
   },
@@ -266,12 +273,110 @@
     ],
     "_why": "The film's logo (a picture it shows named *logo*) above the words, as a round paper badge when it is a square picture -- how the channel shows its face -- else as it is, held to max_w_frac of the width. The owner asked to try the logo, not to require it (2026-09-30), so options 1 and 3 carry it and 2 and 4 do not: the person picking sees both. A frame that already shows the film's logo is not given a second one."
   },
+  "poster": {
+    "_why": "A thumbnail composed from the film's own pieces, not cut from one of its frames (2026-10-05). A frame is laid out for motion: on a 6-minute collage film the characters stood 164-296 px wide in 1920, and the furthest push the camera allows (1.5x) left a slide with a caption -- 'all bad', said the owner of the first channel to publish through it. A poster takes the film's pictures themselves (its cut-outs with their paper shadow, its prints) and sets them as large as it likes on the film's own page (the stage pass: the film drawn with everything hushed but its ground, its pages and the dots printed on them), with the words in its title type and outline, or on its label strips. An image model given the stills (GPT Image 2.5, Nano Banana Pro, Nano Banana 2 via OpenRouter, 2026-10-05) composed the same picture but redrew the characters: refused, the film's own style is the point.",
+    "_templates": "Both read off channels that draw rather than film, from their own thumbnails (2026-10-05): side -- the words stacked on one side, one subject on the other (TED-Ed: 3-5 words in 2-3 lines on ~45% of the frame, the object at 55-60% of its height); band -- 2-3 words across the top ~20%, one subject under them at 70-80% of the height and off the bottom edge (Kurzgesagt, The Infographics Show). At most three things to look at (Paddy Galloway, x.com/PaddyG96/status/1450463472907657220): the hero with what is tucked behind it, the words, the logo.",
+    "_figure": "figure_hs x the frame's height is how tall a standing figure is set (1.62 shows it to the hips, 1.85 to the waist), figure_top its head's clearance; band.bust_h (1.9) shows head and shoulders under the words. max_up holds any picture to 2.1x its own pixels: a 1053-px cut-out at 1.9x the frame is 1.95x -- soft at 1920, clean at the 1280 YouTube serves. mate: somebody tucked in beside somebody is a second figure nearly as large, not a doll at her elbow.",
+    "_variety": "switch and drop_prop: a poster keeps its own template and its second piece unless the words come out 1.25x (1.18x) larger the other way -- 'ДУМАЙ, ПЕРШ НІЖ НАТИСКАТИ' beside a figure and a mousetrap set at 110 px, beside the figure alone at 150. tilts, backings, figure_hs, strips_options and the hero's side are what _thumb.poster_variant draws from, by the film's key and the option's number: one film always gets the same four, another film another four -- a channel's thumbnails share a hand and are never the same picture.",
+    "_burst": "burst_over is how far a burst may reach under outlined words (7% of the height); under words with no outline it stops at their edge (white on an orange burst measured 3.26:1), and a burst cut to under burst_keep of its size is left out (it read as a crown on the object). Under strips it is whole: paper reads over anything.",
+    "_pieces": "piece_min_px: a picture smaller than this is an icon. lettered_lines: the OCR lines that make a picture 'full of words' (a flyer somebody gave a film was tucked in as a second piece, 2026-10-05). print_zoom: a print shows its middle 1/1.18 -- a painted picture's edges are where it fades. scene_w: a print the film draws wider than 75% of the frame is its scene, not a piece of it. stage_overscan: a page is pushed 3% past the fit, so its torn edge and white rim stay out of the frame.",
+    "_logo": "Bottom-left, 15% of the height: the corner opposite YouTube's duration stamp, where a kids' channel keeps its mark (Cocomelon's lockup is bottom-left; TED-Ed's badge is ~12% of the width). Small on purpose ('If a logo is required, keep it small', lowerstreet.co/blog/podcast-youtube-thumbnail). logo.options still says which options carry it.",
+    "_measured": "Bake-off 2026-10-05, 6 studio films with pictures (two Ukrainian clay cut-out episodes of 6 min, an engraving collage, a Haitian Creole promo, a product film of photographs, Persian road works; 15 s to 6 min), 24 options from each film's own draft concepts made up to four: 24 posters, none fell back to a frame. Caps 120-260 px (10.5-22.8 px at 168 wide), median 160; contrast 4.86-12.84:1; 12.5-16.8 s a film with its stills made, 30-45 s from cold. The first run had 7 of 24 fall back to a frame: 4 at a moment with no picture on screen (such a poster now takes a picture no other option has) and 3 whose words did not read on their page (they now go onto strips first: 2 of 24 in the last run). The legibility check read a two-colour stack of strips as 1.4:1 until each letter was judged against its own ring.",
+    "margin": -0.015,
+    "gap": 0.02,
+    "stage_zoom_max": 1.6,
+    "stage_overscan": 1.03,
+    "max_up": 2.1,
+    "piece_min_px": 240,
+    "lettered_lines": 3,
+    "print_zoom": 1.18,
+    "burst_over": 0.07,
+    "burst_keep": 0.7,
+    "mate": 0.86,
+    "mate_out": 0.55,
+    "mate_drop": 0.05,
+    "switch": 1.25,
+    "drop_prop": 1.18,
+    "scene_w": 0.75,
+    "strips_options": [
+      2,
+      3
+    ],
+    "print_border": 0.022,
+    "figure_hs": [
+      1.62,
+      1.62,
+      1.85
+    ],
+    "figure_top": 0.05,
+    "hero_w": 0.44,
+    "object_w": 0.46,
+    "object_h": 0.8,
+    "object_cy": 0.5,
+    "object_rot": 0.12,
+    "object_margin": 0.03,
+    "burst_r": 0.45,
+    "prop_h": 0.52,
+    "prop_w": 0.24,
+    "prop_out": 0.5,
+    "prop_cy": 0.4,
+    "prop_rot": 0.2,
+    "cap_max": 300,
+    "max_lines": 3,
+    "line_gap": 0.24,
+    "words_cy": 0.45,
+    "tilts": [
+      -0.05,
+      -0.035,
+      -0.02,
+      0.025
+    ],
+    "backings": [
+      "burst",
+      "burst",
+      "sun",
+      "disc"
+    ],
+    "shapes": {
+      "burst": {
+        "spikes": 24,
+        "inner": 0.82
+      },
+      "sun": {
+        "spikes": 14,
+        "inner": 0.7
+      },
+      "disc": {
+        "spikes": 90,
+        "inner": 0.992
+      }
+    },
+    "logo_h": 0.15,
+    "logo_margin": 0.035,
+    "logo_corner": "bottom-left",
+    "band": {
+      "h": 0.47,
+      "tilt": 0.4,
+      "max_lines": 2,
+      "cap_max": 230,
+      "bust_h": 1.9,
+      "hero_cx": 0.57,
+      "object_w": 0.6,
+      "cut": 0.1,
+      "prop_h": 0.5,
+      "prop_w": 0.26,
+      "prop_cy": 0.74,
+      "prop_in": 0.3,
+      "mate_out": 0.62
+    }
+  },
   "strip": {
     "pad": [
       0.34,
       0.3
     ],
     "gap_frac": 0.16,
+    "margin": 1.5,
     "rot": -0.02,
     "_why": "A film that labels with strips (collage.js's tape: 'ЗДОРОВ'Я' on red, 'ПОМИЛКА ЛІКАРЯ' on indigo) gets its thumbnail's words on strips like them, a line to a strip, tilted as the film tilts its labels (-0.02 to -0.05 rad)."
   },
@@ -279,5 +384,111 @@
     "min_words_px": 34,
     "empty_detail": 0.012,
     "_why": "The film's own titles, labels, stamps and marker arrows are left out of the picture under the thumbnail's words: a thumbnail carries one message, and the first ones set a card reading 'Від чого залежить зарплата?' over the film's own heading saying the same (2026-09-30). Text under min_words_px (an app's own screen, a progress bar's labels) stays as texture: it is unreadable at feed size and hiding it would empty the screens it sits on. Matches thumb.js minWords. What the words sat on goes with them when it would show empty: a burst or disc with no picture on it, a card with no picture or card on it whose inside is flatter than empty_detail on the clean picture (a ground scores 0.002-0.015; an app screen's rows far more)."
+  },
+  "title": {
+    "options": [
+      2
+    ],
+    "_options_2026_10_14": "The box now carries the option's own question or quote (the owner: every thumbnail a short catchy question or quote), the video's title only when the option's words are neither.",
+    "_options": "Which of the four options are the video's title in a box on a whole frame of the film (the others are made as before). The owner sent a thumbnail of this kind as the format to offer -- a full painted frame, 'PADEL TACTICS' in white capitals on a red box top left with a hard black shadow, 'EVERYTHING, IN 6 MINUTES' small beside it -- and asked for the text to be, or be very close to, the video's name (2026-10-09). Two of four, so the person picking sees this look on two moments beside the film's own.",
+    "upper": true,
+    "ink": "#FFFFFF",
+    "fill": "#E0201F",
+    "shadow": "#141414",
+    "shadow_max_lum": 0.05,
+    "chroma_min": 0.35,
+    "ground_tol": 40,
+    "ground_max": 0.4,
+    "_ground": "A frame whose pixels are within ground_tol of its median colour over all but ground_max of it is drawn on a flat ground: the box goes where it hides the least of what is not ground. Any other frame (painted) is read by saliency.",
+    "fill_margin": 1.2,
+    "deep_margin": 1.5,
+    "_deep_margin": "A title box whose letters measure under contrast_min once drawn is tried once more with its fill moved this much further from them before the option gives the box up. On kc-local (Linux Chromium) the test film's 'STILL WAITING?' in Caveat read 4.49:1 where the same box read over 4.5 on Windows (2026-10-14): a near miss from rasterising, not a box that cannot be read.",
+    "_colours": "White capitals on the film's own accent (the more saturated of its two), darkened until white reads on it with the same margin every layout keeps; a film whose accent is nearly grey (chroma under chroma_min) gets the reference's red. The shadow is the film's darkest ink when that is near black, else near black.",
+    "max_chars": 44,
+    "join_max_chars": 28,
+    "kicker_max_chars": 40,
+    "max_lines": 3,
+    "line_gap": 0.2,
+    "cap_max": 170,
+    "cap_min": 100,
+    "cap_step": 10,
+    "_cap": "The reference sets two words at a cap height of 0.133 of the frame's height (144 px at 1080) in a box 43% of its width. 170 down to 100 px: 100 px is 8.75 px at 168 px wide, over the feed's 8 px floor. A title of up to max_chars characters sets in three lines at that floor inside max_w_frac; a longer one is not set this way and the option is made from its moment's own words.",
+    "max_w_frac": 0.56,
+    "max_h_frac": 0.6,
+    "pad_frac": [
+      0.42,
+      0.38
+    ],
+    "margin_frac": 0.04,
+    "r": 6,
+    "shadow_frac": 0.07,
+    "corners": [
+      "top-left",
+      "top-right",
+      "bottom-left"
+    ],
+    "corner_bias": 0.02,
+    "busy_weight": 4.0,
+    "cover_max": 0.08,
+    "_corners": "The corner where the box hides the least of the frame's subject, top left first (where the reference has it, and where a feed is read from); never bottom right, under YouTube's duration stamp. The largest capitals whose box hides no more than cover_max of the subject.",
+    "kicker_cap_frac": 0.3,
+    "kicker_cap_min": 40,
+    "kicker_pad_frac": [
+      0.5,
+      0.42
+    ],
+    "kicker_gap_frac": 0.2,
+    "kicker_drop_frac": 0.22,
+    "_options_2026_10_22": "Option 1 is the punch now (punch.options); the title box keeps option 2."
+  },
+  "punch": {
+    "_why": "The thumbnail of the channel's best video, the Yandex one (yrfpNa2HCzU, 16k views, 95% from YouTube search, 2026-10-12), which the owner named as the model on 2026-10-22: 'thumbnails with text on top, short catchy title'. It was option 1 of its draft, made by the card layout as a fallback of a fallback at the smallest size; this makes that look the first option of every film on purpose. Measured off it (1280x720): four words in two lines, 'Yandex hit, / bots *quiet*', sentence case in the film's own heavy sans; caps 76 px (0.105 of the height, 10 px at 168 px wide); a box of the film's dark paper (#1E1C19) edged in its amber (#FAC622) about 3 px, corners about 12 px, 52% of the width and 36% of the height, upper left; the words cream (#EFECEC), the last one amber; under it the frame the film drew at that moment -- the Cloudflare Radar chart with its drop, its source tag, the film's own BREAKING bar and question -- pushed in 1.2x; the box covers the chart's header and leaves its drop in view.",
+    "options": [
+      1
+    ],
+    "_options": "Which of the four options are a punch on a 16:9 film. Every option of a film that is not 16:9 is one (a Short's frame has room for nothing else that was composed for 16:9).",
+    "min_words": 2,
+    "max_words": 5,
+    "max_chars": 32,
+    "_words": "'2-5 words' is the owner's ask (2026-10-22); the reference has four. A title, not a quote: what the film is about, naming it first -- the reference's 'Yandex' is the word 1,574 of its search views typed.",
+    "cap_max": 200,
+    "cap_max_tall": 170,
+    "cap_min": 110,
+    "cap_min_tall": 80,
+    "cap_step": 10,
+    "_cap": "Larger than the reference's 110 px where the frame allows it: 200 px is 17.5 px at 168 px wide. On a Short (1080 wide) 110 px is 17 px at 168 px wide. A Short's caps go down to 80 px (12.4 px at 168 px wide): its frame is 1080 wide, and 'Cloudflare:' in a heavy sans did not fit it at 110 px (2026-10-22).",
+    "max_w_frac": 0.62,
+    "max_w_frac_tall": 0.88,
+    "max_h_frac": 0.6,
+    "max_lines": 3,
+    "line_gap": 0.16,
+    "pad_frac": [
+      0.34,
+      0.28
+    ],
+    "edge_frac": 0.025,
+    "step_px": 16,
+    "r_frac": 0.11,
+    "stroke_frac": 0.035,
+    "cover_max": 0.15,
+    "_cover_max": "The largest caps whose box hides no more than this share of the frame's subject (what is drawn on a flat ground, else saliency: drawn_map). Where no size does, the box that hides least for its size (small_cost per step down the size range).",
+    "small_cost": 0.15,
+    "protect_px": 60,
+    "_protect_px": "OCR line height (~1.3x the caps) from which the film's own words are a heading the box may hide whole but never cut. Below it -- chart labels, a screenshot's print, a source line -- the box may cut them like a sticker over a page, as the reference cuts 'Bot Traffic' (about 30 px tall at 1080p); each cut costs cut_cost.",
+    "cut_cost": 0.08,
+    "top_bias": 0.06,
+    "left_bias": 0.02,
+    "place_cost": 0.03,
+    "_bias": "Tie-breaks: higher and further left reads first in a feed (where the reference has it); in the writer's place when that costs little.",
+    "dark": "#1C1A17",
+    "light": "#F3EFE6",
+    "accent": "#FFC81E",
+    "dark_max_lum": 0.05,
+    "ink_margin": 0.8,
+    "_colours": "The box is the film's darkest colour when it is that dark (relative luminance <= dark_max_lum), else `dark`; the words its lightest, else `light`; the starred word and the edge its most saturated accent, else `accent` (the reference's amber) for a film whose accent is grey, lifted until it reads on the box with ink_margin more than every layout keeps.",
+    "mark_diff": 40,
+    "mark_min_cells": 20,
+    "mark_weight": 1.0,
+    "_marks": "punch_map: a cell is the film's mark when its words-out pass (4000+t) differs from the frame there by more than mark_diff (of 255) and no line of words lies there; with mark_min_cells of them, the marks weigh mark_weight as much as the whole subject."
   }
 }

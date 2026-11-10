@@ -13,7 +13,7 @@ render queue the stills and thumbnails share: they see the moments sheet when it
 else the film's review sheet. Before 2026-10-01 one call wrote both, after the sheet had been
 made, so a draft could wait a minute or more behind other films' thumbnails before a word showed.
 check() then holds the words to what YouTube takes and to what they were given: no link nobody
-gave, no chapter past the end, never the prompt pasted back; check_thumbs() holds the picks to
+gave, no chapter past the end; check_thumbs() holds the picks to
 _thumb's rules, with the title once it is known. Once picked, the job makes the thumbnail options
 (thumbs.py) and the draft's answer carries them.
 
@@ -55,7 +55,6 @@ SAMPLE_DESC = 1500  # of each one's description
 TITLE_MAX = 100  # YouTube's
 DESC_MAX = 4500  # bytes: YouTube takes 5000, and the site adds its credit line after
 TAGS_MAX = 500  # YouTube's, counted its way (a tag with a space costs its quotes too)
-RUN = 7  # words in a row shared with the brief that make a paste
 PER_FILM = 12  # drafts one film may have written, all channels together
 KEEP_S = 3600  # a finished job is remembered this long (the draft itself stays on disk)
 CHANNEL = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -79,10 +78,8 @@ will get.
 
 Hold it to the film:
 - Every fact comes from the narration, the pages listed, or what the maker said. Name no number, \
-feature, date or claim the film does not make, and where the maker says something is unconfirmed \
-or came only from the brief, do not state more than the film does.
-- The brief is the request the film was made from, and it is private. Do not quote it, restate \
-it as a request, or say the video was asked for or generated.
+feature, date or claim the film does not make, and where the maker says something is unconfirmed, \
+do not state more than the film does. Do not say the video was asked for or generated.
 - Give a link only if it appears above: in the channel's own descriptions, or among the pages the \
 film's facts came from. Never make one up.
 - Chapters only if the film is long enough to have real parts (about a minute or more): each \
@@ -104,23 +101,70 @@ moment of the film, its subject pushed in large on one side, and a few big words
 the only words on the picture (the film's own titles and labels are left out of it), set in the \
 film's own title type and colours, with its logo:
 - "at": the moment, in seconds, from the sheet of its moments (the time is printed on every \
-frame) -- one where the film's subject is on screen, large and fully drawn: a character, an \
-object, a chart. Four different moments.
+frame) -- one where the film's subject is on screen, large and finished: every line and colour \
+of it drawn in, not still appearing, not half off the frame -- and is what its words are about: \
+a character, an object, a chart. Four different moments.
 - "layout": "headline" (the words large over the picture) for the first and the fourth, "card" \
 (the words on the film's own label or card) and "panel" (the picture on one side, the words on a \
 panel of the film's colour on the other) for the second and third.
-- "words": at most 4 words and 32 characters, in the film's language ({language}). The first \
-thumbnail says the video's main message -- {main}, in fewer words; the others each say one of \
-the film's main points. Words a viewer reads at a glance and wants to click on, and \
-they hold to the film -- no number or claim it does not show or say, nothing from the private \
-brief that the film does not say itself. \
-Star one word to colour it (write it as *word*).
+- "words", in the film's language ({language}). The first thumbnail is the video's punch line, \
+set very large on a dark box over its moment as the film drew it: a short catchy title of 2 to 5 \
+words and at most 32 characters, the way a news headline or a big channel's thumbnail says it -- \
+{main}, in fewer words -- naming first who or what the film is about, by the name a viewer \
+would type into YouTube's search (not a quote). Its moment is the film's strongest evidence or \
+subject for it, large on screen: the chart, the photograph, the document, the person, the \
+product. The other three are at most 4 words and 32 characters, each one of the film's main \
+points: either a short catchy question the film answers, ending with "?", or a short quote -- \
+words said in the film's narration, word for word, in \u201cquotation marks\u201d. Both kinds \
+among those three: at least one question and one quote. Words a viewer reads at a glance and \
+wants to click on, and they hold to the film -- no number or claim it does not show or say. Star \
+one word in each to colour it (write it as *word*).
 - "place": the side the words go on, so they leave the subject clear: left, right, top or \
 bottom.
 Put first the one you would choose yourself.
 
 Answer with one JSON object and nothing else:
 {{"thumbnails": [{{"at": 0.0, "layout": "headline", "words": "...", "place": "top"}}, ...]}}"""
+
+# A film that shows pictures (cut-outs, prints) gets posters composed from them (_thumb.py
+# layout_poster), so its writer names the picture each is built on rather than a layout.
+ASK_POSTERS = """\
+Choose four thumbnails for this film's video on YouTube. Each is a poster composed from the \
+film's own pictures -- not a frame of it: one picture set large (somebody from the waist up, or \
+an object whole) on the film's own coloured ground, at most one more tucked in beside it, and a \
+few big words -- the only words on the picture -- in the film's own title type, with its logo:
+- "hero": the picture the poster is built on, by its name from the list below -- one that shows \
+what its words are about. A face is what \
+a viewer looks at first: when the film has characters, a character is the hero of at least \
+three of the four -- the one whose face and pose show what the words say (worried, delighted, \
+saying stop) -- and an object is the hero only where no character fits the words. Four \
+different pictures (another pose of the same character is a different picture).
+- "with": at most one more picture, by name -- beside a character, the thing the words are \
+about (what they are afraid of, holding, tempted by), or a second character when the words are \
+about the two of them -- or [] for none.
+- "at": a moment of the film, in seconds, from the sheet of its moments (the time is printed on \
+every frame), where that hero is on screen: the poster takes that moment's ground and colours. \
+Four different moments.
+- "words", in the film's language ({language}); fewer and shorter words are set larger. The \
+first thumbnail is the video's punch line, set very large on a dark box over its moment as the \
+film drew it (its "at" picks the picture; its hero is not used): a short catchy title of 2 to 5 \
+words and at most 32 characters, the way a news headline or a big channel's thumbnail says it -- \
+{main}, in fewer words -- naming first who or what the film is about, by the name a viewer \
+would type into YouTube's search (not a quote); its moment the film's strongest picture of that. \
+The other three are at most 4 words and 32 characters, each one of the film's main points: \
+either a short catchy question the film answers, ending with "?", or a short quote -- words \
+said in the film's narration, word for word, in \u201cquotation marks\u201d. Both kinds among \
+those three: at least one question and one quote. Words a viewer reads at a glance and wants to \
+click on, and they hold to the film -- no number or claim it does not show or say. Star one word \
+in each to colour it (write it as *word*).
+Put first the one you would choose yourself.
+
+The film's pictures (name: what it shows):
+{pieces}
+
+Answer with one JSON object and nothing else:
+{{"thumbnails": [{{"at": 0.0, "hero": "name", "with": [], "words": "..."}}, ...]}}"""
+PIECES_MAX = 60  # pictures listed for the writer
 
 # (film id, channel id) -> {"film", "channel", "client", "state", "draft", "error", "t", "task"}
 JOBS = {}
@@ -236,7 +280,6 @@ def material(film, events=None, sheet=False):
     except (OSError, ValueError, KeyError):
         length = rec.get("length") or 0
     return {
-        "prompt": (rec.get("prompt") or "").strip(),
         "length": length,
         "language": vo.get("language") or "en",
         "audience": ((films.FOR_LINE.search(js) or [None, ""])[1] or "").strip()[:300],
@@ -250,9 +293,7 @@ def material(film, events=None, sheet=False):
         ],
         "said": (rec.get("claude_said") or "").strip()[:4000],
         "sources": _sources(film, events),
-        "project": {"name": project.get("name"), "brief": (project.get("brief") or "")[:1000]}
-        if project
-        else None,
+        "project": {"name": project.get("name")} if project else None,
         "film_key": _thumb.film_key(film.dir),
         "moments": thumbs.moments(film) if os.path.exists(film.manifest) else [],
         "sheet": thumbs.sheet_now(film) if sheet else None,
@@ -275,6 +316,23 @@ def sample(recent):
                 "tags": [str(t)[:60] for t in tags[:30]],
             }
         )
+    return out
+
+
+LANG = re.compile(r"^[a-z]{2,3}$")
+
+
+def options(body):
+    """What else the site may send with its ask, for a film made in another language (kitcut.ai's
+    Translate, localize.py): "language", the film's language (the words and the thumbnails' words
+    are written in it), and "fresh": never fall back on a draft written from something else. Russian
+    is never a language here. -> {"language"?, "fresh"?}"""
+    if not isinstance(body, dict):
+        return {}
+    lang = str(body.get("language") or "").lower().split("-")[0]
+    out = {"language": lang} if LANG.match(lang) and lang not in ("ru", "rus") else {}
+    if body.get("fresh") is True:
+        out["fresh"] = True
     return out
 
 
@@ -302,6 +360,9 @@ def ask_text(mat, channel, recent, part="words", title=None):
     thumbnails (part "thumbs": no uploads to match, and the title once it is known)."""
     if part == "thumbs":
         main = 'its title, "%s"' % title if title else "what the video promises or asks"
+        ask = ASK_THUMBS.format(language=mat["language"], main=main)
+        if mat.get("pieces"):
+            ask = ASK_POSTERS.format(language=mat["language"], main=main, pieces=mat["pieces"])
         return "\n".join(
             [
                 "# The channel",
@@ -310,7 +371,7 @@ def ask_text(mat, channel, recent, part="words", title=None):
                 *film_text(mat),
                 "",
                 "# What to choose",
-                ASK_THUMBS.format(language=mat["language"], main=main),
+                ask,
             ]
         )
     parts = [
@@ -334,7 +395,7 @@ def ask_text(mat, channel, recent, part="words", title=None):
 
 
 def film_text(mat):
-    """The film's half of the ask, as lines: what it is and says, the brief marked private, the
+    """The film's half of the ask, as lines: what it is and says, and the
     sheet. share.py sends it too."""
     parts = [
         "# The film",
@@ -359,8 +420,7 @@ def film_text(mat):
         parts.append("\nWhat its maker said when it was finished:\n" + mat["said"])
     if mat.get("project"):
         p = mat["project"]
-        parts.append('\nIt is an episode of the series "%s". %s' % (p["name"], p["brief"]))
-    parts.append("\nThe brief it was made from (private):\n" + (mat["prompt"] or "(none)"))
+        parts.append('\nIt is an episode of the series "%s".' % p["name"])
     if mat["sheet"] and mat.get("moments_sheet"):
         parts.append(
             "\nThe image is the film's moments, in order: clean stills, each with its time "
@@ -396,47 +456,6 @@ def key_of(mat, channel, recent, model, effort):
 
 
 # ------------------------------------------------------------------ holding it to the film
-def _flat(s):
-    return " ".join(re.findall(r"\w+", (s or "").lower()))
-
-
-def _clauses(s):
-    """A text's sentences and lines, each flattened. A run of words that crosses from one into
-    the next is two thoughts side by side, not a paste: ewwd6b's draft put the chapter "Making a
-    film" over the film's own "Say the idea, the length and the look", and the brief had the same
-    heading over the same words, so every draft was refused (2026-09-30)."""
-    return [c for c in (_flat(x) for x in re.split(r"[.!?;:\n]+", s or "")) if c]
-
-
-def leak(d, mat):
-    """Where the draft repeats the brief rather than the film, or None: a run of RUN words the
-    brief and the draft share inside one sentence of each. A run the narration, the maker's notes
-    or a page's title also has is the film's own words, not a paste."""
-    p = _flat(mat["prompt"]).split()
-    if not p:
-        return None
-    if _flat(d["title"]).split() == p:
-        return "the title is the brief"
-    own = " %s " % _flat(
-        " ".join(
-            [t for _, _, t in mat["narration"]]
-            + [mat["said"], mat["header"]]
-            + [s["title"] for s in mat["sources"]]
-        )
-    )
-    text = [" %s " % c for c in _clauses(d["title"] + "\n" + d["description"])]
-    n = min(RUN, len(p))
-    if n < 4:
-        return None
-    for clause in _clauses(mat["prompt"]):
-        c = clause.split()
-        for i in range(len(c) - n + 1):
-            w = " %s " % " ".join(c[i : i + n])
-            if any(w in t for t in text) and w not in own:
-                return 'it repeats the brief: "%s"' % w.strip()
-    return None
-
-
 def _norm_url(u):
     p = urlsplit(u.rstrip(".,;:!?"))
     return (p.netloc.lower().removeprefix("www."), p.path.rstrip("/"), p.query)
@@ -524,7 +543,40 @@ def check_thumbs(d, mat, title, n=4, layouts=None):
     """The draft's four thumbnails (or `n`, of `layouts`) held to _thumb's rules: (concepts,
     notes, problems). A problem is something only the writer can put right; it is asked once,
     then repair() decides."""
-    return _thumb.check_concepts(d.get("thumbnails"), mat["length"] or 0, title, n, layouts)
+    said = " ".join(text for _, _, text in mat.get("narration") or [])
+    punch = _thumb.cfg()["punch"]["options"] if n == 4 else ()
+    return _thumb.check_concepts(
+        d.get("thumbnails"),
+        mat["length"] or 0,
+        title,
+        n,
+        layouts,
+        mat.get("piece_names"),
+        said,
+        punch=punch,
+    )
+
+
+def pieces_text(film_dir):
+    """(the film's pictures as lines for the writer, their names) -- ("", None) for a film with
+    none it can be told about, whose writer then picks moments and each poster takes its moment's
+    own pieces. Listed: the pictures that were painted for the film, by what each was painted as
+    (paint.json). A picture somebody gave it has no such words, so the writer cannot know what it
+    shows and is not asked to choose it; a brand's mark is left off too."""
+    try:
+        pcs = _thumb.film_pieces(film_dir)
+    except Exception as e:  # noqa: BLE001 -- the picks are then made the way they were before posters
+        print("youtube draft: no pictures listed for %s: %s" % (film_dir, e), flush=True)
+        return "", None
+    rows = []
+    for name, p in pcs.items():
+        about = " ".join(p["about"].split())[:160]
+        if not about or p["lettered"] or p["mark"]:
+            continue
+        rows.append("- %s: %s" % (name, about))
+    if not rows:
+        return "", None
+    return "\n".join(rows[:PIECES_MAX]), [r.split(":", 1)[0][2:] for r in rows[:PIECES_MAX]]
 
 
 def repair(concepts, problems, mat, n=4):
@@ -546,18 +598,41 @@ async def _call(
     return await ask_json(text, mat["sheet"], auth, film, model, effort, WRITER, "youtube-draft")
 
 
+# what the login says when its plan is spent for now (Claude Code's own words)
+SPENT = re.compile(r"session limit|usage limit|rate.?limit|resets \d|billing", re.I)
+
+
 async def ask_json(text, sheet, auth, film, model, effort, system, session):
-    """One Claude call with no tools -- the text, and the sheet (JPEG bytes) as an image before
-    it -- on the film's key (auth "api") or this machine's login: (the parsed JSON object, cost
-    in USD). share.py asks through it too."""
+    """One Claude call, carrying on on the key when the login's plan is spent (ask_json_once).
+
+    Films do the same (agent.PlanLimit, make_film): the studio's login has a plan limit that a
+    key does not, so a spent login costs only what the key bills for the rest of this call."""
+    try:
+        return await ask_json_once(text, sheet, auth, film, model, effort, system, session)
+    except agent.apikey.CreditOut as e:  # the credit key's month is spent: the paid key now
+        print("ask_json %s: CREDIT SPENT, on the paid key: %s" % (session, str(e)[:120]))
+        return await ask_json_once(text, sheet, "api", film, model, effort, system, session)
+    except RuntimeError as e:
+        if auth != "login" or not SPENT.search(str(e)):
+            raise
+        print("ask_json %s: PLAN LIMIT, on the key: %s" % (session, str(e)[:120]), file=sys.stderr)
+        return await ask_json_once(text, sheet, "api", film, model, effort, system, session)
+
+
+async def ask_json_once(text, sheet, auth, film, model, effort, system, session):
+    """One Claude call with no tools -- the text, and the sheet (JPEG bytes, or a list of them,
+    in order) as images before it -- on the film's key (auth "api") or this machine's login: (the
+    parsed JSON object, cost in USD). share.py, canon.py and review.py ask through it too. It has
+    no time limit of its own: a caller that must not wait wraps it (asyncio.wait_for)."""
     from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ResultMessage, TextBlock
     from claude_agent_sdk import query
 
     content = [{"type": "text", "text": text}]
-    if sheet:
-        img = base64.b64encode(sheet).decode("ascii")
+    sheets = [sheet] if isinstance(sheet, (bytes, bytearray)) else list(sheet or [])
+    for n, one in enumerate(sheets):
+        img = base64.b64encode(one).decode("ascii")
         content.insert(
-            0,
+            n,
             {
                 "type": "image",
                 "source": {"type": "base64", "media_type": "image/jpeg", "data": img},
@@ -590,6 +665,9 @@ async def ask_json(text, sheet, auth, film, model, effort, system, session):
         elif isinstance(m, ResultMessage):
             cost = m.total_cost_usd or 0.0
             err = m.result if m.is_error else None
+    agent.apikey.charge(opts.env, cost, session, film.id if film else None)
+    if err and agent.apikey.out(err, opts.env):  # the credit key's month: ask_json goes on
+        raise agent.apikey.CreditOut(err)
     j = re.search(r"\{.*\}", said, re.DOTALL)
     try:
         d = json.loads(j.group(0)) if j else None
@@ -626,7 +704,7 @@ async def write(
     on_words=None,
 ):
     """The draft for this film on this channel: from the cache, else two calls made at the same
-    time -- the words (and one more if they were not the JSON asked for or repeated the brief) and
+    time -- the words (and one more if they were not the JSON asked for) and
     the thumbnails' picks (and one more if they broke the rules). on_words(draft) is called with
     the words as soon as they are written, before the thumbnails are picked, so the site can show
     them. Records what it cost on the film and in the run log, unless record is False (a draft
@@ -676,7 +754,7 @@ async def write(
 
 async def _words(film, mat, channel, recent, auth, model, effort, record):
     """The title, description and tags: one call, and one more if the first was not the JSON asked
-    for or repeated the brief. (words, cost, notes). Shown the film's moments when that sheet is
+    for. (words, cost, notes). Shown the film's moments when that sheet is
     made already, else its review sheet or poster: the words never wait for the render queue."""
     if mat.get("sheet") is None:
         got = await asyncio.to_thread(thumbs.sheet_made, film)
@@ -702,17 +780,7 @@ async def _words(film, mat, channel, recent, auth, model, effort, record):
                 raise RuntimeError("no draft: %s" % e) from None
             note = "Your last answer had no title. Answer with the whole JSON object."
             continue
-        why = leak(out, mat)
-        if not why:
-            return out, spent, notes
-        if attempt == 2:
-            if record:
-                await _spent(film, spent, auth)
-            raise RuntimeError("the draft kept repeating the brief (%s)" % why)
-        note = (
-            "Your last answer repeated the brief (%s). The brief is private: write the title "
-            "and description from the film itself." % why
-        )
+        return out, spent, notes
     raise RuntimeError("no draft")
 
 
@@ -728,6 +796,10 @@ async def _pick(film, mat, channel, auth, model, effort):
             if got
             else dict(mat, sheet=_sheet(film), moments_sheet=False)
         )
+    # a film with pictures is asked for posters built on them (not part of the draft's key: a
+    # draft written before posters keeps its picks, and its posters take each moment's own pieces)
+    text, names = await asyncio.to_thread(pieces_text, film.dir)
+    m = dict(m, pieces=text, piece_names=names)
     d, cost = await _call(m, channel, [], auth, film, model, effort, part="thumbs")
     return d, cost, m
 
@@ -842,15 +914,19 @@ async def make_thumbs(job, film):
         job["t"] = time.time()
 
 
-async def start(film, client, channel, recent, auth="api"):
+async def start(film, client, channel, recent, auth="api", language=None, fresh=False):
     """Write the draft in the background (one at a time per film and channel). Returns the job;
-    its state is "done" at once when the same draft is already on disk."""
+    its state is "done" at once when the same draft is already on disk. language (options()): the
+    film's language as the site knows it, over its vo.json's; fresh: no fallback on the last draft
+    written when the film has had all it can, since that one may be from before it was translated."""
     prune()
     k = (film.id, channel["id"])
     job = JOBS.get(k)
     if job and busy(job):
         return job
     mat = await asyncio.to_thread(material, film)
+    if language:
+        mat["language"] = language
     job = {
         "film": film.id,
         "channel": channel["id"],
@@ -864,7 +940,8 @@ async def start(film, client, channel, recent, auth="api"):
         chain_thumbs(job, film)
     if job["draft"] is None:
         if (film.record().get("youtube_drafts") or 0) >= PER_FILM:
-            job["draft"] = cached(film, channel)  # the last one written, if any
+            # the last one written, if any -- unless the site asked for this film's own (fresh)
+            job["draft"] = None if fresh else cached(film, channel)
             if job["draft"] is None:
                 raise DraftError(429, "This film has had all the drafts it can have written.")
             chain_thumbs(job, film)
@@ -967,7 +1044,10 @@ async def _main(a):
             json.dump({"channel": channel, "recent": recent}, fh, indent=1, ensure_ascii=False)
     mat = material(f, a.events, sheet=True)
     if a.plan:
-        print(ask_text(mat, channel, [], "thumbs") + "\n\n=== and, at the same time, the words:\n")
+        shown = dict(mat, pieces=pieces_text(f.dir)[0])  # as _pick() asks it
+        print(
+            ask_text(shown, channel, [], "thumbs") + "\n\n=== and, at the same time, the words:\n"
+        )
         text = ask_text(mat, channel, recent)
         t, usd = estimate(mat, text, a.model)
         print(text)

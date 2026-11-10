@@ -1,0 +1,69 @@
+{
+ "_about": "The jobs of 2026-10-03, the first night (studio/overnight_templates.py): two films were already in the making on the site (the speaker card and the booth invitation's source), two more were started from the prompts beside this file. Its specs were written before the films existed and were rewritten the next morning (config/templates/).",
+ "wait": [
+  "studio-20261003-215221-mikimq",
+  "studio-20261003-215229-l6j4hi"
+ ],
+ "jobs": [
+  {
+   "slug": "trade-show-booth-invite",
+   "film": "studio-20261003-215229-l6j4hi",
+   "spec": {
+    "title": "Trade show booth invitation",
+    "description": "A 30-second 'find us at booth ...' film an exhibitor posts before a show: the show's name, dates and city, a drawn hall where one stand lights up with its hall and booth number, what to see there, the exhibit hours and an end card.",
+    "example": "A booth invitation for GE HealthCare at MEDICA 2026 in Düsseldorf.",
+    "brief": "The film invites visitors to one exhibitor's stand at one show. Keep its scenes and their order. The floor plan is generic: never copy a show's real plan and never name another exhibitor. With no booth number published, say only the show. Every fact is the person's own, from their words, their attachments or the event's own pages on the web; never invent a date, a time, an address, a price, a name or a number: a fact that cannot be found is left out and the layout closes over it. Use their real logo (template_pictures(logo=...)) and their own colours and type. Long values are fitted (shrunk, then wrapped). Rewrite every narration line for their event, keeping the number of lines and their length so the scenes keep their timing; never read a URL aloud.",
+    "generic": [
+     "BOOTH",
+     "HALL",
+     "FIND US",
+     "EXHIBIT HOURS"
+    ]
+   },
+   "tests": [
+    "A booth invitation for GE HealthCare at MEDICA 2026 in Düsseldorf (medica-tradefair.com). Use only what is published; leave the stand number off if you cannot find it.",
+    "A booth invitation for Henry Schein at the Greater New York Dental Meeting 2026 (gnydm.com). Use only what is published; leave the booth number off if you cannot find it."
+   ]
+  },
+  {
+   "slug": "open-house-invitation",
+   "prompt_file": "open-house.md",
+   "spec": {
+    "title": "Open house invitation",
+    "description": "A 30-second open house invitation: the day and hours on a yard sign, the home's photo and address, its key facts one by one, a few more photos, a pin on a street map, and an end card with who to contact.",
+    "example": "An open house this Saturday, 1 to 4 PM, at 12 Oak Lane, Austin: 4 beds, 3 baths, 2,450 sq ft, $685,000. Photos attached.",
+    "brief": "The film invites people to one open house or model-home opening. Keep its scenes and their order. The photos are the person's own attachments or the host's own published ones; with none, the house is drawn simply. Show only the facts given (beds, baths, area, price). Every fact is the person's own, from their words, their attachments or the event's own pages on the web; never invent a date, a time, an address, a price, a name or a number: a fact that cannot be found is left out and the layout closes over it. Use their real logo (template_pictures(logo=...)) and their own colours and type. Long values are fitted (shrunk, then wrapped). Rewrite every narration line for their event, keeping the number of lines and their length so the scenes keep their timing; never read a URL aloud.",
+    "generic": [
+     "OPEN HOUSE",
+     "BEDS",
+     "BATHS",
+     "SQ FT"
+    ]
+   },
+   "tests": [
+    "An invitation to Century Communities' October 2026 grand opening in Dacono, Colorado. Find its page and use only what it publishes.",
+    "An invitation to the next model home grand opening Toll Brothers has announced (tollbrothers.com). Use only what its page publishes."
+   ]
+  },
+  {
+   "slug": "webinar-promo",
+   "prompt_file": "webinar-promo.md",
+   "spec": {
+    "title": "Webinar promo",
+    "description": "A 30-second promo for a webinar or online workshop: a live tag and the date, the title set large, the speakers with their photos, what people will learn, the time with its time zone, and a Register end card.",
+    "example": "A promo for our free webinar 'Reading the 2027 housing market', November 12 at 1 PM ET, with our chief economist. Speaker photo and logo attached.",
+    "brief": "The film promotes one webinar. Keep its scenes and their order. One to three speakers lay out; a speaker with no photo stands in type. 'You'll learn' shows only points the host published or the person gave. Every fact is the person's own, from their words, their attachments or the event's own pages on the web; never invent a date, a time, an address, a price, a name or a number: a fact that cannot be found is left out and the layout closes over it. Use their real logo (template_pictures(logo=...)) and their own colours and type. Long values are fitted (shrunk, then wrapped). Rewrite every narration line for their event, keeping the number of lines and their length so the scenes keep their timing; never read a URL aloud.",
+    "generic": [
+     "LIVE WEBINAR",
+     "REGISTER",
+     "FREE",
+     "YOU'LL LEARN"
+    ]
+   },
+   "tests": [
+    "A promo for the next free public webinar of the National Association of REALTORS (nar.realtor). Find it on their site and use only what its page publishes.",
+    "A promo for the next free public webinar or online seminar of the Harvard T.H. Chan School of Public Health (hsph.harvard.edu). Use only what its page publishes."
+   ]
+  }
+ ]
+}

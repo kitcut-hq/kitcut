@@ -74,7 +74,7 @@ SPEC = {
     "frames": ["16:9", "1:1"],
     "caps": ["space", "portraits"],
     "moments": [1.0, 3.0],
-    "limits": {"images": 9},
+    "limits": {"images": 12},
     "keep": ["_about", "copy"],
     "generic": ["GET TICKETS"],
     "identity": ["event.name"],
@@ -130,6 +130,141 @@ def fixture():
         f.write(png(10, 10))
     with open(os.path.join(d, "sketch.json"), "w", encoding="utf-8") as f:
         json.dump(m, f)
+    return d
+
+
+def route_fixture():
+    """A finished route film: content, a route.json beside it naming its map, and a bike every
+    film may keep."""
+    d = os.path.join(HOME, "src-ride")
+    os.makedirs(os.path.join(d, "images"))
+    with open(os.path.join(d, "film.js"), "w", encoding="utf-8") as f:
+        f.write(FILM_JS.replace("D.speakers[0].image", "'bike'"))
+    with open(os.path.join(d, "content.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "event": {"name": "SAMPLE RIDE"},
+                "kit": {"image": "bike"},
+                "palette": {"ground": "#102030"},
+            },
+            f,
+        )
+    with open(os.path.join(d, "route.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "image": "route_map",
+                "w": 100,
+                "h": 200,
+                "rows": [[0.1, 0.2, 5, 0, 0], [0.5, 0.6, 50, 1.2, 300]],
+            },
+            f,
+        )
+    with open(os.path.join(d, "images", "bike.png"), "wb") as f:
+        f.write(png(300, 200))
+    with open(os.path.join(d, "images", "route_map.jpg"), "wb") as f:
+        f.write(jpg(100, 200))
+    with open(os.path.join(d, "sketch.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "title": "Sample ride",
+                "duration": 5.0,
+                "fps": 30,
+                "film": "film.js",
+                "data": {"content": "content.json", "route": "route.json"},
+                "images": {"bike": "images/bike.png", "route_map": "images/route_map.jpg"},
+                "audio": {"score": "score.json", "sfx": "sfx.json", "mix": {"music_db": 0}},
+            },
+            f,
+        )
+    return d
+
+
+PARTY_JS = """// For: a test -- a narrated party invite, its words in content.json
+const D = SK.DATA.content;
+SK.setStyle('clean', { grain: 0, vignette: 0 });
+SK.film({
+  duration: 5, camera: SK.camera([[0, [SK.W / 2, SK.H / 2, 1]]]), handheld: false, speedLines: false,
+  fadeOut: 0,
+  draw(t) {
+    const c = SK.ctx(); c.fillStyle = '#204060'; c.fillRect(0, 0, SK.W, SK.H);
+    c.fillStyle = '#ffffff'; c.font = '90px sans-serif';
+    if (t > SK.w(1, 'come', 1.2)) c.fillText(D.child.name, 100, 300);
+    SK.cast.kid.draw(c, 900, 600);
+  },
+});
+"""
+
+
+def party_fixture():
+    """A finished narrated film: its party in content.json, its script and recorded word times,
+    a character in cast/, its music and cues as files, spoken in the author's own voice."""
+    d = os.path.join(HOME, "src-party")
+    os.makedirs(os.path.join(d, "images"))
+    os.makedirs(os.path.join(d, "cast"))
+    os.makedirs(os.path.join(d, "audio", "vo"))
+    files = {
+        "film.js": PARTY_JS,
+        "cast/kid.js": "SK.cast.kid = { about: 'a doodle child', draw(c, x, y) {"
+        " c.fillStyle = '#f0c040'; c.fillRect(x, y, 80, 160); } };",
+        "content.json": {
+            "_about": "a test party",
+            "child": {"name": "Ted", "age": 4, "photo": "kid-photo"},
+            "venue": {"name": "Bouncy Castle Club"},
+        },
+        "vo.json": {
+            "tts": "elevenlabs",
+            "model": "eleven_multilingual_v2",
+            "voice": "an-authors-own-voice",
+            "jobs": 3,
+            "style": "a bubbly party host",
+            "language": "en",
+            "lines": [{"text": "Hey, friends!"}, {"text": "It's Ted! Come to the party!"}],
+        },
+        "audio/vo/timeline.json": {
+            "duration": 5.0,
+            "lines": [
+                {
+                    "i": 0,
+                    "text": "Hey, friends!",
+                    "file": "audio/vo/L00.wav",
+                    "start": 0.2,
+                    "end": 0.8,
+                    "words": [{"text": "Hey,", "s": 0.2, "e": 0.5}],
+                },
+                {
+                    "i": 1,
+                    "text": "It's Ted! Come to the party!",
+                    "file": "audio/vo/L01.wav",
+                    "start": 1.0,
+                    "end": 2.0,
+                    "words": [],
+                },
+            ],
+        },
+        "score.json": {"bpm": 120, "events": []},
+        "sfx.json": [{"t": 1.0, "fx": "pop", "db": -20}],
+    }
+    for rel, body in files.items():
+        with open(os.path.join(d, *rel.split("/")), "w", encoding="utf-8") as f:
+            f.write(body if isinstance(body, str) else json.dumps(body))
+    with open(os.path.join(d, "images", "kid-photo.png"), "wb") as f:
+        f.write(png(300, 300))
+    with open(os.path.join(d, "sketch.json"), "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "title": "Ted's party",
+                "duration": 5.0,
+                "fps": 30,
+                "film": "film.js",
+                "cast": "cast",
+                "vo": "vo.json",
+                "captions": {"max_words": 8},
+                "data": {"content": "content.json"},
+                "images": {"kid-photo": "images/kid-photo.png"},
+                "audio": {"score": "score.json", "sfx": "sfx.json", "mix": {"music_db": 0}},
+            },
+            f,
+        )
     return d
 
 
@@ -197,7 +332,7 @@ async def main():
     pub = templates.public(t)
     check(
         pub.get("example") == SPEC["example"]
-        and pub.get("limits") == {"images": 9}
+        and pub.get("limits") == {"images": 12}
         and "fields" not in pub
         and "brief" not in pub,
         "a template shows an example of what to ask and its picture cap -- no form, no brief",
@@ -226,7 +361,7 @@ async def main():
             j,
         )
         logo = await up(png(600, 200, bg=(255, 255, 255, 255)))  # a dark logo on white, no alpha
-        photos = [await up(jpg(500, 600, (40 + i, 90, 120)), "image/jpeg") for i in range(7)]
+        photos = [await up(jpg(500, 600, (40 + i, 90, 120)), "image/jpeg") for i in range(9)]
         body = {
             "template": {"id": "t-test-promo", "version": 1},
             "prompt": "A promo for Nordic Build 2027 in Helsinki, nordic.example",
@@ -252,7 +387,7 @@ async def main():
         j = await r.json()
         check(
             r.status == 202 and j.get("template") == {"id": "t-test-promo", "version": 1},
-            "a film from a template, from a prompt and 8 pictures (over a plain film's 6)",
+            "a film from a template, from a prompt and 10 pictures (over a plain film's 9)",
             j,
         )
         f = Film.open(j.get("id"))
@@ -364,7 +499,7 @@ async def main():
         )
         tl = Tools(f, server.SCHED, lambda ev: None)
         check(
-            tl.web_limit() == max(tools.MAX_WEB_PICTURES, 9),
+            tl.web_limit() == max(tools.MAX_WEB_PICTURES, 12),
             "a template film may bring in its own number of pictures, never fewer than any film",
             tl.web_limit(),
         )
@@ -394,6 +529,18 @@ async def main():
             json.dump(m, fh)
         said = await tl.template_pictures("mark", [])
         check("logo-light" in said, "a picture brought in from the web is taken by its name", said)
+        said = await tl.template_pictures(None, [], None, ["upload1", "mark"])
+        with open(f.manifest, encoding="utf-8") as fh:
+            imgs = json.load(fh)["images"]
+        check(
+            '"logo-2-light"' in said
+            and all(
+                os.path.exists(f.path(*imgs[k].split("/")))
+                for k in ("logo-1", "logo-1-light", "logo-2", "logo-2-light")
+            ),
+            "several logos (co-hosts) each made readable on dark and light, in order",
+            said,
+        )
         for name in ("sp-ada", "nope"):
             try:
                 await tl.template_pictures(name, [])
@@ -415,6 +562,51 @@ async def main():
         with open(f.path("content.json"), "w", encoding="utf-8") as fh:
             json.dump(remade, fh)
         check(templates.leftovers(f) == [], "a film remade whole has nothing left over")
+        # a word of the sample the film says for itself (the same city) is listed in "_own"; the
+        # sample's identity never is, whatever the list says
+        same = dict(remade, event=dict(remade["event"], city="SAMPLEVILLE"))
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(same, fh)
+        check(templates.leftovers(f) == ["SAMPLEVILLE"], "a sample word kept is a leftover")
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(dict(same, _own=["Sampleville", "SAMPLE FEST"]), fh)
+        check(
+            templates.leftovers(f) == [],
+            'a sample word the film lists in "_own" is its own',
+            templates.leftovers(f),
+        )
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            ev = dict(same["event"], name="SAMPLE FEST")
+            json.dump(dict(same, event=ev, _own=["SAMPLEVILLE", "SAMPLE FEST"]), fh)
+        check(
+            templates.leftovers(f) == ["SAMPLE FEST"],
+            'the identity of the sample is never freed by "_own"',
+            templates.leftovers(f),
+        )
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(remade, fh)
+        # a picture the film's data names (not its code) is drawn: it stays in the manifest
+        with open(f.manifest, encoding="utf-8") as fh:
+            mm = json.load(fh)
+        before = dict(mm["images"])
+        mm["images"].update(web_hall="images/logo.png", web_spare="images/logo.png")
+        with open(f.manifest, "w", encoding="utf-8") as fh:
+            json.dump(mm, fh)
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(dict(remade, hero={"img": "web_hall"}), fh)
+        gone = agent.drop_unused_uploads(f)
+        check(
+            "web_spare" in gone and "web_hall" not in gone and "upload2" not in gone,
+            "a picture only the film's content names stays; one nothing names leaves",
+            gone,
+        )
+        with open(f.manifest, encoding="utf-8") as fh:
+            mm = json.load(fh)
+        mm["images"] = before
+        with open(f.manifest, "w", encoding="utf-8") as fh:
+            json.dump(mm, fh)
+        with open(f.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(remade, fh)
         # the sample's own picture key, made the person's own (template_pictures names a logo
         # "logo" too): theirs, not a leftover
         with open(f.manifest, encoding="utf-8") as fh:
@@ -480,20 +672,326 @@ async def main():
             j,
         )
 
-        # ---- the pictures a plain film may take are still 6
-        fresh = [await up(jpg(300, 300, (i, 50, 50)), "image/jpeg") for i in range(7)]
+        # ---- the pictures a plain film may take are 9
+        fresh = [await up(jpg(300, 300, (i, 50, 50)), "image/jpeg") for i in range(10)]
         try:
             await uploads.take("u:alice", fresh)
             why = ""
         except uploads.UploadError as e:
             why = str(e.body())
-        check("Up to 6" in why, "a plain film still takes at most 6 pictures", why)
+        check("Up to 9" in why, "a plain film takes at most 9 pictures", why)
         try:
-            await uploads.take("u:alice", fresh, 9)
+            await uploads.take("u:alice", fresh, 10)
             took = True
         except uploads.UploadError:
             took = False
         check(took, "a template's own cap lets it take more")
+
+        # ---- a route template: data beside the content (route.json), and assets every film keeps
+        src2 = route_fixture()
+        spec2 = dict(SPEC, title="Test ride", caps=["routes"], frames=["16:9"], assets=["bike"])
+        got2 = sorted(rel for _, rel in templates.plan(src2, spec2))
+        check(
+            "route.sample.json" in got2
+            and "sample/route_map.jpg" in got2
+            and "assets/bike.png" in got2
+            and "sample/bike.png" not in got2,
+            "a version takes the route as a sample of its own, its map, and the assets apart",
+            got2,
+        )
+        templates.make(src2, "t-test-ride", spec2)
+        templates.set_status("t-test-ride", 1, "live")
+        t3 = templates.load("t-test-ride")
+        check(
+            t3.get("data") == ["route"]
+            and t3.get("assets") == ["bike"]
+            and t3["manifest"]["data"]
+            == {"content": "content.sample.json", "route": "route.sample.json"},
+            "the version knows its data and its assets",
+            (t3.get("data"), t3.get("assets"), t3["manifest"].get("data")),
+        )
+        r = await c.post(
+            "/api/films",
+            json={"template": {"id": "t-test-ride"}, "prompt": "A Saturday ride in Lviv"},
+            headers=local,
+        )
+        f4 = Film.open((await r.json()).get("id"))
+        with open(f4.manifest, encoding="utf-8") as fh:
+            m4 = json.load(fh)
+        check(
+            m4["data"] == {"content": "content.json", "route": "route.json"}
+            and os.path.exists(f4.path("route.json"))
+            and m4["images"].get("bike") == "template/assets/bike.png"
+            and os.path.exists(f4.path("template", "assets", "bike.png"))
+            and m4["images"].get("route_map") == "template/sample/route_map.jpg",
+            "a film from it gets the route, the sample's map and the assets",
+            (m4.get("data"), m4.get("images")),
+        )
+        check("routes" in f4.caps, "and the routes capability: the route tool", f4.caps)
+        left4 = templates.leftovers(f4)
+        check(
+            "the picture route_map" in left4 and "the picture bike" not in left4,
+            "the sample's map is a leftover until a route of their own; an asset never is",
+            left4,
+        )
+        with open(f4.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump({"event": {"name": "LVIV RIDE"}, "kit": {"image": "bike"}}, fh)
+        m4["images"]["route_map"] = "images/route_map.jpg"
+        with open(f4.manifest, "w", encoding="utf-8") as fh:
+            json.dump(m4, fh)
+        check(
+            templates.leftovers(f4) == [],
+            "a route of their own, the asset kept: nothing left over",
+            templates.leftovers(f4),
+        )
+        tl4 = Tools(f4, server.SCHED, lambda ev: None)
+        said = await tl4.template_pictures(None, [], "https://example.com/ride?x=1")
+        import cv2  # noqa: PLC0415
+
+        qr = cv2.imread(f4.path("images", "qr.png"))
+        check(
+            '"qr"' in said
+            and cv2.QRCodeDetector().detectAndDecode(qr)[0] == "https://example.com/ride?x=1",
+            "a QR code of their link, read back",
+            said,
+        )
+        try:
+            await tl4.template_pictures(None, [], "x")
+            refused = False
+        except ToolError:
+            refused = True
+        check(refused, "a QR code of nothing is refused")
+
+        # ---- the map tool (every film's): the real map of an address, or no map at all -- never
+        # the sample's, never a made-up one. place-map.py is stood in for: what it prints, and how
+        # it refuses a place that is not on the map ("no map:")
+        real_script = tl4._script
+
+        async def mapped(kind, script, args, **k):
+            out_img, out_data = (
+                args[args.index("--out-image") + 1],
+                args[args.index("--out-data") + 1],
+            )
+            os.makedirs(os.path.dirname(out_img), exist_ok=True)
+            with open(out_img, "wb") as fh:
+                fh.write(b"jpeg")
+            with open(out_data, "w", encoding="utf-8") as fh:
+                json.dump({"image": "place_map", "pin": {"u": 0.5, "v": 0.5}}, fh)
+            got = {
+                "map": "place_map.jpg, 4001 x 4001 px, 0.50 m a pixel, 1000 m from the pin to each edge",
+                "found": "12, Oak Lane, Lviv",
+                "how": "the address itself is on OpenStreetMap: the pin is the house",
+                "pin": [0.5, 0.5],
+                "street": "Oak Lane",
+                "streets": ["Oak Lane", "Elm Street"],
+                "areas": ["Founders Park (green)"],
+            }
+            return ["place-map --film ran in 1 s", json.dumps(got)]
+
+        tl4._script = mapped
+        said = await tl4.map("12 Oak Lane, Lviv", tint="#235aa6")
+        with open(f4.manifest, encoding="utf-8") as fh:
+            m5 = json.load(fh)
+        with open(f4.path("temp", "place-spec.json"), encoding="utf-8") as fh:
+            asked = json.load(fh)
+        check(
+            m5["images"].get("place_map") == "images/place_map.jpg"
+            and m5["data"].get("place") == "place.json"
+            and "SK.map" in said
+            and "Oak Lane" in said
+            and "the pin is the house" in said
+            and asked == {"at": "12 Oak Lane, Lviv", "image": "place_map", "tint": "#235aa6"},
+            "the map tool: the real map is the film's picture and data, and Claude is told how exactly",
+            (m5.get("images"), m5.get("data"), said, asked),
+        )
+
+        async def unmapped(kind, script, args, **k):
+            raise ToolError("found nothing\nno map: '9 Nowhere Court' is not on OpenStreetMap.")
+
+        m5["images"]["place_map"] = (
+            "template/sample/place_map.jpg"  # as a template's sample seeds it
+        )
+        with open(f4.manifest, "w", encoding="utf-8") as fh:
+            json.dump(m5, fh)
+        tl4._script = unmapped
+        said = await tl4.map("9 Nowhere Court, Lviv")
+        with open(f4.manifest, encoding="utf-8") as fh:
+            m5 = json.load(fh)
+        with open(f4.path("place.json"), encoding="utf-8") as fh:
+            none = json.load(fh)
+        check(
+            said.startswith("No map:")
+            and "in type" in said
+            and "place_map" not in m5["images"]
+            and m5["data"].get("place") == "place.json"
+            and none == {"none": "'9 Nowhere Court' is not on OpenStreetMap."},
+            "a place that is not on the map: the film has none, not the sample's, and says why",
+            (said, m5.get("images"), none),
+        )
+
+        async def broken(kind, script, args, **k):
+            raise ToolError("Overpass did not answer: timed out")
+
+        tl4._script = broken
+        try:
+            await tl4.map("12 Oak Lane, Lviv")
+            raised = False
+        except ToolError:
+            raised = True
+        check(raised, "a map that failed for another reason is an error, to try again")
+        try:
+            await tl4.map(None)
+            raised = False
+        except ToolError:
+            raised = True
+        check(raised, "a map of nowhere in particular is refused")
+        tl4._script = real_script
+
+        # ---- a narrated template: its script, its word times, its cast and its sound as files
+        src3 = party_fixture()
+        spec3 = dict(
+            SPEC,
+            title="Test party",
+            caps=[],
+            frames=["16:9"],
+            narration=True,
+            sound="files",
+            watch=["child.name"],
+            identity=["venue.name"],
+            generic=[],
+        )
+        got3 = sorted(rel for _, rel in templates.plan(src3, spec3))
+        check(
+            {"vo.sample.json", "timeline.sample.json", "score.json", "sfx.json", "cast/kid.js"}
+            <= set(got3),
+            "a narrated version takes the script, the word times, the sound files and the cast",
+            got3,
+        )
+        templates.make(src3, "t-test-party", spec3)
+        templates.set_status("t-test-party", 1, "live")
+        t5 = templates.load("t-test-party")
+        with open(os.path.join(t5["_dir"], "vo.sample.json"), encoding="utf-8") as fh:
+            vo5 = json.load(fh)
+        with open(os.path.join(t5["_dir"], "timeline.sample.json"), encoding="utf-8") as fh:
+            tl5 = json.load(fh)
+        check(
+            t5["narration"] is True
+            and t5["sound"] == "files"
+            and "voice" not in vo5
+            and "tts" not in vo5
+            and vo5["lines"][1]["text"] == "It's Ted! Come to the party!"
+            and "file" not in tl5["lines"][0]
+            and t5["manifest"]["audio"]["vo_timeline"] == "timeline.sample.json"
+            and t5["manifest"]["cast"] == "cast",
+            "the version keeps the narration, never the author's own voice or its take files",
+            (vo5, tl5["lines"][0], t5["manifest"].get("audio")),
+        )
+        check(
+            templates.public(t5)["narration"] is True and "brief" not in templates.public(t5),
+            "anyone sees it is narrated",
+        )
+        r = await c.post(
+            "/api/films",
+            json={"template": {"id": "t-test-party"}, "prompt": "Mia is turning 6! Pool party"},
+            headers=local,
+        )
+        f5 = Film.open((await r.json()).get("id"))
+        with open(f5.manifest, encoding="utf-8") as fh:
+            m5 = json.load(fh)
+        with open(f5.path("vo.json"), encoding="utf-8") as fh:
+            v5 = json.load(fh)
+        check(
+            f5.record().get("narration") is not False
+            and f5.record()["template"]["sound"] == "files"
+            and m5.get("vo") == "vo.json"
+            and "vo_timeline" not in m5["audio"]
+            and m5.get("captions") == {"max_words": 8}
+            and v5["lines"][0]["text"] == "Hey, friends!"
+            and v5["tts"] == films.VO_PINNED["tts"]
+            and os.path.exists(f5.path("cast", "kid.js"))
+            and os.path.exists(f5.path("sfx.json"))
+            and os.path.exists(f5.path("template", "timeline.sample.json"))
+            and "vo.json" in f5.editable(),
+            "a film from it is narrated: the sample's script pinned to the studio's voice, its "
+            "cast, its sound, captions, and the sample's word times to move its cues from",
+            (f5.record().get("narration"), m5.get("vo"), m5.get("audio"), v5),
+        )
+        first = templates.ask(f5)
+        check(
+            "record it with the voice tool" in first
+            and "No narration" not in first
+            and "never write those two by hand" not in first,
+            "its first message asks for the lines rewritten and recorded, the sound kept",
+            first[:400],
+        )
+        check(
+            templates.sample_timeline(f5) == f5.path("template", "timeline.sample.json"),
+            "before it records, its cues sit on the sample's word times",
+        )
+        left5 = templates.leftovers(f5)
+        check(
+            "Ted" in left5 and "Bouncy Castle Club" in left5,
+            "the sample's short name and venue are caught in its narration",
+            left5,
+        )
+        content5 = {"child": {"name": "Mia", "photo": "upload1"}, "venue": {"name": "our house"}}
+        with open(f5.path("content.json"), "w", encoding="utf-8") as fh:
+            json.dump(content5, fh)
+        v5["lines"] = [{"text": "Hey, friends!"}, {"text": "It's Mia! Come to the party!"}]
+        with open(f5.path("vo.json"), "w", encoding="utf-8") as fh:
+            json.dump(v5, fh)
+        os.makedirs(f5.path("audio", "vo"), exist_ok=True)
+        with open(f5.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as fh:
+            json.dump({"lines": [dict(L, text="It's Ted!") for L in tl5["lines"]]}, fh)
+        check(
+            templates.leftovers(f5) == ["Ted"],
+            "a line rewritten but not recorded again still says the sample's name",
+            templates.leftovers(f5),
+        )
+        tl_new = {
+            "duration": 5.0,
+            "lines": [
+                dict(tl5["lines"][0], start=0.5, end=1.5),
+                {
+                    "i": 1,
+                    "text": "It's Mia! Come to the party!",
+                    "start": 2.5,
+                    "end": 4.0,
+                    "words": [],
+                },
+            ],
+        }
+        with open(f5.path("audio", "vo", "timeline.json"), "w", encoding="utf-8") as fh:
+            json.dump(tl_new, fh)
+        check(
+            templates.leftovers(f5) == [],
+            "the person's own name, said and recorded: nothing left over",
+            templates.leftovers(f5),
+        )
+        import subprocess  # noqa: PLC0415
+
+        before = f5.path("template", "timeline.sample.json")
+        r5 = subprocess.run(
+            [
+                sys.executable,
+                os.path.join(films.KIT, "scripts", "vo-retime.py"),
+                "--manifest",
+                f5.manifest,
+                "--before",
+                before,
+                "--by-line",
+                "--write",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        with open(f5.path("sfx.json"), encoding="utf-8") as fh:
+            cues = json.load(fh)
+        check(
+            r5.returncode == 0 and abs(cues[0]["t"] - 2.5) < 0.01,
+            "its cue on line 1 moves with line 1, rewritten and said later",
+            (r5.stdout[-300:], r5.stderr[-300:], cues),
+        )
 
     # ---- the health check: a live version drawn again by this release
     t2 = templates.load("t-test-promo", 2)

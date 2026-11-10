@@ -83,6 +83,7 @@ import _env  # noqa: E402 -- re-execs into .venv; before any 3rd-party import
 
 import _encode  # noqa: E402
 import _heads  # noqa: E402
+import _actor  # noqa: E402
 import _project  # noqa: E402
 import _sketch  # noqa: E402
 
@@ -131,7 +132,7 @@ def vo_timeline(m):
         return {"lines": []}
     with open(p, encoding="utf-8") as f:
         tl = json.load(f)
-    if m.get("heads"):  # talking heads: each line's speaker and the mouth its audio moves
+    if m.get("heads") or m.get("actors"):  # each line's speaker and the mouth its audio moves
         return {"lines": _heads.voice_lines(m, tl)}
     return {
         "lines": [{"start": L["start"], "end": L["end"], "words": L["words"]} for L in tl["lines"]]
@@ -185,6 +186,9 @@ def module_scripts(m):
     names = list(m.get("modules") or [])
     if m.get("heads") and "heads" not in names:  # rigs need the module that draws them
         names.append("heads")
+    for need in ("heads", "actors") if m.get("actors") else ():  # actors talk with heads' SK.talk
+        if need not in names:
+            names.append(need)
     for name in names:
         _sketch.safe_name(name, "module")
         for d in (m["_engine"], SKETCH):
@@ -198,6 +202,9 @@ def module_scripts(m):
     rigs = _heads.rigs_script(m)  # the talking heads' rigs; nothing for a film without
     if rigs:
         out.append(rigs)
+    packs = _actor.film_script(m, _sketch.rel)  # the actors' packs (actor-pack.py)
+    if packs:
+        out.append(packs)
     return "\n".join(out)
 
 
@@ -330,6 +337,14 @@ def bundle(m, audio=True, preview=None):
             film = read_text(_sketch.rel(m, p)) + "\n;\n" + film
         for p in tail.get("scripts", []):  # a closing drawn after the film (it lengthens SK._film)
             film += "\n;\n" + read_text(_sketch.rel(m, p))
+        if m.get("_probe"):  # --probe: the kit's own sketch/probe.js, ahead of everything (it wraps
+            # the cast before the film takes its functions), never a copy in the film's folder
+            film = (
+                "window.__PROBE__ = %s;\n" % json.dumps({"step": float(m["_probe"])})
+                + read_text(os.path.join(SKETCH, "probe.js"))
+                + "\n;\n"
+                + film
+            )
     mp3 = preview["audio"] if preview else os.path.join(m["_audio"], "final.mp3")
     src = "data:audio/mpeg;base64," + b64(mp3) if audio and mp3 and os.path.exists(mp3) else ""
     extra = ""
@@ -364,6 +379,8 @@ def bundle(m, audio=True, preview=None):
         "__SCENES__": "" if bare else scene_scripts(m),
         "__AUDIO__": src,
         "__VO__": json.dumps(vo_timeline(m)),
+        # the film's length as the manifest has it: SK.film takes it over film.js's own figure
+        "__LENGTH__": json.dumps(float(m["duration"])),
         "__DATA__": json.dumps(film_data(m), ensure_ascii=False),
         "__IMAGES__": json.dumps(
             {
@@ -372,6 +389,7 @@ def bundle(m, audio=True, preview=None):
                     **m.get("images", {}),
                     **tail.get("images", {}),
                     **(_heads.images(m) if m.get("heads") else {}),
+                    **(_actor.film_images(m, _sketch.rel) if m.get("actors") else {}),
                 }.items()
             }
             if not bare
@@ -533,6 +551,9 @@ class Session:
             "--user-data-dir=" + prof,
             "--window-size=%d,%d" % self.size,
         ]
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            # Chromium will not start as root with its sandbox on (a cloud container, a CI box)
+            cmd.append("--no-sandbox")
         if os.environ.get("SKETCH_RENDER_OFFLINE") == "1":
             # no network at all: every request that is not to this page's own loopback server
             # goes to a proxy that is not there, names never resolve, and WebRTC stays off
@@ -957,6 +978,14 @@ def main():
         "--into", help="with --stills: the folder for them (relative to the manifest's)"
     )
     ap.add_argument(
+        "--probe",
+        type=float,
+        metavar="STEP",
+        help="with --stills: afterwards play the whole film once more every STEP seconds without "
+        "painting it, and save what each cast member drew, where and under what transform, as "
+        "report.json beside the stills (sketch/probe.js; studio/motion.py reads it)",
+    )
+    ap.add_argument(
         "--sheet",
         action="store_true",
         help="with --stills: also tile them into outputs/review/sheet.png",
@@ -1131,7 +1160,10 @@ def main():
             ) as f:
                 f.write(artifact_flavour(page))
             print("  %s (%.1f MB)" % (os.path.relpath(out_html, _env.ROOT), len(page) / 1e6))
+        if args.stills and args.probe:  # only the page the stills are drawn in, never the player
+            m["_probe"] = args.probe
         light = bundle(m, audio=False)  # the renderer needs no soundtrack inside the page
+        m.pop("_probe", None)
 
         if args.stills:
             with st("stills"):

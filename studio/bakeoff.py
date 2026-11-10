@@ -231,6 +231,13 @@ def worker(spec_path):
             auth=spec["auth"],
             listed=False,
             **({"attachments": pictures(spec["attach"][:6])} if spec.get("attach") else {}),
+            # a set's frame ("frame": "9:16" on the set or a prompt): a Short, as the site asks
+            # for one (frame and captions together, lib/mcp/tools.js frameInput)
+            **(
+                {"frame": spec["frame"], "captions": spec["frame"] == "9:16"}
+                if spec.get("frame") and spec["frame"] != "16:9"
+                else {}
+            ),
         )
     print("film %s" % film.dir, flush=True)
     events = os.path.join(spec["home"], "events.log")
@@ -375,6 +382,7 @@ def run_arm(args, s, root, repo):
             "dirty": dirty,
             "mode": args.mode,
             **({"templates": os.path.abspath(args.templates)} if args.templates else {}),
+            **({"frame": p.get("frame") or s["frame"]} if p.get("frame") or s.get("frame") else {}),
         }
 
         def here(x):

@@ -3,7 +3,7 @@
 # repo on the VM, then move the VM's checkout to it. The VM holds no GitHub credentials at all
 # (and kitcut-hq/kitcut has deploy keys disabled): code only ever arrives from here.
 #
-#   bash studio/deploy/push.sh <vm> [branch] [commit]   default branch: studio-poc
+#   bash studio/deploy/push.sh <vm> [branch] [commit]   default branch: main
 #
 # With a commit, that commit is what the VM's branch becomes (ops.sh ship passes the one it ships);
 # without, this clone's own branch -- which in a worktree, or any clone that has not pulled, is an
@@ -15,7 +15,7 @@ unset MSYS_NO_PATHCONV  # git (a Windows exe) must still get /c/... paths transl
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_LOCAL="$(cd "$HERE/../.." && pwd)"
 VM="${1:?vm name}"
-BRANCH="${2:-studio-poc}"
+BRANCH="${2:-main}"
 REV="${3:-refs/heads/$BRANCH}"
 KEY="${KITCUT_SSH_KEY:-$HOME/.ssh/kitcut-studio}"
 vm() { bash "$HERE/vm.sh" "$@"; }

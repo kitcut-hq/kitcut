@@ -11,7 +11,8 @@ environment variables.
 Lifetime. On Windows every step runs in a Job Object of its own: killing it (a timeout, a
 cancelled film) takes down the step and everything it started -- browsers, ffmpeg -- in one call,
 and since the job is set to die with its last handle, a server that is killed outright takes all
-of them with it. A step may use at most STUDIO_FILM_MEM_GB (12) of memory. On Linux under
+of them with it. A step may use at most STUDIO_FILM_MEM_GB of memory (when it is not set: 12 GB,
+and never more than two fifths of the machine's -- step_mem_gb, KI-066). On Linux under
 systemd (the Azure VM: studio/deploy/kitcut-studio@.service, Delegate=yes) the same is a cgroup v2
 per step: memory.max is the cap, cgroup.kill the one call, and stopping the service takes every
 step's cgroup with it. Anywhere else the step leads a process group of its own and the group is
@@ -19,12 +20,15 @@ killed, with no memory cap.
 """
 
 import os
+import re
 import sys
+import json
 import time
 import signal
 import itertools
 import asyncio
 import subprocess
+from datetime import datetime
 
 SECRETS = {}
 # settings from the .env that are not secret, and stay in the environment
@@ -32,10 +36,14 @@ CONFIG = ("STUDIO_", "HTML2IMG_BROWSER", "VIDEDIT_ENCODER", "VIDEDIT_WEBCODECS",
 # a key with one of these names is a secret wherever it comes from (the .env or the shell)
 KNOWN_SECRETS = (
     "ANTHROPIC_API_KEY",
+    # a key whose month of credit is spent first (apikey.py)
+    "ANTHROPIC_CREDIT_KEY",
     "CLAUDE_CODE_OAUTH_TOKEN",
     "MONGODB_URI",
     "STUDIO_TOKEN",
     "STUDIO_MEDIA_SAS",
+    "STUDIO_R2_KEY_ID",
+    "STUDIO_R2_SECRET",
     "GOOGLE_SERVICE_ACCOUNT_KEY",
     "GEMINI_API_KEY",
     "OPENROUTER_API_KEY",
@@ -276,16 +284,94 @@ def _rmdir_cgroup(path, tries=20):
     return False
 
 
+def _read(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read()
+    except OSError:
+        return ""
+
+
+FILM_ID = re.compile(r"studio-\d{8}-\d{6}-([a-z0-9]{6})")
+
+
+def step_label(argv, cwd):
+    """(film, step) for a step's command: the film's short id (its folder's last six letters) and
+    what runs -- a script's name and its first option (`sketch-render --stills`), else the
+    program's. Names the step's cgroup, so the machine's sampler (deploy/usage.py) can say whose
+    it is, and its line in the steps log."""
+    m = FILM_ID.search(os.path.basename(os.path.normpath(cwd or "")))
+    film = m.group(1) if m else os.path.basename(os.path.normpath(cwd or "")) or "-"
+    args = [str(a) for a in argv]
+    i = next((i for i, a in enumerate(args) if a.endswith((".py", ".js", ".mjs"))), 0)
+    what = os.path.splitext(os.path.basename(args[i]))[0] if args else "?"
+    opt = next((a for a in args[i + 1 :] if a.startswith("--") and a != "--manifest"), "")
+    step = (what + (" " + opt if opt else "")).strip()
+    return film, step
+
+
+def _slug(s):
+    return re.sub(r"[^a-z0-9.]+", "-", s.lower()).strip("-")[:48]
+
+
+def record_step(film, step, wall, usage, code):
+    """One line per finished step in STUDIO_HOME/usage/steps-<day>.jsonl: who (the film, the
+    step), how long, the CPU it used and its memory peak, exactly -- read off the step's own
+    cgroup (Job Object on Windows) just before it goes. `ops.sh usage` sums them. Never raises: a
+    film is not stopped by its own bookkeeping."""
+    home = os.environ.get("STUDIO_HOME")
+    if not home:
+        return
+    try:
+        d = os.path.join(home, "usage")
+        os.makedirs(d, exist_ok=True)
+        now = datetime.now().astimezone()
+        row = {"t": now.isoformat(timespec="seconds"), "film": film, "step": step}
+        row.update(wall_s=round(wall, 1), code=code, **usage)
+        with open(
+            os.path.join(d, now.strftime("steps-%Y-%m-%d.jsonl")), "a", encoding="utf-8"
+        ) as f:
+            f.write(json.dumps(row) + "\n")
+    except Exception as e:  # noqa: BLE001
+        print("procs: step not recorded (%s)" % e, file=sys.stderr)
+
+
+STEP_MEM_MAX_GB = 12.0  # what a step may take on a machine big enough for it
+STEP_MEM_SHARE = 0.4  # ... and never more than this much of the machine it runs on
+
+
+def step_mem_gb(total_gb=None):
+    """What one step of a film may take when STUDIO_FILM_MEM_GB does not say: 12 GB, but no more
+    than two fifths of the machine's memory -- so two films' steps at once still leave room for
+    the server, sshd and the tunnel. The cap was a flat 12 from when the studio's VM had 32 GB; it
+    stayed 12 when the VM went to 16 (nobody carries a setting across a resize), and on 2026-10-12
+    a narration step that ran away to 12.5 GB froze the whole machine before the cap could kill
+    it (KI-066). A cap that depends on the machine is read off the machine."""
+    if total_gb is None:
+        try:
+            total_gb = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / (1 << 30)
+        except (
+            AttributeError,
+            ValueError,
+            OSError,
+        ):  # Windows: the laptop, where nothing is capped
+            return STEP_MEM_MAX_GB
+    return max(1.0, min(STEP_MEM_MAX_GB, round(total_gb * STEP_MEM_SHARE, 1)))
+
+
 class Job:
     """A step's process and everything it starts, killed as one."""
 
-    def __init__(self, mem_gb=None):
+    def __init__(self, mem_gb=None, label=None):
         self.h, self.pids, self.cg = None, [], None
-        mem = mem_gb or float(os.environ.get("STUDIO_FILM_MEM_GB") or 12)
+        mem = mem_gb or float(os.environ.get("STUDIO_FILM_MEM_GB") or step_mem_gb())
         if os.name != "nt":
             root = cgroup_root()
             if root:
-                self.cg = os.path.join(root, "step-%d-%d" % (os.getpid(), next(_STEPS)))
+                name = "step-%d-%d" % (os.getpid(), next(_STEPS))
+                if label:
+                    name += "-" + _slug(label)
+                self.cg = os.path.join(root, name)
                 os.makedirs(self.cg)
                 _write(os.path.join(self.cg, "memory.max"), int(mem * (1 << 30)))
                 # over the cap the whole step dies, as a Job Object's would, not one random child
@@ -324,6 +410,42 @@ class Job:
     def enter(self):
         """preexec_fn: the child joins its cgroup before it can start anything of its own."""
         _write(os.path.join(self.cg, "cgroup.procs"), os.getpid())
+
+    def usage(self):
+        """What the step used so far: CPU seconds, its memory peak (MB) and how often the cap
+        killed something in it. Empty where nothing measures it (a dev server's process group)."""
+        try:
+            if self.cg is not None:
+                cpu = re.search(
+                    r"^usage_usec (\d+)", _read(os.path.join(self.cg, "cpu.stat")), re.M
+                )
+                peak = _read(os.path.join(self.cg, "memory.peak")).strip()
+                oom = re.search(
+                    r"^oom_kill (\d+)", _read(os.path.join(self.cg, "memory.events")), re.M
+                )
+                return {
+                    "cpu_s": round(int(cpu.group(1)) / 1e6, 1) if cpu else None,
+                    "peak_mb": round(int(peak) / 2**20) if peak.isdigit() else None,
+                    "oom": int(oom.group(1)) if oom else 0,
+                }
+            if self.h is not None:
+                import win32job
+
+                acc = win32job.QueryInformationJobObject(
+                    self.h, win32job.JobObjectBasicAccountingInformation
+                )
+                ext = win32job.QueryInformationJobObject(
+                    self.h, win32job.JobObjectExtendedLimitInformation
+                )
+                cpu = (int(acc["TotalUserTime"]) + int(acc["TotalKernelTime"])) / 1e7
+                return {
+                    "cpu_s": round(cpu, 1),
+                    "peak_mb": round(int(ext["PeakJobMemoryUsed"]) / 2**20),
+                    "oom": 0,
+                }
+        except Exception:  # noqa: BLE001 -- bookkeeping, never the step's trouble
+            pass
+        return {}
 
     def kill(self):
         if self.cg is not None:
@@ -364,8 +486,11 @@ class StepTimeout(Exception):
 async def run(argv, cwd, env, timeout, on_line=None, jobs=None):
     """Run one step to the end. Returns (exit code, the last lines it printed). Raises
     StepTimeout past `timeout` seconds; a cancelled caller kills it too. `jobs` (a set) holds
-    the live ones, so a film can kill whatever it has running."""
-    job = Job()
+    the live ones, so a film can kill whatever it has running. Every step leaves a line in the
+    steps log (record_step): its film, what it was, its CPU seconds and memory peak."""
+    film, step = step_label(argv, cwd)
+    job = Job(label="%s-%s" % (film, step))
+    t0, code = time.monotonic(), None
     if os.name == "nt":
         kw = {"creationflags": subprocess.CREATE_NO_WINDOW | SUSPENDED}
     else:
@@ -414,6 +539,7 @@ async def run(argv, cwd, env, timeout, on_line=None, jobs=None):
     finally:
         if jobs is not None:
             jobs.discard(job)
+        record_step(film, step, time.monotonic() - t0, job.usage(), code)
         job.close()
     return code, tail
 

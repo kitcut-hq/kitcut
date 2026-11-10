@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # Install the studio's systemd units on this machine (run on the VM, as the checkout's owner): the
 # server (a template, one instance per release), the unit that starts the current instance at
-# boot, the tunnel, and the daily Claude login check (a service and its timer) -- plus the one
+# boot, the tunnel, the daily Claude login check (a service and its timer), the usage sampler
+# (kitcut-usage.service: who uses the CPU and memory), the hourly removal of finished films'
+# working pictures (kitcut-prune, a service and its timer) and the mirror of the studio's home to
+# R2 (kitcut-backup every 15 minutes, kitcut-backup-full nightly) and Remote Control
+# (kitcut-claude-rc: `claude rc` in tmux, enabled only by `ops.sh rc install`) and the ship that
+# follows GitHub's main (kitcut-autoship: a service, the path unit its hook starts it by and
+# a timer, enabled only by `ops.sh autoship on`) -- plus the one
 # kernel setting two servers on one port need.
 #
 #   bash studio/deploy/install.sh [--home /srv/kitcut/studio] [--dry-run]
@@ -41,7 +47,10 @@ put() {  # <path> <body>: a root-owned file, shown instead in a dry run
 run mkdir -p "$HOME_DIR"
 run chmod +x "$REPO"/studio/deploy/*.sh "$REPO"/studio/serve.sh
 for unit in kitcut-studio@.service kitcut-studio-boot.service kitcut-tunnel.service \
-  kitcut-login-check.service kitcut-login-check.timer; do
+  kitcut-login-check.service kitcut-login-check.timer kitcut-usage.service \
+  kitcut-prune.service kitcut-prune.timer kitcut-backup.service kitcut-backup.timer \
+  kitcut-backup-full.service kitcut-backup-full.timer kitcut-filmgit.service kitcut-filmgit.timer \
+  kitcut-claude-rc.service kitcut-autoship.service kitcut-autoship.timer kitcut-autoship.path; do
   body="$(sed -e "s#@REPO@#$REPO#g" -e "s#@HOME@#$HOME_DIR#g" -e "s#@USER@#$USER_NAME#g" \
     "$REPO/studio/deploy/$unit")"
   put "/etc/systemd/system/$unit" "$body"

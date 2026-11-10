@@ -14,6 +14,15 @@ the assistants' film player) names one media host instead of a tunnel whose name
                                             film online without one
     python studio/media.py --download-backfill [--dry-run]  mark the master of every film online
                                             as a download (below)
+    python studio/media.py --move-from <old base> --blobs <file> [--dry-run]
+                                            copy every file named in <file> (one per line, as
+                                            `az storage blob list --query [].name -o tsv` prints
+                                            them) from the old place to this one, keeping its
+                                            name, type and download name; one already here at
+                                            the same size is skipped, so it can be run again
+    python studio/media.py --move-records <old base> [--dry-run]
+                                            then point every film's record at this place: each
+                                            URL under the old base, wherever in the record
 
 Every film gets a web copy (make_web, WEB below): the master re-encoded at 5 Mbps, which is what
 every page plays; the master stays for downloads and YouTube. The master is stored with
@@ -27,7 +36,14 @@ and the cache again).
 Where: STUDIO_MEDIA_BASE, the container's URL (https://kitcutst.blob.core.windows.net/films,
 anonymous read of blobs), and STUDIO_MEDIA_SAS, a container SAS allowing create, write and delete
 (a secret: the studio's .env). Without both nothing is copied, and films play from the tunnel as
-before. Each file is one Put Blob call, <id>/<name>; the film's record keeps the URLs as "media".
+before. Or Cloudflare R2, which charges nothing for downloads (r2 below): STUDIO_MEDIA_BASE is
+then the bucket's public address and folder (https://media.kitcut.ai/films), STUDIO_R2_ENDPOINT
+its S3 address and STUDIO_R2_KEY_ID / STUDIO_R2_SECRET an R2 token allowed to write objects; the
+three win over the SAS when all are set. A film's record keeps the URLs it was given, so films
+copied to one place still play after new ones go to the other. After a move
+(--move-from, --move-records) STUDIO_MEDIA_OLD_BASE names the place left behind: nothing is
+written there, but --delete (and a film deleted for good) removes a film's files there too. Each file is one upload,
+<id>/<name>; the film's record keeps the URLs as "media".
 The share page's two pictures (share.jpg, thumb.jpg: make_share, publish_share) go up the same
 way when share.py has made them, as share-<v>.jpg and thumb-<v>.jpg (<v> a hash of their bytes,
 so a remake gets a new URL); their URLs are kept in the record's "share".
@@ -87,21 +103,133 @@ def sas():
     return procs.secret("STUDIO_MEDIA_SAS").lstrip("?")
 
 
+def r2():
+    """(endpoint, key id, secret) when the copy goes to Cloudflare R2 instead of Azure: the
+    bucket's S3 address (STUDIO_R2_ENDPOINT, https://<account>.r2.cloudflarestorage.com/<bucket>)
+    and an R2 token's two halves (STUDIO_R2_KEY_ID, STUDIO_R2_SECRET). STUDIO_MEDIA_BASE is then
+    the bucket's public address, and its path the folder the files go in (.../films)."""
+    end = (os.environ.get("STUDIO_R2_ENDPOINT") or "").strip().rstrip("/")
+    kid, sec = procs.secret("STUDIO_R2_KEY_ID"), procs.secret("STUDIO_R2_SECRET")
+    return (end, kid, sec) if end and kid and sec else None
+
+
+def old_base():
+    """Where the copies were before they moved to R2 (STUDIO_MEDIA_OLD_BASE: Azure's container,
+    still written with the SAS). Nothing is copied there any more; a film deleted for good is
+    removed there too, for as long as that place is kept -- or its old address would still play."""
+    return (os.environ.get("STUDIO_MEDIA_OLD_BASE") or "").strip().rstrip("/")
+
+
+# A finished film's videos live online, not on this disk: prune.py removes outputs/film.mp4 and
+# film_web.mp4 of a film nobody has touched for a while, once their online copies are proven the
+# same size. What still reads them here asks bring_back() first (a YouTube send, a round's
+# filmstrip, a share's frame thumbnail); the files route sends the browser to the copy instead.
+LOCAL = {"film.mp4": "video", "film_web.mp4": "web"}  # file in outputs/ -> key in record["media"]
+
+
+def stored(film, name):
+    """The online copy of outputs/<name> (film.mp4, film_web.mp4) as the record names it."""
+    url = ((film.record().get("media") or {}).get(LOCAL.get(name, ""))) or ""
+    return url if url.startswith(("https://", "http://127.0.0.1:")) else None
+
+
+def bring_back(film, name="film.mp4", timeout=1800):
+    """outputs/<name> on this disk, fetched from its online copy when it is not here. The path, or
+    None when there is neither. The download lands beside the file and is renamed into place, so a
+    reader finds the whole film or none."""
+    import urllib.request
+
+    p = film.path("outputs", name)
+    if os.path.isfile(p):
+        return p
+    url = stored(film, name)
+    if not url:
+        return None
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    part = "%s.part-%d" % (p, os.getpid())
+    req = urllib.request.Request(url, headers={"User-Agent": "kitcut-studio"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r, open(part, "wb") as f:
+            want = int(r.headers.get("Content-Length") or -1)
+            while True:
+                chunk = r.read(8 << 20)
+                if not chunk:
+                    break
+                f.write(chunk)
+        if want >= 0 and os.path.getsize(part) != want:
+            raise OSError("%s came back short" % url)
+        os.replace(part, p)
+    except OSError:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        return None
+    return p
+
+
 def enabled():
-    # plain http only to this machine (test_media.py's stand-in for Azure)
-    return bool(base().startswith(("https://", "http://127.0.0.1:")) and sas())
+    # plain http only to this machine (test_media.py's stand-in for the storage)
+    return bool(base().startswith(("https://", "http://127.0.0.1:")) and (r2() or sas()))
+
+
+def _s3(method, blob, headers=None):
+    """(url, headers) of one signed S3 request to R2 for the file `blob` (AWS Signature V4,
+    region "auto"; the body is not hashed -- UNSIGNED-PAYLOAD -- so a 2 GB master is read once).
+    Every x-amz-* header is signed; the type, the cache and the disposition need not be."""
+    import hmac
+    import hashlib
+    from datetime import datetime, timezone
+    from urllib.parse import urlsplit
+
+    end, kid, sec = r2()
+    u = urlsplit(end)
+    folder = urlsplit(base()).path.strip("/")
+    key = "/".join(x for x in (u.path.strip("/"), folder, blob) if x)
+    path = "/" + quote(key, safe="/-_.~")
+    amz = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    signed = {"host": u.netloc, "x-amz-content-sha256": "UNSIGNED-PAYLOAD", "x-amz-date": amz}
+    signed |= {k.lower(): v for k, v in (headers or {}).items() if k.lower().startswith("x-amz-")}
+    names = ";".join(sorted(signed))
+    canon = "\n".join(
+        [method, path, "", "".join("%s:%s\n" % (k, signed[k].strip()) for k in sorted(signed))]
+        + [names, "UNSIGNED-PAYLOAD"]
+    )
+    scope = "%s/auto/s3/aws4_request" % amz[:8]
+    text = "\n".join(["AWS4-HMAC-SHA256", amz, scope, hashlib.sha256(canon.encode()).hexdigest()])
+    k = ("AWS4" + sec).encode()
+    for part in (amz[:8], "auto", "s3", "aws4_request"):
+        k = hmac.new(k, part.encode(), hashlib.sha256).digest()
+    sig = hmac.new(k, text.encode(), hashlib.sha256).hexdigest()
+    out = dict(headers or {})
+    out |= {"x-amz-content-sha256": "UNSIGNED-PAYLOAD", "x-amz-date": amz}
+    out["Authorization"] = "AWS4-HMAC-SHA256 Credential=%s/%s, SignedHeaders=%s, Signature=%s" % (
+        kid,
+        scope,
+        names,
+        sig,
+    )
+    return "%s://%s%s" % (u.scheme, u.netloc, path), out
+
+
+def _asis(url):
+    """The URL exactly as signed: aiohttp would otherwise encode its path its own way."""
+    from yarl import URL
+
+    return URL(url, encoded=True)
 
 
 def url_of(fid, name):
     return "%s/%s/%s" % (base(), fid, name)
 
 
-def blob_of(film, name):
+def blob_of(film, name, rev=None):
     """Where a film's file goes online: <id>/<name>, or <id>/r<n>/<name> once the film has been
-    rendered again after a hand patch (resume.py --patched sets media_rev). Its files are served
-    as immutable for a year (CACHE), so a changed film must have new names, or everyone who
-    watched it keeps the old one."""
-    rev = film.record().get("media_rev")
+    rendered again -- after a hand patch (resume.py --patched sets media_rev), or without its
+    branding (unbrand.py, which names the revision it is making as `rev` before the record has
+    it). Its files are served as immutable for a year (CACHE), so a changed film must have new
+    names, or everyone who watched it keeps the old one."""
+    rev = film.record().get("media_rev") if rev is None else rev
     return "r%d/%s" % (rev, name) if rev else name
 
 
@@ -187,6 +315,29 @@ def make_share(outputs, src_jpg):
     return out
 
 
+def make_frame_thumb(outputs, t):
+    """thumb.jpg from the film's own frame at t seconds (share.py --frame): 1280x720, the frame as
+    it is when the film is 16:9, else whole in the middle over a blurred stretch of itself.
+    share.jpg, the link preview, is left as it is. Raises MediaError when there is no such frame."""
+    from PIL import Image, ImageFilter
+
+    mp4 = os.path.join(outputs, "film.mp4")
+    src = _frame(mp4, t) if os.path.isfile(mp4) else None
+    if src is None:
+        raise MediaError("no frame at %.2f s" % t)
+    w = round(src.width * THUMB[1] / src.height)
+    if abs(w - THUMB[0]) <= 2:
+        out = src.resize(THUMB, Image.LANCZOS)
+    else:
+        out = src.resize(THUMB, Image.LANCZOS).filter(ImageFilter.GaussianBlur(24))
+        h = THUMB[1] if w < THUMB[0] else round(src.height * THUMB[0] / src.width)
+        w = min(w, THUMB[0])
+        out.paste(src.resize((w, h), Image.LANCZOS), ((THUMB[0] - w) // 2, (THUMB[1] - h) // 2))
+    path = os.path.join(outputs, "thumb.jpg")
+    _save_jpeg(out, path)
+    return path
+
+
 def share_version(outputs):
     """The share pictures' version: the first 8 hex of a hash of their bytes. It is in their blob
     names (share-<v>.jpg, thumb-<v>.jpg), so a remade picture gets a new URL -- the files go up
@@ -212,11 +363,11 @@ def share_blob(name, v):
 SHARE_BLOB = re.compile(r"^(share|thumb)(-[0-9a-f]{8})?\.jpg$")
 
 
-async def publish_share(film, timeout=300):
+async def publish_share(film, timeout=300, only=None):
     """Copy the share pictures online under versioned names (share_version): {"image": url,
-    "thumb": url} (the ones there are), or {} when copying is off. Raises when a copy is
-    refused. A remake's older copies are left where they are: a preview already posted may still
-    point at them."""
+    "thumb": url} (the ones there are; `only` names the ones to copy), or {} when copying is off.
+    Raises when a copy is refused. A remake's older copies are left where they are: a preview
+    already posted may still point at them."""
     if not enabled():
         return {}
     import aiohttp
@@ -226,7 +377,7 @@ async def publish_share(film, timeout=300):
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
         for key, name in SHARE_FILES:
             p = film.path("outputs", name)
-            if os.path.isfile(p):
+            if os.path.isfile(p) and (only is None or key in only):
                 blob = share_blob(name, v)
                 await _put(s, "%s/%s" % (film.id, blob), p, "image/jpeg")
                 urls[key] = url_of(film.id, blob)
@@ -292,14 +443,15 @@ def web_settings(film):
     return WEB | machine | {k: v for k, v in own.items() if not k.startswith("_")}
 
 
-def make_web(film):
+def make_web(film, out=None):
     """outputs/film_web.mp4: the master re-encoded to stream (WEB), its soft subtitles kept; a
     master already light enough is copied as it is. Made once (a newer copy is kept). Returns
-    its path, or None when there is no master. Raises on a failed encode."""
+    its path, or None when there is no master. Raises on a failed encode. `out`: another folder
+    holding the master (a second render of the film, beside it)."""
     import shutil
     import subprocess
 
-    out = film.path("outputs")
+    out = out or film.path("outputs")
     src, dst = os.path.join(out, "film.mp4"), os.path.join(out, "film_web.mp4")
     if not os.path.isfile(src):
         return None
@@ -351,6 +503,20 @@ def download_name(film):
 
 
 async def _put(session, blob, path, ctype, disposition=None):
+    if r2():
+        headers = {
+            "Content-Type": ctype,
+            "Cache-Control": CACHE,
+            "Content-Length": str(os.path.getsize(path)),
+        }
+        if disposition:
+            headers["Content-Disposition"] = disposition
+        url, headers = _s3("PUT", blob, headers)
+        with open(path, "rb") as f:
+            async with session.put(_asis(url), data=f, headers=headers) as r:
+                if r.status != 200:
+                    raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
+        return
     url = "%s/%s?%s" % (base(), quote(blob), sas())
     headers = {
         "x-ms-blob-type": "BlockBlob",
@@ -368,22 +534,24 @@ async def _put(session, blob, path, ctype, disposition=None):
                 raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
 
 
-async def publish(film, timeout=3600):
+async def publish(film, timeout=3600, out=None, rev=None):
     """Make the web copy, then copy the finished film's files; answers {"web", "video", "poster",
     "card", "subtitles"} (the ones there are), or {} when copying is off or the master could not
     be copied. A web copy that failed leaves the master to play. A film whose picture changed
-    gets new URLs by its record's media_rev (blob_of): CACHE keeps the old ones for a year."""
+    gets new URLs by its record's media_rev (blob_of): CACHE keeps the old ones for a year.
+    `out` and `rev`: the film's files from another folder, as that revision (unbrand.py copies
+    the new film online before it takes the old one's place)."""
     if not enabled():
         return {}
     import aiohttp
 
-    out = film.path("outputs")
+    out = out or film.path("outputs")
     try:
         await asyncio.to_thread(ensure_card, out, film.record().get("length") or film.length)
     except Exception as e:  # noqa: BLE001 -- no card is no reason to keep the film offline
         print("film %s: no card: %s" % (film.id, e), file=sys.stderr, flush=True)
     try:
-        await asyncio.to_thread(make_web, film)
+        await asyncio.to_thread(make_web, film, out)
     except Exception as e:  # noqa: BLE001 -- the master plays instead
         print("film %s: no web copy: %s" % (film.id, e), file=sys.stderr, flush=True)
     urls = {}
@@ -393,12 +561,32 @@ async def publish(film, timeout=3600):
                 p = os.path.join(out, name)
                 if os.path.isfile(p):
                     how = download_name(film) if key == "video" else None
-                    await _put(s, "%s/%s" % (film.id, blob_of(film, name)), p, ctype, how)
-                    urls[key] = url_of(film.id, blob_of(film, name))
+                    await _put(s, "%s/%s" % (film.id, blob_of(film, name, rev)), p, ctype, how)
+                    urls[key] = url_of(film.id, blob_of(film, name, rev))
     except Exception as e:  # noqa: BLE001 -- the film is made; the copy is a bonus
         print("film %s: not copied online: %s" % (film.id, e), file=sys.stderr, flush=True)
         return urls if "video" in urls else {}
     return urls if "video" in urls else {}
+
+
+async def publish_one(film, name, ctype, out=None, rev=None, timeout=300):
+    """Copy one more of the film's files online, beside the rest (rounds.py: a version's
+    filmstrip). Its URL, or None when copying is off, the file is not there, or it failed."""
+    if not enabled():
+        return None
+    import aiohttp
+
+    p = os.path.join(out or film.path("outputs"), name)
+    if not os.path.isfile(p):
+        return None
+    blob = blob_of(film, name, rev)
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
+            await _put(s, "%s/%s" % (film.id, blob), p, ctype)
+    except Exception as e:  # noqa: BLE001 -- a nicety, never the reason a film is not online
+        print("film %s: %s not copied online: %s" % (film.id, name, e), file=sys.stderr, flush=True)
+        return None
+    return url_of(film.id, blob)
 
 
 async def publish_web(film, timeout=3600):
@@ -420,6 +608,24 @@ async def mark_download(session, film):
     if not video.startswith(base() + "/"):
         raise MediaError("its copy is not in %s" % base())
     blob = video[len(base()) + 1 :]
+    if r2():  # S3 has no "set properties": the file is copied onto itself with new ones
+        from urllib.parse import urlsplit
+
+        url, headers = _s3(
+            "PUT",
+            blob,
+            {
+                "x-amz-copy-source": urlsplit(_s3("GET", blob)[0]).path,
+                "x-amz-metadata-directive": "REPLACE",
+                "Content-Type": "video/mp4",
+                "Cache-Control": CACHE,
+                "Content-Disposition": download_name(film),
+            },
+        )
+        async with session.put(_asis(url), headers=headers) as r:
+            if r.status != 200:
+                raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
+        return
     url = "%s/%s?comp=properties&%s" % (base(), blob, sas())
     headers = {
         "x-ms-version": VERSION,
@@ -457,13 +663,142 @@ async def delete(fid, timeout=60, urls=()):
     gone = 0
     async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as s:
         for blob in blobs:
-            url = "%s/%s?%s" % (base(), quote(blob), sas())
-            async with s.delete(url, headers={"x-ms-version": VERSION}) as r:
-                if r.status in (200, 202):
-                    gone += 1
-                elif r.status != 404:
-                    raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
+            if r2():  # an S3 delete answers 204 for a file that was never there: ask first
+                url, headers = _s3("HEAD", blob)
+                async with s.head(_asis(url), headers=headers) as r:
+                    if r.status == 404:
+                        continue
+                    if r.status != 200:
+                        raise MediaError("%s: %d" % (blob, r.status))
+                url, headers = _s3("DELETE", blob)
+                async with s.delete(_asis(url), headers=headers) as r:
+                    if r.status not in (200, 204):
+                        raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
+                gone += 1
+                if old_base() and sas():  # the copy left where it was before the move
+                    gone += await _delete_azure(s, old_base(), blob)
+                continue
+            gone += await _delete_azure(s, base(), blob)
     return gone
+
+
+async def _delete_azure(session, where, blob):
+    """One Delete Blob with the SAS: 1 when it went, 0 when it was not there."""
+    url = "%s/%s?%s" % (where, quote(blob), sas())
+    async with session.delete(url, headers={"x-ms-version": VERSION}) as r:
+        if r.status in (200, 202):
+            return 1
+        if r.status != 404:
+            raise MediaError("%s: %d %s" % (blob, r.status, (await r.text())[:200]))
+    return 0
+
+
+# ------------------------------------------------------------------ moving house
+async def move_files(old, names, dry=False, say=print):
+    """Copy the files `names` from the old public base to R2 under the same names. Answers
+    (copied, skipped, failed, bytes copied). Each is fetched to a file first: a master is 2 GB,
+    and the upload needs its length."""
+    import tempfile
+
+    import aiohttp
+
+    old = old.rstrip("/")
+    copied = skipped = failed = total = 0
+    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=3600)) as s:
+        for name in names:
+            tmp = None
+            try:
+                async with s.head("%s/%s" % (old, quote(name))) as r:
+                    if r.status != 200:
+                        raise MediaError("not at the old place: %d" % r.status)
+                    size = int(r.headers.get("Content-Length") or -1)
+                    headers = {
+                        "Content-Type": r.headers.get("Content-Type") or "application/octet-stream",
+                        "Cache-Control": r.headers.get("Cache-Control") or CACHE,
+                    }
+                    if r.headers.get("Content-Disposition"):
+                        headers["Content-Disposition"] = r.headers["Content-Disposition"]
+                url, signed = _s3("HEAD", name)
+                async with s.head(_asis(url), headers=signed) as r:
+                    if r.status == 200 and int(r.headers.get("Content-Length") or -2) == size:
+                        skipped += 1
+                        continue
+                if dry:
+                    copied, total = copied + 1, total + max(size, 0)
+                    continue
+                fd, tmp = tempfile.mkstemp(prefix="media-move-")
+                with os.fdopen(fd, "wb") as f:
+                    async with s.get("%s/%s" % (old, quote(name))) as r:
+                        if r.status != 200:
+                            raise MediaError("could not be read: %d" % r.status)
+                        async for chunk in r.content.iter_chunked(1 << 20):
+                            f.write(chunk)
+                if size >= 0 and os.path.getsize(tmp) != size:
+                    raise MediaError("arrived short: %d of %d" % (os.path.getsize(tmp), size))
+                headers["Content-Length"] = str(os.path.getsize(tmp))
+                url, signed = _s3("PUT", name, headers)
+                with open(tmp, "rb") as f:
+                    async with s.put(_asis(url), data=f, headers=signed) as r:
+                        if r.status != 200:
+                            raise MediaError("%d %s" % (r.status, (await r.text())[:200]))
+                copied, total = copied + 1, total + os.path.getsize(tmp)
+            except Exception as e:  # noqa: BLE001 -- say which, and carry on
+                failed += 1
+                say("  %s: NOT copied: %s" % (name, e))
+            finally:
+                if tmp and os.path.exists(tmp):
+                    os.remove(tmp)
+    return copied, skipped, failed, total
+
+
+def moved(value, old, new):
+    """`value` (a record, or any part of one) with every URL under `old` put under `new`."""
+    if isinstance(value, str):
+        return new + value[len(old) :] if value.startswith(old + "/") else value
+    if isinstance(value, dict):
+        return {k: moved(v, old, new) for k, v in value.items()}
+    if isinstance(value, list):
+        return [moved(v, old, new) for v in value]
+    return value
+
+
+async def move_records(old, dry=False, say=print):
+    """Every film's record pointed at this place: answers how many records changed. The films
+    here first (studio.json and the database), then the records only the database still has -- a
+    film whose folder is gone keeps its copy online, and its pages read the database."""
+    import agent
+    from film import Film
+
+    old, n, here = old.rstrip("/"), 0, set()
+    for f in Film.all():
+        here.add(f.id)
+        rec = f.record()
+        new = {k: moved(v, old, base()) for k, v in rec.items()}
+        changed = {k: v for k, v in new.items() if v != rec[k]}
+        if not changed:
+            continue
+        n += 1
+        if dry:
+            continue
+        f.update(**changed)
+        if not await agent.save(f.id, changed):
+            say("  %s: its record here is changed, the database's is NOT" % f.id)
+    for doc in await asyncio.to_thread(agent.STORE.runs):
+        if doc["_id"] in here:
+            continue
+        changed = {
+            k: w
+            for k, v in doc.items()
+            if k not in ("_id", "created_at", "updated_at") and (w := moved(v, old, base())) != v
+        }
+        if not changed:
+            continue
+        n += 1
+        if dry:
+            say("  %s: only in the database" % doc["_id"])
+        elif not await agent.save(doc["_id"], changed):
+            say("  %s: the database's record is NOT changed" % doc["_id"])
+    return n
 
 
 # ------------------------------------------------------------------ the command line
@@ -482,7 +817,32 @@ async def _main(args):
     from film import Film
 
     if not enabled():
-        sys.exit("STUDIO_MEDIA_BASE and STUDIO_MEDIA_SAS must both be set (the studio's .env)")
+        sys.exit(
+            "STUDIO_MEDIA_BASE and STUDIO_MEDIA_SAS (or the three STUDIO_R2_ settings) must be "
+            "set (the studio's .env)"
+        )
+    if args.move_from or args.move_records:
+        if not r2():
+            sys.exit("moving is to R2: the three STUDIO_R2_ settings must be set")
+        if (args.move_from or args.move_records).rstrip("/") == base():
+            sys.exit("that is where the files already go (STUDIO_MEDIA_BASE)")
+    if args.move_from:
+        if not args.blobs:
+            sys.exit("--move-from needs --blobs <file>, the names to copy")
+        with open(args.blobs, encoding="utf-8") as fh:
+            names = [x.strip() for x in fh if x.strip()]
+        c, k, bad, size = await move_files(args.move_from, names, args.dry_run)
+        print(
+            "%d files: %d %s (%.2f GB), %d already here, %d failed"
+            % (len(names), c, "to copy" if args.dry_run else "copied", size / 1e9, k, bad)
+        )
+        if bad:
+            sys.exit(1)
+        return
+    if args.move_records:
+        n = await move_records(args.move_records, args.dry_run)
+        print("%d records %s" % (n, "to change" if args.dry_run else "changed"))
+        return
     if args.delete:
         f = Film.open(args.delete)
         n = await delete(args.delete, urls=((f.record().get("media") or {}) if f else {}).values())
@@ -568,9 +928,16 @@ def main():
         action="store_true",
         help="mark the master of every film online as a download (Content-Disposition)",
     )
+    g.add_argument("--move-from", metavar="OLD_BASE", help="copy the files in --blobs from there")
+    g.add_argument(
+        "--move-records", metavar="OLD_BASE", help="point every record's URLs under it at here"
+    )
+    ap.add_argument("--blobs", help="with --move-from: a file of names, one per line")
     ap.add_argument("--first", help="with --web-backfill: this film before the others")
     ap.add_argument(
-        "--dry-run", action="store_true", help="with --download-backfill: count, and show five"
+        "--dry-run",
+        action="store_true",
+        help="with --download-backfill: count, and show five; with --move-*: count only",
     )
     ap.add_argument(
         "--revision",

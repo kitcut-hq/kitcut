@@ -21,6 +21,7 @@ import io
 import os
 import sys
 import json
+import time
 import stat
 import shutil
 import tarfile
@@ -41,19 +42,41 @@ TESTS = (
     "test_isolation.py",
     "test_direction.py",
     "test_library.py",
+    "test_variety.py",  # a series hears what it always did; a collection's films are told to differ
     "test_youtube.py",
     "test_ytdraft.py",
     "test_share.py",  # a finished film's share page: title, description, picture (stubbed)
     "test_thumbs.py",  # a film's four YouTube thumbnail options, drawn for real
+    "test_outro.py",  # the Free plan's mark and closing read the same on a right-to-left film
     "test_media.py",
+    "test_delete_film.py",  # a film deleted for good: gone everywhere, the one beside it whole
     "test_multi.py",  # two servers on one home (peers.py): the ship that never stops a film
     "test_shared.py",  # the files two servers share, raced by real processes (locks.py)
     "test_bluegreen.py",  # an old server handing over to a new one, end to end
     "test_memory.py",  # the still cache stays capped; every job beside the server is (KI-045)
+    "test_autoship.py",  # the ship that follows GitHub: what it waits for, refuses, ships
+    "test_hook.py",  # GitHub's push hook: only a request signed with the machine's secret
+    "test_prune.py",  # a finished film loses its working pictures and nothing else (KI-063)
+    "test_backup.py",  # what is mirrored off the machine, and that every folder of the home is named
+    "test_restore.py",  # a rehearsal built from the mirror cannot act as the studio
+    "test_sealenv.py",  # the machine's keys sealed: they open for the vault's key and nothing else
+    "test_apikey.py",  # the credit key first while its month lasts, then the paid key; the ledger
+    "test_filmgit.py",  # films' code in their projects' git repositories; a deleted film forgotten
+    "test_episode.py",  # a series' next episode starts from its last one's code (episode.py)
+    "test_usage.py",  # who uses the machine: each step's bill, the sampler, the report
     "test_scenes.py",  # a film made in scenes: SK.scene on real stills, the passes, carrying on
     "test_people.py",  # people drawn as talking characters: the request, brief, voices, drawing
+    "test_actors.py",  # a project's actor packs: put in, refused, seeded, prompted, drawn
+    "test_paintref.py",  # a painting made from a project's picture: refused, ordered, cached
+    "test_characters.py",  # painted characters: put in, seeded, kept, refused; @name in a prompt
     "test_templates.py",  # a film remade from a template: the version, the API, the first message, a render
+    "test_localize.py",  # a finished film in another language: what is carried, refused, asked, checked
     "test_web.py",  # the studio's web tools: public URLs only, pictures, pages, fonts (stubbed)
+    "test_rounds.py",  # a finished film changed from its maker's notes: versions, the swap, the line
+    "test_resume.py",  # a film changed by hand is not rendered over a version it never saw (KI-061)
+    "test_review.py",  # the whole film a frame a second, the probe in a real browser, the reader (stubbed)
+    "test_verbatim.py",  # a narration written word for word: vo.json held to the person's script
+    "test_research.py",  # a research film's documents and sources checked for an agent, no network
 )
 
 
@@ -131,7 +154,10 @@ def test(dest):
     """The studio's quick tests, run from inside the snapshot."""
     env = dict(os.environ, STUDIO_REPO=REPO, STUDIO_ENV_FILE=os.path.join(REPO, ".env"))
     env.pop("STUDIO_HOME", None)  # each test makes its own throwaway home
+    # seconds per test, printed: a ship is mostly these, and which ones cost is measured here
+    t_all = time.time()
     for t in TESTS:
+        t0 = time.time()
         r = subprocess.run(
             [sys.executable, "-X", "utf8", os.path.join(dest, "studio", t)],
             env=env,
@@ -140,12 +166,13 @@ def test(dest):
             encoding="utf-8",
         )
         last = (r.stdout.strip().splitlines() or ["(no output)"])[-1]
-        print("  %-18s %s" % (t, last))
+        print("  %-18s %4.0fs  %s" % (t, time.time() - t0, last))
         if r.returncode:
             print(r.stdout[-3000:] + r.stderr[-2000:])
             return False
     # every live template drawn again by this release (templates.py check): an engine or renderer
     # change that would draw someone's template differently stops the ship
+    t0 = time.time()
     r = subprocess.run(
         [sys.executable, "-X", "utf8", os.path.join(dest, "studio", "templates.py"), "check"],
         env=dict(env, STUDIO_HOME=films.HOME),
@@ -154,7 +181,8 @@ def test(dest):
         encoding="utf-8",
     )
     last = (r.stdout.strip().splitlines() or ["(no output)"])[-1]
-    print("  %-18s %s" % ("templates", last))
+    print("  %-18s %4.0fs  %s" % ("templates", time.time() - t0, last))
+    print("  %-18s %4.0fs" % ("all the tests", time.time() - t_all))
     if r.returncode:
         print(r.stdout[-3000:] + r.stderr[-2000:])
         return False
@@ -166,6 +194,11 @@ def main():
     ap.add_argument("--ref", default="studio-stable", help="the commit to ship (a tag, a sha)")
     ap.add_argument("--list", action="store_true", help="the releases built, and the current one")
     ap.add_argument("--no-test", action="store_true", help="make it current without testing it")
+    ap.add_argument(
+        "--test",
+        action="store_true",
+        help="test a release already built (--ref); change nothing (autoship, after it switched)",
+    )
     args = ap.parse_args()
     if args.list:
         cur = current()
@@ -177,6 +210,8 @@ def main():
                 print("%s %s  %s  %s" % ("*" if n == cur else " ", n, r["built"], r["ref"]))
         return
     dest = build(args.ref)
+    if args.test:  # it already runs: only whether it passes
+        sys.exit(0 if test(dest) else "the release's tests failed")
     if not args.no_test and not test(dest):
         sys.exit("the release's tests failed: it is built but NOT current")
     os.makedirs(RELEASES, exist_ok=True)

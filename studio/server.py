@@ -31,6 +31,9 @@ the day's budget still holds.
                                  queue. X-At-Once: N (from the site, for a plan that allows it):
                                  the account may have N films in the making instead of one.
                                  "listed": false keeps it out of the gallery (link-only).
+                                 "auto_length": true (from the site, paid plans): Claude picks
+                                 the length, "seconds" the longest it may be; the record's
+                                 "length" is the length picked once it is (agent.pick_length).
                                  X-Source: mcp and X-App: <name> (from the site): it was asked for
                                  through an assistant. {"auth": "login"} (this machine only):
                                  Claude runs on its Claude Code login. X-Preview: 1 (from the
@@ -38,19 +41,41 @@ the day's budget still holds.
                                  "preview" events, a signed review/preview.html to watch while it
                                  is made (tools.py PREVIEW).
                                  "project": {id, name, brief, from_account_cast}: an episode of
-                                 the site's project, with the project's library (library.py)
+                                 the site's project, with the project's library (library.py);
+                                 its "keep", a list from cast, look, voice, music, is what its
+                                 films share: without one it is a series and keeps them all
     GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
                                  its pictures and voice lines. Also GET /api/library/{name}/
                                  thumb.png, DELETE /api/library/{name} (a cast member), each
                                  with ?project=
-    POST /api/library/pictures   {"project", "upload", "name"}: an upload becomes a picture every
-                                 episode of the project gets; GET .../pictures/{name}/thumb.png
-                                 and DELETE .../pictures/{name}, with ?project=
+    POST /api/library/pictures   {"project", "upload", "name", "once", "role"}: an upload becomes
+                                 a picture; every future episode of the project gets it, unless
+                                 "once" is true, in which case only the project's next episode
+                                 does, and it is then removed. "role" (optional): show, scene or
+                                 style (library.PICTURE_ROLES). GET .../pictures/{name}/thumb.png
+                                 and DELETE .../pictures/{name}, with ?project=; POST
+                                 .../pictures/{name}/role {"project", "role"} changes its role
+    POST /api/library/characters {"project", "upload", "name", "about"}: an upload becomes a
+                                 painted character of the project's cast (library.add_character):
+                                 every future episode paints it from that picture. Its thumbnail
+                                 and Remove are a cast member's (above)
     POST /api/library/voice      {"project", "film", "line"}: approve line i of one of the
                                  asker's finished episodes as the project's voice line: the
                                  next episodes play that recording for the same words and voice
                                  (docs/studio-voice-lines.md); GET .../voice/{key}.mp3 and
                                  DELETE .../voice/{key}, with ?project=
+    POST /api/library/from-film  {"project", "film"}: one of the asker's finished films starts the
+                                 project (fromfilm.py): its pictures, cast and painted characters
+                                 are copied in at once (the answer says which, with its narrator's
+                                 voice), and its brief is written in the background; GET
+                                 .../from-film?project= says how that stands: writing, done
+                                 {brief, name} or failed
+    GET  /api/library/style      ?project=: the project's style (stylekit.py), as the Style tab
+                                 shows it; PATCH (the card's fields and picks), DELETE, POST
+                                 .../style/read {"project", "look", "brief"}, .../style/proof
+                                 {"project", "subject"?}, files in parts as the brand's
+                                 (.../style/files...), GET .../style/{kind}/{name}. X-Team: 1 (the
+                                 site's KITCUT_TEAM) is what lets the asker paint and pick Gemini
     GET  /api/films/{id}/lines   the asker's finished film's narration lines, each with its key
                                  and whether its project has it approved; .../lines/{i}.mp3
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
@@ -58,8 +83,18 @@ the day's budget still holds.
                                  "listed", ...}; a film copied online (media.py) has its lasting
                                  URLs there instead of signed ones
     POST /api/films/{id}/cancel  the film's own client (or this machine) stops it
+    POST /api/films/{id}/unbrand X-Fps, X-Priority: the film's own client has a finished film
+                                 that carries the Free plan's mark and closing drawn again
+                                 without them (unbrand.py); its status says how it stands
     POST /api/films/{id}/listed  {"listed": true|false}: the film's own client shows it in the
                                  gallery or keeps it link-only
+    GET  /api/films/{id}/versions            the film's own client: its versions (each with its
+                                 filmstrip and narration), how a round of changes stands, whether
+                                 its words may change, the rounds it has left today (rounds.py)
+    POST /api/films/{id}/versions            {"key", "from", "notes": [...]}: its maker's notes
+                                 made into the film's next version; 202 {"round": {id, n, state}}
+    POST /api/films/{id}/versions/stop       stop the round being made
+    POST /api/films/{id}/versions/{n}/current  version n is the film again (nothing is rendered)
     GET  /api/uploads            the asker's pictures, voice notes and documents no film has taken
     POST /api/films/{id}/youtube {"to": <YouTube upload session>, "key"}: the film's own client
                                  sends the finished film into a session the site opened (youtube.py)
@@ -112,6 +147,7 @@ import re
 import sys
 import hmac
 import json
+import hashlib
 import time
 import errno
 import signal
@@ -120,6 +156,7 @@ import asyncio
 import secrets
 import argparse
 import contextlib
+import tempfile
 from collections import OrderedDict
 from datetime import datetime
 
@@ -133,12 +170,22 @@ import peers  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
 import templates  # noqa: E402
+import localize  # noqa: E402 -- a finished film in another language (kitcut.ai's Translate)
 import validate  # noqa: E402
 import thumbs  # noqa: E402
 import uploads  # noqa: E402
 import youtube  # noqa: E402
 import ytdraft  # noqa: E402
+import fromfilm  # noqa: E402 -- a finished film made the start of a project
+import live as nowline  # noqa: E402 -- `live` is this module's own (its films in the making)
+import rounds  # noqa: E402
+import unbrand  # noqa: E402
 import share  # noqa: E402
+import canon  # noqa: E402
+import filmgit  # noqa: E402
+import brandkit  # noqa: E402
+import stylekit  # noqa: E402
+import delete_film  # noqa: E402
 from film import Film  # noqa: E402
 from sched import Sched  # noqa: E402
 
@@ -151,7 +198,12 @@ ADMIT = asyncio.Lock()  # one admission at a time: the limits are checked and ta
 DRAINING = False
 TOKEN = ""
 MAX_QUEUE = int(os.environ.get("STUDIO_MAX_QUEUE") or 5)
-PROMPT_MAX = 12000  # characters of a prompt: a long pasted brief with its narration fits (the page caps it too)
+# Characters of a prompt. It was 12,000, and a longer one was cut there without a word: the
+# script of Leo episode 11's remake (20,338 characters, sent by scripts/film.mjs, which did not
+# check) reached Claude ending in the middle of part 5 of 11, and the film was finished from the
+# first make's story (2026-10-09). A five-minute script with its art direction runs to 20,000;
+# one longer than this is refused, never trimmed (the page caps it too: lib/projects.js).
+PROMPT_MAX = 30000
 # the public site makes this reachable by anyone: a day's spend, and each client's films, are
 # capped. It must hold at least one film of the longest length's reserve (8 minutes: ~$29,
 # film.limits)
@@ -401,7 +453,7 @@ def mine():
         }
         for jid, J in JOBS.items()
         if J["status"] in ("queued", "running") and not J.get("ended")
-    ]
+    ] + rounds.mine()  # a round of changes to a finished film counts as one in the making
 
 
 def everyone(status=("queued", "running"), others=None):
@@ -449,6 +501,8 @@ def beat():
         sends=youtube.in_flight(),
         drafts=ytdraft.in_flight(),
         transcribing=transcribing(),
+        unbrands=unbrand.in_flight(),
+        rounds=rounds.in_flight(),
     )
 
 
@@ -486,6 +540,11 @@ def idle():
         and not youtube.in_flight()
         and not ytdraft.in_flight()
         and not share.in_flight()
+        and not canon.in_flight()
+        and not brandkit.in_flight()
+        and not stylekit.in_flight()
+        and not unbrand.in_flight()
+        and not rounds.in_flight()
         and not transcribing()
     )
 
@@ -524,6 +583,9 @@ def start(film, finish_only=False, resume=None):
         "control": {},
         "ended": None,
     }
+    # the one line the site has when it cannot ask this server (live.py): the film's stage, or
+    # what it waits for, in its document in the database
+    told = nowline.of(film.id, lambda rid, fields: agent.STORE.save(rid, fields))
 
     def emit(ev):
         # t: seconds into the run, so a page reloaded half-way shows the same times
@@ -544,6 +606,7 @@ def start(film, finish_only=False, resume=None):
             # the login failed and the film is being made on the key (agent.make_film): from here
             # it is held against the day's budget as a film on the key
             J["auth"], J["reserve"] = "api", reserve(film.length, "api")
+        told.event(ev)
 
     async def run():
         ok = False
@@ -568,6 +631,8 @@ def start(film, finish_only=False, resume=None):
             if ok:  # its moments sheet now, so a YouTube draft does not wait for it
                 thumbs.premake(film)
                 share.premake(film)  # its share page's title and picture (never raises)
+                canon.premake(film)  # an episode's entry in its project's log (never raises)
+                filmgit.on_finish(film)  # its code into its repository, and to GitHub (ditto)
         except asyncio.CancelledError:
             c = J["control"]  # drain() requeued it; shutdown() stopped it; else its person did
             J["status"] = (
@@ -577,6 +642,7 @@ def start(film, finish_only=False, resume=None):
             emit({"type": "error", "text": str(e)})
             J["status"] = "error"
         J["ended"] = time.time()
+        told.end()  # its record's state says the rest (or the next server's own line does)
 
     def over(task):
         # cancelled before it ever ran (a handover or a shutdown right after it was started):
@@ -585,6 +651,7 @@ def start(film, finish_only=False, resume=None):
             c = J["control"]
             J["status"] = "queued" if c.get("requeue") or c.get("shutdown") else "cancelled"
             J["ended"] = time.time()
+            told.end()
 
     J["task"] = asyncio.create_task(run())
     J["task"].add_done_callback(over)
@@ -659,6 +726,16 @@ async def adopt(app=None):
                 why = "the studio restarted while Claude was working on it"
                 await put_down(f, "interrupted", why, agent.INTERRUPTED)
 
+    # the finished films that were being drawn again without their branding when their server
+    # went (unbrand.py): started again here, a few times at most
+    for f, _ in await asyncio.to_thread(unbrand.orphans):
+        unbrand.resume(f, SCHED)
+
+    # the rounds of changes whose server went (rounds.py): a swap cut short is undone, and the
+    # round is made again from its notes, once
+    for f in await asyncio.to_thread(rounds.orphans):
+        rounds.resume(f, SCHED)
+
     # the films that waited too long for their person's voice: put down, their credits back
     for f in await asyncio.to_thread(overdue):
         await put_down(
@@ -726,6 +803,8 @@ async def shutdown(app):
         tasks.append(J["task"])
     if tasks:
         await asyncio.wait(tasks, timeout=SHUTDOWN_WAIT_S)
+    await unbrand.stop_all()  # back in the queue, for the next leader
+    await rounds.stop_all()  # and so do the rounds of changes
 
 
 # ------------------------------------------------------------------ a server's life among others
@@ -982,6 +1061,13 @@ def limits_doc():
             "waiting_max": MAX_QUEUE,
             "made_at_once": SCHED["claude"].capacity,
         },
+        # a round of changes to a finished film (rounds.py)
+        "rounds": {
+            "per_film_per_day": rounds.PER_DAY,
+            "notes": rounds.MAX_NOTES,
+            "note_chars": rounds.NOTE_MAX,
+            "versions_kept": rounds.KEEP,
+        },
         "attachments": {
             "pictures_per_film": uploads.MAX_IMAGES,
             "voice_notes_per_film": uploads.MAX_NOTES,
@@ -1009,12 +1095,33 @@ def limits_doc():
                 "waiting_days": WAITING_DAYS,
             },
         },
+        # how carefully pictures are painted: every film a draft, a sharper version on request
+        "pictures": {
+            "qualities": list(films.QUALITIES),
+            "draft": films.DRAFT,
+            # where a film may be asked for above a draft (film.chooses_quality): these looks,
+            # and a project's painted episodes on these style routes
+            "choose": {
+                "looks": [lk for lk in films.LOOKS if films.chooses_quality(lk)],
+                "style_routes": [
+                    r for r in films.STYLE_ROUTES if films.chooses_quality("painted", r)
+                ],
+            },
+        },
         "library": {
             "characters_per_new_film": library.SEEDED,
             "earlier_films_remembered": library.MEMORY,
             "versions_kept": library.KEEP,
             "project_pictures": library.PICTURES,
+            "brand_pictures": brandkit.MAX_PICTURES,
+            # a project's style (the Style tab): every one goes with every painting
+            "style_pictures": stylekit.MAX_PICTURES,
             "project_voice_lines": library.VOICE_LINES,
+            # a project's painted characters (library.add_character, _keep_painted)
+            "painted_characters": library.CHARACTERS,
+            "character_min_side_px": library.MIN_SIDE,
+            "character_about_chars": library.MAX_ABOUT,
+            "characters_per_painting": validate.MAX_REFS,
         },
         "by_length": {
             str(n): {
@@ -1052,10 +1159,14 @@ def at_once_of(req):
     return max(1, min(n, AT_ONCE_MAX))
 
 
-async def over_limit(client, seconds, auth="api", at_once=1, others=None):
+async def over_limit(
+    client, seconds, auth="api", at_once=1, others=None, need=None, films_day=True
+):
     """Why this request must wait (for now, or until tomorrow), or None. Today is local time.
     Nothing is refused to this machine itself except by the budget. The films being made count
-    on every live server (others: their heartbeats, else read now)."""
+    on every live server (others: their heartbeats, else read now). need: what it may spend, when
+    that is not a film's reserve (a round of changes); films_day False: not one of the day's
+    films (a round changes one that exists)."""
     midnight = datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
     try:
         rows = await asyncio.to_thread(agent.STORE.runs, None, midnight)
@@ -1068,7 +1179,7 @@ async def over_limit(client, seconds, auth="api", at_once=1, others=None):
     # record shows so far; the new one is held at its own
     reserved = sum(max(0.0, (j.get("reserve") or 0) - (j.get("cost_usd") or 0)) for j in making_all)
     spent = sum(r.get("cost_usd") or 0 for r in rows)
-    if spent + reserved + reserve(seconds, auth) > DAILY_USD:
+    if spent + reserved + (reserve(seconds, auth) if need is None else need) > DAILY_USD:
         return "Today's budget ($%.0f) is used up. Please try again tomorrow." % DAILY_USD
     if client == "local":
         return None
@@ -1081,7 +1192,7 @@ async def over_limit(client, seconds, auth="api", at_once=1, others=None):
             % making
         )
     mine = sum(1 for r in rows if clients.same(r.get("client"), client) and r.get("kind") == "film")
-    if mine >= PER_CLIENT_DAILY and clients.canon(client) not in DAILY_EXEMPT:
+    if films_day and mine >= PER_CLIENT_DAILY and clients.canon(client) not in DAILY_EXEMPT:
         return "That is %d films today, the limit for now. Please try again tomorrow." % mine
     return None
 
@@ -1138,7 +1249,20 @@ async def create(req):
         body = await req.json()
     except ValueError:
         return web.json_response({"error": 'send JSON: {"prompt": "..."}'}, status=400)
-    prompt = str(body.get("prompt", "")).strip()[:PROMPT_MAX]
+    prompt = str(body.get("prompt", "")).strip()
+    if (
+        len(prompt) > PROMPT_MAX
+    ):  # said, not cut: a film made from half its script is the wrong film
+        return web.json_response(
+            {
+                "error": "That prompt is %d characters; the studio reads up to %d. Shorten it."
+                % (len(prompt), PROMPT_MAX),
+                "reason": "prompt",
+            },
+            status=400,
+        )
+    if body.get("localize") is not None:  # a finished film in another language (localize.py)
+        return await localize_create(req, body)
     tpl = frame = None
     if body.get("template") is not None:  # a remake of a template, as asked (templates.py)
         tpl, frame, err = template_of(body, from_this_machine(req))
@@ -1159,6 +1283,20 @@ async def create(req):
             {"error": 'people must be at most %d of {"upload", "name"}' % films.MAX_PEOPLE},
             status=400,
         )
+    # what each attached picture is for, where the person said: {"up-...": "show"|"scene"|"style"}
+    roles = body.get("picture_roles") or {}
+    if (
+        not isinstance(roles, dict)
+        or not all(k in ids for k in roles)
+        or not all(v in library.PICTURE_ROLES for v in roles.values())
+    ):
+        return web.json_response(
+            {
+                "error": "picture_roles maps attached pictures to one of %s"
+                % ", ".join(library.PICTURE_ROLES)
+            },
+            status=400,
+        )
     style = body.get("character_style") or "auto"
     if style != "auto" and style not in films.people_styles():
         return web.json_response(
@@ -1176,7 +1314,10 @@ async def create(req):
         seconds = 0
     if seconds not in films.LENGTHS and not tpl:  # a template's own length may be any
         return web.json_response(
-            {"error": "seconds must be one of %s" % ", ".join(map(str, films.LENGTHS))},
+            {
+                "error": "seconds must be a multiple of 5 from %d to %d"
+                % (films.LENGTHS[0], films.LENGTHS[-1])
+            },
             status=400,
         )
     look = body.get("look") or films.LOOKS[0]
@@ -1184,6 +1325,22 @@ async def create(req):
         return web.json_response(
             {"error": "look must be one of %s" % ", ".join(films.LOOKS)}, status=400
         )
+    # a film from an idea in a frame of its own ("9:16": a YouTube Short), and with the
+    # narration's words drawn into the picture ("captions": true), which a Short needs: a video
+    # site shows no soft subtitle track. A template's film takes its template's (template_of).
+    # "music": false is a film with no music at all (film.create).
+    captions, music = False, True
+    if not tpl:
+        frame = body.get("frame") or "16:9"
+        if frame not in films.FRAMES:
+            return web.json_response(
+                {"error": "frame must be one of %s" % ", ".join(films.FRAMES)}, status=400
+            )
+        captions = body.get("captions") is True
+        music = body.get("music") is not False
+    # Claude picks the length, `seconds` the longest it may be (kitcut.ai: paid plans; agent.
+    # pick_length). Never a template's: it keeps its own
+    auto_length = body.get("auto_length") is True and not tpl
     # the site's project the film is an episode of: {id, name, brief, from_account_cast}. The
     # site checks it is the person's (trusted like X-Client-Ip); its library is theirs anyway
     project = body.get("project")
@@ -1195,7 +1352,38 @@ async def create(req):
             "name": " ".join(str(project.get("name") or "").split())[:80] or "Untitled",
             "brief": str(project.get("brief") or "").strip()[: films.BRIEF_MAX],
             "from_account_cast": project.get("from_account_cast") is True,
+            # what its films share (film.PROJECT_KEEPS). Not given: a series, which keeps it all
+            **(
+                {"keep": [k for k in films.PROJECT_KEEPS if k in project["keep"]]}
+                if isinstance(project.get("keep"), list)
+                else {}
+            ),
         }
+    # how carefully its pictures are painted ("low" a draft, "medium", "high"; none: a draft),
+    # where its painter has the setting (film.chooses_quality: a collage, a project's GPT style).
+    # The site charges for more than a draft; a template's film keeps its own
+    quality = body.get("quality")
+    if quality is not None:
+        if quality not in films.QUALITIES or tpl:
+            return web.json_response(
+                {
+                    "error": "quality is one of %s, and not for a template's film"
+                    % ", ".join(films.QUALITIES)
+                },
+                status=400,
+            )
+        lib = library.owner(client_of(req), project["id"]) if project else None
+        card = stylekit.read_card(stylekit.dir_of(lib)) if lib else None
+        route = stylekit.route_of(card) if card else None
+        if quality != films.DRAFT and not films.chooses_quality(look, route):
+            return web.json_response(
+                {
+                    "reason": "quality",
+                    "error": "This film's pictures are painted by a model with no quality to "
+                    "choose: only a collage, or a project whose style is painted by GPT Image.",
+                },
+                status=400,
+            )
     # the narrator the person picked (the site's voice setting, kitcut.ai lib/narrator.js):
     # {"source": "kitcut", "voice": <a Gemini voice>} pins that voice (film.vo_pins); none, or
     # no voice in it, and Claude picks as ever
@@ -1203,6 +1391,24 @@ async def create(req):
     if err:
         return web.json_response({"error": err}, status=400)
     client = client_of(req)
+    # the project's characters the prompt names as @name (library.mentioned): each will be in the
+    # film; a near miss (@mum for @mom) is said now, before anything is held or made
+    named = []
+    if project and not tpl:
+        named, typos = await asyncio.to_thread(library.mentioned, client, project["id"], prompt)
+        if typos:
+            return web.json_response(
+                {
+                    "error": "No character %s in this project's cast: did you mean %s?"
+                    % (
+                        ", ".join("@" + t for t in typos),
+                        ", ".join("@" + n for n in typos.values()),
+                    ),
+                    "reason": "characters",
+                    "unknown": typos,
+                },
+                status=400,
+            )
     # who asked (a member of the client's workspace), and whose uploads it may attach: a person's
     # own, so a team's members never see each other's voice notes (clients.py)
     member = clients.member_of(req.headers)
@@ -1251,6 +1457,9 @@ async def create(req):
         return web.json_response(e.body(), status=e.status)
     for a in attached + faces:
         a["src"] = uploads.file_of(uploader, a)
+    for a in attached:
+        if a["kind"] == "image" and roles.get(a["id"]):
+            a["role"] = roles[a["id"]]
     for a, p in zip(faces, people, strict=True):
         if a["kind"] != "image":
             return web.json_response(
@@ -1296,9 +1505,15 @@ async def create(req):
             narrator=narrator,
             template=tpl,
             frame=frame,
+            captions=captions,
+            music=music,
+            auto_length=auto_length,
+            quality=quality,
         )
         if preview:
             f.update(preview=True)
+        if named:  # the characters it must have (library.named_note)
+            f.update(characters=named)
         if tpl:  # its code and its own sample, the starting point (templates.seed)
             await asyncio.to_thread(templates.seed, f, tpl)
         uploads.release(uploader, attached + faces)  # the film has its own copies now
@@ -1323,6 +1538,127 @@ async def create(req):
             "people": len(faces),
             "listed": listed,
             **({"template": {"id": tpl["id"], "version": tpl["version"]}} if tpl else {}),
+        },
+        status=202,
+    )
+
+
+async def localize_create(req, body):
+    """POST /api/films {"localize": {"from", "version", "language", "key"}, "listed"?}: the original
+    made again in another language, as a film of its own (localize.py). The asker is the original's
+    own client (the site sends it), with a film's usual headers. Asked twice with one key: the same
+    film. 202 {"id", "status", "position", "listed", "localized"}; 409 {"reason"} for a film that
+    cannot be, or a language it has; 400 for a language there is none of; 404 for another's film."""
+    client = client_of(req)
+    member = clients.member_of(req.headers)
+    spec = body.get("localize")
+    key = str((spec or {}).get("key") or "") if isinstance(spec, dict) else ""
+    films_seen = await asyncio.to_thread(localize.recent)
+    again = localize.by_key(key, films_seen) if key else None
+    if again is not None and clients.same(again.record().get("client"), client):  # asked again
+        return web.json_response(
+            {
+                "id": again.id,
+                "status": again.record().get("state") or "queued",
+                "position": 0,
+                "listed": again.record().get("listed") is not False,
+                "localized": again.record().get("localized"),
+            },
+            status=202,
+        )
+    try:
+        narrator, bad = narrator_of(body.get("voice"))
+        if bad:
+            return web.json_response({"error": bad}, status=400)
+        src, lang, key, version = await asyncio.to_thread(
+            localize.check, spec, client, films_seen, narrator
+        )
+    except localize.Refused as e:
+        return web.json_response(e.body(), status=e.status)
+    args = localize.create_args(src)
+    seconds = args["seconds"]
+    priority = 1 if req.headers.get("X-Priority", "").strip() == "1" else 0
+    at_once = at_once_of(req)
+    local = "api" if body.get("auth") == "api" else os.environ.get("STUDIO_LOCAL_AUTH") or "login"
+    auth = local if from_this_machine(req) else site_auth()
+    branding = req.headers.get("X-Branding", "").strip() == "1"
+    listed = body.get("listed") is not False and src.record().get("listed") is not False
+    source = "mcp" if req.headers.get("X-Source", "").strip() == "mcp" else "web"
+    app = req.headers.get("X-App", "").strip()[:40] or None
+    fps = 30 if req.headers.get("X-Fps", "").strip() == "30" else 60
+    prune()
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    async with ADMIT:
+        if not peers.leads() or MODE != "serving" or DRAINING:
+            return web.json_response({"error": RESTARTING}, status=503)
+        # asked again while it waited for the lock, or that language started meanwhile
+        again = localize.by_key(key)
+        if again is not None and clients.same(again.record().get("client"), client):
+            return web.json_response(
+                {
+                    "id": again.id,
+                    "status": again.record().get("state") or "queued",
+                    "position": 0,
+                    "listed": again.record().get("listed") is not False,
+                    "localized": again.record().get("localized"),
+                },
+                status=202,
+            )
+        there = localize.made_in(src.id, lang)
+        if there is not None:
+            return web.json_response(
+                {
+                    "reason": "exists",
+                    "film": there.id,
+                    "error": "the film has that language already",
+                },
+                status=409,
+            )
+        others = peers.peers()
+        if len(everyone(("queued",), others)) >= MAX_QUEUE:
+            return web.json_response({"error": "the queue is full; try again later"}, status=429)
+        refused = await over_limit(client, seconds, auth, at_once, others)
+        if refused:
+            return web.json_response({"error": refused}, status=429)
+        f = Film.create(
+            args["prompt"],
+            seconds,
+            args["look"],
+            client=client,
+            source=source,
+            priority=priority,
+            auth=auth,
+            branding=branding,
+            project=args["project"],
+            listed=listed,
+            app=app,
+            fps=fps,
+            member=member,
+            frame=args["frame"],
+            captions=args["captions"],
+            music=args["music"],
+            narrator=narrator,
+        )
+        try:
+            await asyncio.to_thread(localize.seed, f, src, lang, version, key)
+        except Exception as e:  # noqa: BLE001 -- a film that could not be laid in is not started
+            f.update(state="error", error="could not start from the original: %s" % e)
+            return web.json_response(
+                {"error": "the film could not be started from the original"}, status=500
+            )
+        await agent.save(f.id, agent.first_record(f, source, client))
+        start(f)
+    await asyncio.sleep(0)
+    ahead = SCHED["claude"].ahead(f.id)
+    return web.json_response(
+        {
+            "id": f.id,
+            "status": "queued" if ahead is not None else "running",
+            "position": (ahead + 1) if ahead is not None else 0,
+            "status_url": "%s/api/films/%s" % (base_url(req), f.id),
+            "listed": listed,
+            "localized": f.record().get("localized"),
         },
         status=202,
     )
@@ -1399,6 +1735,71 @@ async def upload_list(req):
     return web.json_response({"uploads": uploads.listing(uploader_of(req))})
 
 
+# A research film's documents and sources, checked for an agent before it spends credits
+# (scripts/research-check.py, docs/autonomous-research-films.md): no AI, so no bill; the pages
+# are read on the public internet only. Two at a time: --sources may start a browser.
+RESEARCH_MAX_BYTES = 1_500_000
+RESEARCH_SLOTS = asyncio.Semaphore(2)
+
+
+async def research(req):
+    """POST /api/research/check {fact, chart, script} -> the findings; POST /api/research/sources
+    {sources: [{url, quote, number?, id?}]} -> each read on its page."""
+    what = req.match_info["what"]
+    if what not in ("check", "sources"):
+        raise web.HTTPNotFound()
+    body = bytearray()
+    async for chunk in req.content.iter_chunked(65536):
+        body += chunk
+        if len(body) > RESEARCH_MAX_BYTES:
+            return web.json_response({"error": "the request is over 1.5 MB"}, status=413)
+    try:
+        doc = json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return web.json_response({"error": "send JSON"}, status=400)
+    if not isinstance(doc, dict):
+        return web.json_response({"error": "send a JSON object"}, status=400)
+    if what == "sources":
+        if isinstance(doc.get("fact"), str) and doc["fact"].strip():
+            doc = {"fact": doc["fact"], "skip": max(0, int(doc.get("skip") or 0))}
+        elif isinstance(doc.get("sources"), list) and doc["sources"]:
+            doc = {"sources": doc["sources"], "skip": max(0, int(doc.get("skip") or 0))}
+        else:
+            return web.json_response(
+                {"error": "send the fact sheet (fact), or sources: a list of {url, quote}"},
+                status=400,
+            )
+    else:
+        doc = {k: doc.get(k) or "" for k in ("fact", "chart", "script")}
+    work = os.path.join(films.HOME, "tmp", "research")  # backup-filter.txt leaves /tmp/ out
+    os.makedirs(work, exist_ok=True)
+    fd, path = tempfile.mkstemp(suffix=".json", dir=work)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(doc, f)
+    env = {k: os.environ[k] for k in procs.BASICS if k in os.environ}
+    env.update(TEMP=work, TMP=work, TMPDIR=work, PYTHONIOENCODING="utf-8", KITCUT_DOTENV="0")
+    argv = [procs.python(), "-X", "utf8", os.path.join(films.KIT, "scripts", "research-check.py")]
+    try:
+        async with RESEARCH_SLOTS:
+            _, tail = await procs.run([*argv, "--input", path], work, env, 110)
+    except procs.StepTimeout:
+        return web.json_response(
+            {"error": "the check took too long: send fewer sources"}, status=504
+        )
+    finally:
+        with contextlib.suppress(OSError):
+            os.remove(path)
+    for line in reversed(tail):
+        if line.startswith("{"):
+            try:
+                return web.json_response(json.loads(line))
+            except ValueError:
+                break
+    return web.json_response(
+        {"error": "the check failed: %s" % " ".join(tail[-2:])[:300]}, status=500
+    )
+
+
 async def youtube_send(req):
     """Send a finished film into a YouTube upload session the site opened (youtube.py). The
     film's owner only; asking again with the same key answers the first send -- on whichever
@@ -1414,11 +1815,32 @@ async def youtube_send(req):
         return web.json_response({"error": "only whoever made a film can publish it"}, status=403)
     if not rec.get("ok"):
         return web.json_response({"error": "This film is not finished."}, status=409)
+    if f.id in rounds.in_flight() or peer_has("rounds", f.id):
+        # the film's next version is being made: what would be sent is about to be the old one
+        return web.json_response(
+            {
+                "reason": "round",
+                "error": "A new version of this film is being made. Publish it when it is "
+                "ready, in a few minutes.",
+            },
+            status=409,
+        )
+    if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
+        # its master is about to be replaced: a send started now could carry half of each
+        return web.json_response(
+            {
+                "error": "This film is being drawn again without the KitCut branding. "
+                "Publish it in a few minutes."
+            },
+            status=409,
+        )
     try:
         body = await req.json()
         key = body.get("key")
         if isinstance(key, str) and youtube.get(key) is None and peer_has("sends", key):
             return web.json_response({"key": key, "film": f.id, "state": "sending"}, status=202)
+        if isinstance(key, str) and youtube.get(key) is None:  # online only: fetch it back
+            await asyncio.to_thread(media.bring_back, f, "film.mp4")
         job = youtube.start(f, client, body.get("to"), key)
     except (ValueError, AttributeError):
         return web.json_response({"error": "expected JSON"}, status=400)
@@ -1462,7 +1884,8 @@ async def youtube_draft(req):
     if not rec.get("ok"):
         return web.json_response({"error": "This film is not finished."}, status=409)
     try:
-        channel, recent = ytdraft.parse_request(await req.json())
+        body = await req.json()
+        channel, recent = ytdraft.parse_request(body)
     except ValueError as e:
         return web.json_response({"error": str(e) or "expected JSON"}, status=400)
     writing = {"film": f.id, "channel": channel["id"], "state": "writing"}
@@ -1473,7 +1896,7 @@ async def youtube_draft(req):
         (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else site_auth()
     )
     try:
-        job = await ytdraft.start(f, client, channel, recent, auth)
+        job = await ytdraft.start(f, client, channel, recent, auth, **ytdraft.options(body))
     except ytdraft.DraftError as e:
         return web.json_response({"error": e.text}, status=e.status)
     return web.json_response(ytdraft.public(job), status=200 if job["state"] == "done" else 202)
@@ -1638,10 +2061,281 @@ async def library_delete(req):
     return web.json_response({"name": name, "deleted": True})
 
 
+# ------------------------------------------------------------------ a project's brand (brandkit.py)
+async def _brand_dir(req, body=None):
+    """The asker's project's brand folder, from ?project= or the body's "project"."""
+    p = (body or {}).get("project") if isinstance(body, dict) else None
+    p = str(p or req.query.get("project") or "")
+    lib = library.owner(client_of(req), p) if films.PROJECT_ID.match(p) else None
+    if not lib:
+        raise web.HTTPNotFound(
+            text='{"error": "No such project."}', content_type="application/json"
+        )
+    return brandkit.dir_of(lib)
+
+
+async def _json(req):
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    return body if isinstance(body, dict) else {}
+
+
+def _brand_error(e):
+    return web.json_response({"error": e.text}, status=e.status)
+
+
+def _look(v):
+    return v if v in brandkit.LOOK_STYLE else "drawn"
+
+
+async def brand_get(req):
+    """The brand as the page shows it: its state, files, card and what was found."""
+    d = await _brand_dir(req)
+    return web.json_response(await asyncio.to_thread(brandkit.public, d))
+
+
+async def brand_file_add(req):
+    """Start a file: ?project=&name=&size= -> {id, ...}; its bytes follow in parts."""
+    d = await _brand_dir(req)
+    try:
+        size = int(req.query.get("size") or 0)
+        m = await asyncio.to_thread(brandkit.add_file, d, req.query.get("name"), size)
+    except ValueError:
+        return web.json_response({"error": "Say how big the file is."}, status=400)
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(m, status=201)
+
+
+async def brand_file_part(req):
+    """One part of a file, the raw body (at most brandkit.PART): ?project=&offset=."""
+    d = await _brand_dir(req)
+    buf, n = bytearray(), 0
+    async for chunk in req.content.iter_chunked(256 * 1024):
+        n += len(chunk)
+        if n > brandkit.PART:
+            return web.json_response({"error": "A part is at most 4 MB."}, status=413)
+        buf += chunk
+    try:
+        offset = int(req.query.get("offset") or 0)
+        m = await asyncio.to_thread(brandkit.put_part, d, req.match_info["fid"], offset, bytes(buf))
+    except ValueError:
+        return web.json_response({"error": "Say where the part goes."}, status=400)
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response({"id": m["id"], "got": m["got"], "size": m["size"]})
+
+
+async def brand_file_done(req):
+    d = await _brand_dir(req)
+    try:
+        m = await asyncio.to_thread(brandkit.finish, d, req.match_info["fid"])
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(m)
+
+
+async def brand_file_delete(req):
+    d = await _brand_dir(req)
+    if not await asyncio.to_thread(brandkit.remove_file, d, req.match_info["fid"]):
+        return web.json_response({"error": "No such file."}, status=404)
+    return web.json_response({"deleted": True})
+
+
+async def brand_read(req):
+    """Read the brand's files (again) in the background: {"project", "look"}."""
+    body = await _json(req)
+    d = await _brand_dir(req, body)
+    try:
+        st = brandkit.start(d, site_auth(), _look(body.get("look")))
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(st, status=202)
+
+
+async def brand_edit(req):
+    """The person's corrections to the card: {"project", "look", ...fields}."""
+    body = await _json(req)
+    d = await _brand_dir(req, body)
+    try:
+        card = await asyncio.to_thread(brandkit.edit, d, body)
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    brandkit.preview_again(d, _look(body.get("look")))
+    return web.json_response({"card": card})
+
+
+async def brand_preview(req):
+    """The preview drawn in a look (the project's look changed): {"project", "look"}."""
+    body = await _json(req)
+    d = await _brand_dir(req, body)
+    try:
+        st = brandkit.preview_again(d, _look(body.get("look")))
+    except brandkit.BrandError as e:
+        return _brand_error(e)
+    return web.json_response(st, status=202)
+
+
+async def brand_delete(req):
+    d = await _brand_dir(req)
+    await asyncio.to_thread(brandkit.remove, d)
+    return web.json_response({"deleted": True})
+
+
+async def brand_asset(req):
+    """A page, a picture, a face's specimen, a logo or the preview, for the page."""
+    d = await _brand_dir(req)
+    got = brandkit.asset(d, req.match_info["kind"], req.match_info["name"])
+    if not got:
+        return web.json_response({"error": "not found"}, status=404)
+    path, ctype = got
+    return web.FileResponse(
+        path, headers={"Content-Type": ctype, "Cache-Control": "private, max-age=60"}
+    )
+
+
+# ------------------------------------------------------------------ a project's style (stylekit.py)
+async def _style_dir(req, body=None):
+    """The asker's project's style folder, from ?project= or the body's "project"."""
+    p = (body or {}).get("project") if isinstance(body, dict) else None
+    p = str(p or req.query.get("project") or "")
+    lib = library.owner(client_of(req), p) if films.PROJECT_ID.match(p) else None
+    if not lib:
+        raise web.HTTPNotFound(
+            text='{"error": "No such project."}', content_type="application/json"
+        )
+    return stylekit.dir_of(lib)
+
+
+def _team(req):
+    """The site says the asker is on the KitCut team (its KITCUT_TEAM): Gemini is theirs."""
+    return req.headers.get("X-Team", "").strip() == "1"
+
+
+def _style_error(e):
+    return web.json_response({"error": e.text}, status=e.status)
+
+
+async def style_get(req):
+    d = await _style_dir(req)
+    return web.json_response(await asyncio.to_thread(stylekit.public, d, _team(req)))
+
+
+async def style_file_add(req):
+    """Start a file: ?project=&name=&size= -> {id, ...}; its bytes follow in parts."""
+    d = await _style_dir(req)
+    try:
+        size = int(req.query.get("size") or 0)
+        m = await asyncio.to_thread(stylekit.add_file, d, req.query.get("name"), size)
+    except ValueError:
+        return web.json_response({"error": "Say how big the file is."}, status=400)
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(m, status=201)
+
+
+async def style_file_part(req):
+    """One part of a file, the raw body (at most stylekit.PART): ?project=&offset=."""
+    d = await _style_dir(req)
+    buf, n = bytearray(), 0
+    async for chunk in req.content.iter_chunked(256 * 1024):
+        n += len(chunk)
+        if n > stylekit.PART:
+            return web.json_response({"error": "A part is at most 4 MB."}, status=413)
+        buf += chunk
+    try:
+        offset = int(req.query.get("offset") or 0)
+        m = await asyncio.to_thread(stylekit.put_part, d, req.match_info["sid"], offset, bytes(buf))
+    except ValueError:
+        return web.json_response({"error": "Say where the part goes."}, status=400)
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response({"id": m["id"], "got": m["got"], "size": m["size"]})
+
+
+async def style_file_done(req):
+    d = await _style_dir(req)
+    try:
+        m = await asyncio.to_thread(stylekit.finish, d, req.match_info["sid"])
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(m)
+
+
+async def style_file_delete(req):
+    d = await _style_dir(req)
+    if not await asyncio.to_thread(stylekit.remove_file, d, req.match_info["sid"]):
+        return web.json_response({"error": "No such file."}, status=404)
+    return web.json_response({"deleted": True})
+
+
+async def style_read(req):
+    """Read the pictures (again) in the background: {"project", "look", "brief"}."""
+    body = await _json(req)
+    d = await _style_dir(req, body)
+    try:
+        st = stylekit.start(
+            d,
+            site_auth(),
+            str(body.get("look") or "painted"),
+            str(body.get("brief") or "")[:4000],
+            _team(req),
+        )
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(st, status=202)
+
+
+async def style_proof(req):
+    """Paint the proof again: {"project", "subject"?}."""
+    body = await _json(req)
+    d = await _style_dir(req, body)
+    subject = body.get("subject")
+    try:
+        st = stylekit.proof_again(d, _team(req), str(subject) if subject is not None else None)
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response(st, status=202)
+
+
+async def style_edit(req):
+    """The person's corrections and picks: {"project", ...fields}."""
+    body = await _json(req)
+    d = await _style_dir(req, body)
+    try:
+        card = await asyncio.to_thread(stylekit.edit, d, body, _team(req))
+    except stylekit.StyleError as e:
+        return _style_error(e)
+    return web.json_response({"card": card})
+
+
+async def style_delete(req):
+    d = await _style_dir(req)
+    await asyncio.to_thread(stylekit.remove, d)
+    return web.json_response({"deleted": True})
+
+
+async def style_asset(req):
+    """A picture, a thumbnail, a line of lettering or a face set in its words, or a proof."""
+    d = await _style_dir(req)
+    got = stylekit.asset(d, req.match_info["kind"], req.match_info["name"])
+    if not got:
+        return web.json_response({"error": "not found"}, status=404)
+    path, ctype = got
+    return web.FileResponse(
+        path, headers={"Content-Type": ctype, "Cache-Control": "private, max-age=60"}
+    )
+
+
 async def picture_add(req):
     """Put one of the asker's uploads into their project as a picture its episodes get:
-    {"project": id, "upload": "up-...", "name": "logo"}. The upload goes; the picture stays. The
-    upload is the person's (uploader_of: X-Member), the project the workspace's (the client)."""
+    {"project": id, "upload": "up-...", "name": "logo", "once": false, "role": "show"} (role
+    optional: library.PICTURE_ROLES). The upload goes; the
+    picture stays, for every future episode unless "once" is true, in which case only the next
+    one gets it. The upload is the person's (uploader_of: X-Member), the project the workspace's
+    (the client)."""
     try:
         body = await req.json()
     except ValueError:
@@ -1668,6 +2362,103 @@ async def picture_add(req):
             str(body.get("name") or ""),
             uploads.file_of(uploader, meta),
             meta["ext"],
+            bool(body.get("once")),
+            body.get("role") or None,
+        )
+    except library.PictureError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    uploads.release(uploader, [meta])
+    return web.json_response(entry, status=201)
+
+
+async def from_film(req):
+    """Start the asker's project from one of their finished films: {"project", "film"}. What the
+    film used is copied in now and answered (fromfilm.seed); the brief is written in the
+    background (fromfilm.start), and GET says how it stands. Asking again copies nothing twice and
+    writes the brief again."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    body = await _json(req)
+    client, project = client_of(req), str(body.get("project") or "")
+    film_id = str(body.get("film") or "")
+    try:
+        got = await asyncio.to_thread(fromfilm.seed, client, project, film_id)
+    except fromfilm.FromFilmError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    auth = (
+        (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else site_auth()
+    )
+    brief = fromfilm.start(client, project, film_id, got, auth)
+    return web.json_response(got | {"brief": brief}, status=202)
+
+
+async def from_film_state(req):
+    """How the brief of a project started from a film stands: ?project=."""
+    try:
+        st = fromfilm.state(client_of(req), str(req.query.get("project") or ""))
+    except fromfilm.FromFilmError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(st)
+
+
+async def picture_role(req):
+    """Say what one of the asker's project pictures is for: {"project": id, "role": "style"}."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response({"error": 'send {"project", "role"}'}, status=400)
+    project = str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project):
+        return web.json_response({"error": "No such project."}, status=404)
+    try:
+        entry = await asyncio.to_thread(
+            library.set_picture_role,
+            client_of(req),
+            project,
+            req.match_info["name"],
+            body.get("role"),
+        )
+    except library.PictureError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    if not entry:
+        return web.json_response({"error": "no such picture"}, status=404)
+    return web.json_response(entry)
+
+
+async def character_add(req):
+    """Put one of the asker's uploads into their project's cast as a painted character:
+    {"project": id, "upload": "up-...", "name": "mom", "about": "Mom, mid-30s, yellow raincoat"}.
+    The upload goes; the character stays, for every future episode. Answers its cast entry."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response(
+            {"error": 'send {"project", "upload", "name", "about"}'}, status=400
+        )
+    client, project = client_of(req), str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project) or not library.owner(client, project):
+        return web.json_response({"error": "No such project."}, status=404)
+    uploader = uploader_of(req)
+    meta = uploads.get(uploader, body.get("upload"))
+    if meta is None:
+        return web.json_response(
+            {"error": "That upload is no longer here; add it again.", "reason": "attachment"},
+            status=409,
+        )
+    if meta["kind"] != "image":
+        return web.json_response({"error": "A character is a picture."}, status=400)
+    try:
+        entry = await asyncio.to_thread(
+            library.add_character,
+            client,
+            project,
+            str(body.get("name") or ""),
+            str(body.get("about") or ""),
+            uploads.file_of(uploader, meta),
         )
     except library.PictureError as e:
         return web.json_response({"error": e.text}, status=e.status)
@@ -1808,6 +2599,285 @@ async def set_listed(req):
     return web.json_response({"id": f.id, "listed": listed})
 
 
+async def delete(req):
+    """Delete a film for good (delete_film.py): its copy online, its record, its folder and what
+    else names it. {"plan": true} answers what would go and removes nothing. The film's own
+    client (or this machine) only; a film being made, changed, drawn again or sent to YouTube is
+    refused (409, with the reason)."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    f = film_of(req.match_info["id"])
+    if not (from_this_machine(req) or clients.same(f.record().get("client"), client_of(req))):
+        return web.json_response({"error": "only whoever made a film can delete it"}, status=403)
+    try:
+        only_plan = bool((await req.json()).get("plan"))
+    except (ValueError, AttributeError):
+        only_plan = False
+    J = JOBS.get(f.id)
+    no = delete_film.why_not(f)
+    if J is not None and J["status"] in ("queued", "running") and not J.get("ended"):
+        no = ("making", "This film is still being made. Stop it first.")
+    elif not no and (peer_has("rounds", f.id) or peer_has("unbrands", f.id)):
+        no = ("round", "This film is being changed; try again in a few minutes.")
+    if only_plan:
+        what = await asyncio.to_thread(delete_film.plan, f)
+        return web.json_response(
+            what | {"refused": {"reason": no[0], "error": no[1]} if no else None}
+        )
+    if no:
+        return web.json_response({"reason": no[0], "error": no[1]}, status=409)
+    try:
+        gone = await delete_film.delete(f)
+    except delete_film.DeleteError as e:
+        return web.json_response({"reason": e.reason, "error": str(e)}, status=e.status)
+    JOBS.pop(f.id, None)
+    print("deleted %s: %d online, %d records" % (f.id, gone["online"], gone["records"]), flush=True)
+    return web.json_response(gone | {"deleted": True})
+
+
+async def unbrand_film(req):
+    """Draw a finished film again without the Free plan's mark and closing (unbrand.py), at the
+    frame rate its maker's plan gives (X-Fps) and in its place in the line (X-Priority). The
+    film's own client (or this machine) only -- the site asks once that client is on a paid
+    plan. Asked again, it answers how the first stands; a film with no branding left is answered
+    as done."""
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
+        return web.json_response({"error": "only whoever made a film can change that"}, status=403)
+    if rec.get("state") != "done" or not rec.get("ok"):
+        return web.json_response({"error": "This film is not finished."}, status=409)
+    if not rec.get("branding"):
+        return web.json_response({"id": f.id, "branded": False, "unbrand": "done"})
+    if f.id in rounds.in_flight() or peer_has("rounds", f.id):
+        # the round's version is made from the film as it stood: asked again once it is done
+        return web.json_response(
+            {"error": "A new version of this film is being made; try again in a few minutes."},
+            status=409,
+        )
+    if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
+        st = (rec.get("unbrand") or {}).get("state") or "queued"
+        return web.json_response({"id": f.id, "branded": True, "unbrand": st}, status=202)
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    try:
+        job = unbrand.start(
+            f,
+            SCHED,
+            fps=30 if req.headers.get("X-Fps", "").strip() == "30" else 60,
+            priority=1 if req.headers.get("X-Priority", "").strip() == "1" else 0,
+            by=req.headers.get("X-Member", "").strip() or client_of(req),
+        )
+    except unbrand.UnbrandError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response({"id": f.id, "branded": True, "unbrand": job["state"]}, status=202)
+
+
+# ------------------------------------------------------------------ a film's versions (rounds.py)
+def _round_error(e):
+    body = {"error": e.text}
+    if e.reason:
+        body["reason"] = e.reason
+    return web.json_response(body, status=e.status)
+
+
+def _own_done(req):
+    """The finished film of this route, when its own client asks (or this machine); else the
+    answer to give instead."""
+    f = film_of(req.match_info["id"])
+    rec = f.record()
+    if not (from_this_machine(req) or clients.same(rec.get("client"), client_of(req))):
+        return None, web.json_response(
+            {"error": "only whoever made a film can change it"}, status=403
+        )
+    if rec.get("state") != "done" or not rec.get("ok"):
+        return None, web.json_response(
+            {"reason": "state", "error": "This film is not finished."}, status=409
+        )
+    return f, None
+
+
+async def versions(req):
+    """A finished film's versions, for its own client: each with its filmstrip and narration,
+    how a round of changes stands, whether its words may change, its rounds left today. The
+    first time it is asked for a film, its filmstrip is made (two seconds)."""
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    if f.mode == "scenes":
+        return web.json_response(
+            {
+                "reason": "scenes",
+                "error": "This film was made in scenes; it cannot be changed here yet.",
+            },
+            status=409,
+        )
+    try:
+        rec = await rounds.prepare(f)
+    except Exception as e:  # noqa: BLE001 -- the film plays whether or not its notes open
+        print(
+            "film %s: its versions could not be read: %s" % (f.id, e), file=sys.stderr, flush=True
+        )
+        return web.json_response({"error": "This film's versions could not be read."}, status=500)
+    return web.json_response(
+        {"id": f.id, **rounds.public(rec), "pictures": rounds.pictures(f, rec)}
+    )
+
+
+async def versions_make(req):
+    """A round of changes: the film's maker's notes, made into its next version (rounds.py); or,
+    with {"key", "from", "sharpen": "medium"|"high"} and no notes, its pictures painted again at
+    that quality from their drafts (rounds.sharpen). The film's own client only. It takes one of that client's films-at-once places and its reserve
+    of the day's budget, but is not one of the day's films. Asked again with the same key, it
+    answers the round already asked for."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response(
+            {"error": 'send JSON: {"key", "from", "notes": [...]}'}, status=400
+        )
+    key = str(body.get("key") or "")[:80] or None
+    rec = f.record()
+    was = rec.get("round") or {}
+    if key and was.get("key") == key:  # the same asking, again: how it stands
+        return web.json_response(
+            {"id": f.id, "round": {k: was.get(k) for k in ("id", "n", "state")}}, status=202
+        )
+    if f.id in rounds.in_flight() or peer_has("rounds", f.id):
+        return web.json_response(
+            {"reason": "round", "error": "A round of changes to this film is already being made."},
+            status=409,
+        )
+    if f.id in unbrand.in_flight() or peer_has("unbrands", f.id):
+        return web.json_response(
+            {
+                "reason": "unbrand",
+                "error": "This film is being drawn again without the KitCut branding. Send "
+                "your notes in a few minutes.",
+            },
+            status=409,
+        )
+    if any(j["film"] == f.id and j["state"] == "sending" for j in youtube.SENDS.values()):
+        return web.json_response(
+            {
+                "reason": "sending",
+                "error": "This film is being sent to YouTube. Send your notes when that is done.",
+            },
+            status=409,
+        )
+    # files changed by hand, sent to be the next version (ops.sh put): this machine's only
+    hand = body.get("hand")
+    if hand is not None and not from_this_machine(req):
+        return web.json_response({"error": "not from here"}, status=403)
+    sharp = body.get("sharpen")
+    if sharp is not None and (hand is not None or body.get("notes")):
+        return web.json_response({"error": "sharpen takes no notes"}, status=400)
+    try:
+        bare = hand is not None or sharp is not None
+        notes = [] if bare else rounds.clean_notes(f, body.get("notes"))
+    except rounds.RoundError as e:
+        return _round_error(e)
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    local = from_this_machine(req)
+    auth = (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if local else site_auth()
+    client = client_of(req)
+    async with ADMIT:
+        if not peers.leads() or MODE != "serving" or DRAINING:
+            return web.json_response({"error": RESTARTING}, status=503)
+        refused = await over_limit(
+            client,
+            f.length,
+            auth,
+            at_once_of(req),
+            peers.peers(),
+            need=rounds.reserve(f, len(notes), auth),
+            films_day=False,
+        )
+        if refused:
+            return web.json_response(
+                {"reason": "budget" if "budget" in refused else "busy", "error": refused},
+                status=429,
+            )
+        try:
+            await rounds.prepare(f)  # the version the notes are on has its entry before the next
+            job = rounds.start(
+                f,
+                SCHED,
+                notes,
+                key=key,
+                # a hand's version is the studio's own work: not its maker's round to pay for,
+                # to be mailed about as theirs, or to wait behind the film they are making
+                client=client if hand is not None else rec.get("client") or client,
+                member=req.headers.get("X-Member", "").strip() or None,
+                priority=1 if req.headers.get("X-Priority", "").strip() == "1" else 0,
+                auth=auth,
+                src=body.get("from"),
+                hand=hand,
+                sharpen=sharp,
+            )
+        except rounds.RoundError as e:
+            return _round_error(e)
+    return web.json_response(
+        {"id": f.id, "round": {"id": job["rid"], "n": job["n"], "state": job["state"]}}, status=202
+    )
+
+
+async def versions_stop(req):
+    """Stop the round of changes being made: the film stays as it is."""
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    try:
+        r = await asyncio.to_thread(rounds.stop, f)
+    except rounds.RoundError as e:
+        return _round_error(e)
+    return web.json_response({"id": f.id, "round": {k: r.get(k) for k in ("id", "n", "state")}})
+
+
+async def versions_use(req):
+    """Make an earlier (or later) version the film again: its files come back, nothing is
+    rendered, and the film's addresses are that version's."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    try:
+        n = int(req.match_info["n"])
+    except ValueError:
+        raise web.HTTPNotFound() from None
+    if peer_has("rounds", f.id) or peer_has("unbrands", f.id):
+        return web.json_response(
+            {"reason": "round", "error": "This film is being changed; try again in a few minutes."},
+            status=409,
+        )
+    try:
+        rec = await asyncio.to_thread(rounds.use, f, n)
+    except rounds.RoundError as e:
+        return _round_error(e)
+    fields = {
+        "version": n,
+        "versions": rec.get("versions"),
+        "media_rev": rec.get("media_rev"),
+        # another version may be another quality (a draft, or its sharper version)
+        "pictures": rounds.pictures(f, rec),
+        "paint_quality": rounds.pictures(f, rec)["quality"],
+    }
+    if rec.get("media"):
+        fields["media"] = rec["media"]
+    await agent.save(f.id, fields, final=True)
+    thumbs.premake(f)  # its moments are another version's now
+    return web.json_response({"id": f.id, "version": n})
+
+
 def film_urls(req, jid, rec):
     """A finished film's video and poster: its copy online (media.py) when there is one --
     lasting, and playing when this machine is off -- else signed URLs through the tunnel."""
@@ -1824,7 +2894,9 @@ def film_urls(req, jid, rec):
             out["poster_url"] = signed(req, jid, "film_poster.png")
         return out
     f = Film.open(jid)
-    web = f is not None and os.path.isfile(f.path("outputs", "film_web.mp4"))
+    web = f is not None and (
+        os.path.isfile(f.path("outputs", "film_web.mp4")) or bool(media.stored(f, "film_web.mp4"))
+    )
     return {
         "video_url": signed(req, jid, "film_web.mp4" if web else "film.mp4"),
         "download_url": signed(req, jid, "film.mp4") + "&dl=1",
@@ -1944,7 +3016,7 @@ async def status(req):
             out["position"] = said["ahead"] + 1
         if said["cost"] is not None:
             out["cost_usd"] = said["cost"]  # so far
-        r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
+        r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed", "auto_length")}
     # over, made before this server started, or since replaced by a remade film (ops.sh
     # replace): what is on disk is all there is
     elif J is None or (J["status"] == "done" and r.get("replaced")):
@@ -1979,7 +3051,9 @@ async def status(req):
         if J.get("cost_usd") is not None:
             out["cost_usd"] = J["cost_usd"]  # so far; the final figure replaces it below
         if J["status"] not in ("done", "error", "cancelled"):
-            r = {k: r.get(k) for k in ("prompt", "title", "look", "length", "listed")}
+            r = {
+                k: r.get(k) for k in ("prompt", "title", "look", "length", "listed", "auto_length")
+            }
     if out["status"] == "waiting":  # paused for its person's voice: why and since when, in words
         w = f.record().get("waiting") or {}
         out["waiting"] = {
@@ -1989,16 +3063,25 @@ async def status(req):
         }
     if out["status"] == "done":
         out.update(film_urls(req, jid, r))
+        # whether it carries the Free plan's mark and closing, and how removing them stands
+        out.update(unbrand.public(f.record()))
     out["listed"] = r.get("listed") is not False  # a film from before the switch was listed
+    if f.record().get("localized"):  # a translation of a finished film (localize.py)
+        out["localized"] = {
+            k: f.record()["localized"].get(k) for k in ("from", "version", "language")
+        }
     made_from = f.record().get("template")  # a remake of a template: its "Made from" line
     if made_from:
         out["template"] = {k: made_from.get(k) for k in ("id", "version", "title")}
         out["frame"] = f.record().get("frame")
+    elif f.record().get("frame"):  # a square or tall film brought in (import_film.py): its page
+        out["frame"] = f.record()["frame"]  # shapes its player by it
     keys = (
         "prompt",
         "title",
         "look",
         "length",
+        "auto_length",  # its length was Claude's to choose (kitcut.ai's Try again keeps that)
         "image_cost_usd",
         "images",
         "seconds",
@@ -2029,8 +3112,14 @@ async def files(req):
     if req.match_info["path"] == "card.jpg" and not os.path.isfile(p):
         if os.path.isfile(os.path.join(d, "film_poster.png")):
             f = film_of(req.match_info["id"])
-            await asyncio.to_thread(media.make_card, d, f.record().get("length") or f.length)
+            await asyncio.to_thread(
+                media.make_card, d, f.record().get("runs") or f.record().get("length") or f.length
+            )
     if not os.path.isfile(p):
+        # a finished film's videos live online once prune.py let the disk copy go
+        url = media.stored(film_of(req.match_info["id"]), req.match_info["path"])
+        if url:
+            raise web.HTTPFound(url)
         raise web.HTTPNotFound()
     headers = {"Cache-Control": "no-cache"}
     if p.endswith(".html"):
@@ -2041,6 +3130,69 @@ async def files(req):
         f = film_of(req.match_info["id"])
         headers["Content-Disposition"] = media.download_name(f)
     return web.FileResponse(p, headers=headers)
+
+
+# ------------------------------------------------------------------ the GitHub hook
+# A push to kitcut's main tells the machine to look now, instead of at the next poll
+# (deploy/autoship.py; studio/deploy/README.md, "A push to GitHub ships itself"). Two locks, so
+# only GitHub gets through: Cloudflare blocks the path for every address outside GitHub's hook
+# ranges (deploy/hook-lock.mjs), and this checks GitHub's signature (an HMAC of the body with the
+# secret only GitHub and the machine's .env hold). What it lets through is only a nudge: it writes
+# STUDIO_HOME/autoship.poke and nothing of the payload is used beyond the branch's name --
+# autoship still reads GitHub itself and decides as it always does.
+HOOK_PATH = "/hooks/github"
+HOOK_MAX = 4 * 1024 * 1024  # a push of many commits is a few hundred KB; GitHub caps it at 25 MB
+# studio-poc too: the branch it followed until 2026-11-02, where a push is reported, not shipped
+HOOK_BRANCHES = ("refs/heads/main", "refs/heads/studio-poc")
+
+
+def hook_secret():
+    """AUTOSHIP_HOOK_SECRET from the machine's .env, read per call: set or changed without a
+    restart, and "" (the hook does not exist) until it is."""
+    path = os.environ.get("STUDIO_ENV_FILE") or os.path.join(films.REPO, ".env")
+    out = ""
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            for line in f:
+                k, eq, v = line.partition("=")
+                if eq and k.strip() == "AUTOSHIP_HOOK_SECRET":
+                    out = v.strip().strip("\"'")
+    except OSError:
+        pass
+    return out
+
+
+async def github_hook(req):
+    secret = hook_secret()
+    if not secret:
+        raise web.HTTPNotFound()
+    sig = req.headers.get("X-Hub-Signature-256", "")
+    if not sig.startswith("sha256=") or (req.content_length or 0) > HOOK_MAX:
+        return web.json_response({"error": "not signed"}, status=401)
+    body = bytearray()  # read here, not by req.read(): the app's cap is 64 KB
+    async for chunk in req.content.iter_chunked(65536):
+        body += chunk
+        if len(body) > HOOK_MAX:
+            return web.json_response({"error": "too large"}, status=413)
+    want = "sha256=" + hmac.new(secret.encode(), bytes(body), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig.encode(), want.encode()):
+        who = req.headers.get("CF-Connecting-IP", req.remote)
+        print("hook: a request with a wrong signature, from %s" % who)
+        return web.json_response({"error": "not signed"}, status=401)
+    event = req.headers.get("X-GitHub-Event", "")
+    if event == "ping":
+        return web.json_response({"ok": True, "pong": True})
+    try:
+        ref = json.loads(body).get("ref") if event == "push" else None
+    except (ValueError, AttributeError):  # not JSON, or not an object
+        ref = None
+    if ref not in HOOK_BRANCHES:
+        return web.json_response({"ok": True, "ignored": "%s %s" % (event, ref or "")}, status=202)
+    poke = os.path.join(films.HOME, "autoship.poke")
+    with open(poke + ".tmp", "w", encoding="utf-8") as f:
+        f.write("%s %s\n" % (time.strftime("%F %T"), req.headers.get("X-GitHub-Delivery", "")))
+    os.replace(poke + ".tmp", poke)  # kitcut-autoship.path starts a look
+    return web.json_response({"ok": True, "looking": True}, status=202)
 
 
 async def costs(req):
@@ -2100,23 +3252,54 @@ def make_app(token):
             web.get("/api/costs", costs),
             web.post("/api/films", create),
             web.post("/api/uploads", upload),
+            web.post("/api/research/{what}", research),
             web.get("/api/uploads", upload_list),
             web.get("/api/uploads/{id}", upload_status),
             web.get("/api/library", library_list),
             web.post("/api/library/pictures", picture_add),
+            web.post("/api/library/characters", character_add),
+            web.post("/api/library/from-film", from_film),
+            web.get("/api/library/from-film", from_film_state),
             web.get("/api/library/pictures/{name}/thumb.png", picture_thumb),
             web.delete("/api/library/pictures/{name}", picture_delete),
+            web.post("/api/library/pictures/{name}/role", picture_role),
             web.post("/api/library/voice", voice_add),
             web.get("/api/library/voice/{key}.mp3", voice_audio),
             web.delete("/api/library/voice/{key}", voice_delete),
+            web.get("/api/library/style", style_get),
+            web.patch("/api/library/style", style_edit),
+            web.delete("/api/library/style", style_delete),
+            web.post("/api/library/style/read", style_read),
+            web.post("/api/library/style/proof", style_proof),
+            web.post("/api/library/style/files", style_file_add),
+            web.put("/api/library/style/files/{sid}", style_file_part),
+            web.post("/api/library/style/files/{sid}/done", style_file_done),
+            web.delete("/api/library/style/files/{sid}", style_file_delete),
+            web.get("/api/library/style/{kind}/{name}", style_asset),
+            web.get("/api/library/brand", brand_get),
+            web.patch("/api/library/brand", brand_edit),
+            web.delete("/api/library/brand", brand_delete),
+            web.post("/api/library/brand/read", brand_read),
+            web.post("/api/library/brand/preview", brand_preview),
+            web.post("/api/library/brand/files", brand_file_add),
+            web.put("/api/library/brand/files/{fid}", brand_file_part),
+            web.post("/api/library/brand/files/{fid}/done", brand_file_done),
+            web.delete("/api/library/brand/files/{fid}", brand_file_delete),
+            web.get("/api/library/brand/{kind}/{name}", brand_asset),
             web.get("/api/library/{name}/thumb.png", library_thumb),
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),
             web.get("/api/films/{id}/lines", film_lines),
             web.get("/api/films/{id}/lines/{i}.mp3", film_line_audio),
             web.post("/api/films/{id}/cancel", cancel),
+            web.post("/api/films/{id}/delete", delete),
             web.post("/api/films/{id}/continue", continue_film),
             web.post("/api/films/{id}/listed", set_listed),
+            web.post("/api/films/{id}/unbrand", unbrand_film),
+            web.get("/api/films/{id}/versions", versions),
+            web.post("/api/films/{id}/versions", versions_make),
+            web.post("/api/films/{id}/versions/stop", versions_stop),
+            web.post("/api/films/{id}/versions/{n}/current", versions_use),
             web.post("/api/films/{id}/youtube", youtube_send),
             web.post("/api/films/{id}/youtube/draft", youtube_draft),
             web.get("/api/films/{id}/youtube/draft/{channel}", youtube_drafted),
@@ -2124,6 +3307,7 @@ def make_app(token):
             web.post("/api/admin/drain", drain),
             web.post("/api/admin/films/{id}/hidden", hide),
             web.get("/files/{id}/{path:.+}", files),
+            web.post(HOOK_PATH, github_hook),
         ]
     )
     app.on_startup.append(on_start)

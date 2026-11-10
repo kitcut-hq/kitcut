@@ -1,0 +1,246 @@
+{
+ "title": "Is there an oil well under your house? Los Angeles",
+ "project": "ca-data-shorts",
+ "out": "projects/ca-data-shorts/temp/maps/oil",
+ "views": [
+  {
+   "name": "la",
+   "bbox": [
+    -118.62,
+    33.7,
+    -117.92,
+    34.2
+   ],
+   "width_px": 2600,
+   "base": "s2",
+   "tone": {
+    "saturation": 0.4,
+    "brightness": 0.5,
+    "contrast": 1.1,
+    "tint": "#0a1424",
+    "tint_mix": 0.25
+   },
+   "layers": [
+    {
+     "name": "plugged",
+     "type": "points",
+     "src": "projects/ca-data-shorts/sources/calgem_wells_la.json",
+     "lon": "Longitude",
+     "lat": "Latitude",
+     "where": {
+      "WellStatus": [
+       "Plugged",
+       "PluggedOnly"
+      ]
+     },
+     "color": "#ffd27a",
+     "radius": 2.2,
+     "alpha": 0.85,
+     "glow": 3,
+     "what": "plugged wells (CalGEM WellSTAR, LA County)"
+    },
+    {
+     "name": "idle",
+     "type": "points",
+     "src": "projects/ca-data-shorts/sources/calgem_wells_la.json",
+     "lon": "Longitude",
+     "lat": "Latitude",
+     "where": {
+      "WellStatus": "Idle"
+     },
+     "color": "#ff8a1f",
+     "radius": 2.6,
+     "alpha": 0.95,
+     "glow": 3,
+     "what": "idle wells"
+    },
+    {
+     "name": "active",
+     "type": "points",
+     "src": "projects/ca-data-shorts/sources/calgem_wells_la.json",
+     "lon": "Longitude",
+     "lat": "Latitude",
+     "where": {
+      "WellStatus": "Active"
+     },
+     "color": "#ff2a3d",
+     "radius": 2.8,
+     "alpha": 1.0,
+     "glow": 4,
+     "what": "active wells"
+    }
+   ],
+   "places": [
+    {
+     "name": "Downtown LA",
+     "lon": -118.2437,
+     "lat": 34.0522
+    },
+    {
+     "name": "Echo Park / Westlake (Los Angeles City field)",
+     "lon": -118.258,
+     "lat": 34.066
+    },
+    {
+     "name": "Beverly Hills High School",
+     "lon": -118.4137,
+     "lat": 34.0598
+    },
+    {
+     "name": "Baldwin Hills (Inglewood field)",
+     "lon": -118.37,
+     "lat": 34.0
+    },
+    {
+     "name": "Long Beach / Signal Hill",
+     "lon": -118.167,
+     "lat": 33.805
+    },
+    {
+     "name": "Wilmington field",
+     "lon": -118.24,
+     "lat": 33.78
+    },
+    {
+     "name": "THUMS islands",
+     "lon": -118.17,
+     "lat": 33.757
+    },
+    {
+     "name": "Santa Monica",
+     "lon": -118.49,
+     "lat": 34.02
+    },
+    {
+     "name": "LAX",
+     "lon": -118.408,
+     "lat": 33.942
+    }
+   ]
+  },
+  {
+   "name": "westlake",
+   "bbox": [
+    -118.272,
+    34.0545,
+    -118.246,
+    34.0745
+   ],
+   "width_px": 2160,
+   "base": "naip",
+   "tone": {
+    "saturation": 0.55,
+    "brightness": 0.62,
+    "contrast": 1.08,
+    "tint": "#0a1424",
+    "tint_mix": 0.2
+   },
+   "mark_scale": 1.0,
+   "layers": [
+    {
+     "name": "wells",
+     "type": "points",
+     "src": "projects/ca-data-shorts/sources/calgem_wells_la.json",
+     "lon": "Longitude",
+     "lat": "Latitude",
+     "where": {
+      "WellStatus": [
+       "Plugged",
+       "PluggedOnly",
+       "Idle",
+       "Active"
+      ]
+     },
+     "color": "#ffb020",
+     "radius": 8,
+     "alpha": 0.95,
+     "glow": 6,
+     "what": "every well on CalGEM's map here: the Los Angeles City oil field, drilled from the 1890s"
+    }
+   ],
+   "places": [
+    {
+     "name": "US-101 freeway",
+     "lon": -118.255,
+     "lat": 34.063
+    },
+    {
+     "name": "Echo Park Lake",
+     "lon": -118.2606,
+     "lat": 34.0726
+    }
+   ]
+  },
+  {
+   "name": "bhhs",
+   "bbox": [
+    -118.4195,
+    34.0545,
+    -118.4075,
+    34.0645
+   ],
+   "width_px": 2160,
+   "base": "naip",
+   "tone": {
+    "saturation": 0.55,
+    "brightness": 0.62,
+    "contrast": 1.08,
+    "tint": "#0a1424",
+    "tint_mix": 0.2
+   },
+   "layers": [
+    {
+     "name": "wells",
+     "type": "points",
+     "src": "projects/ca-data-shorts/sources/calgem_wells_la.json",
+     "lon": "Longitude",
+     "lat": "Latitude",
+     "where": {
+      "WellStatus": [
+       "Plugged",
+       "PluggedOnly",
+       "Idle",
+       "Active"
+      ]
+     },
+     "color": "#ffd27a",
+     "radius": 9,
+     "alpha": 0.95,
+     "glow": 6,
+     "what": "every well on CalGEM's map here (almost all plugged)"
+    }
+   ],
+   "places": [
+    {
+     "name": "Beverly Hills High School",
+     "lon": -118.4137,
+     "lat": 34.0598
+    }
+   ]
+  },
+  {
+   "name": "thums",
+   "bbox": [
+    -118.1631,
+    33.7502,
+    -118.1565,
+    33.7556
+   ],
+   "width_px": 2160,
+   "base": "naip",
+   "tone": {
+    "saturation": 0.8,
+    "brightness": 0.85,
+    "contrast": 1.1
+   },
+   "layers": [],
+   "places": [
+    {
+     "name": "Island White (THUMS)",
+     "lon": -118.1598,
+     "lat": 33.7528
+    }
+   ]
+  }
+ ]
+}

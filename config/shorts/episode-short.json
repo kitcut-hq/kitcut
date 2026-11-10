@@ -1,0 +1,41 @@
+{
+  "_comment": "The look of a vertical Short cut from a finished 16:9 sketch-film episode (scripts/episode-short.py). The episode is cropped to a 4:5 window that follows the action and set full width in a 1080x1920 frame, over a blurred copy of itself; the Short's headline sits on a card in the top band, in the film's own paper/ink/accent (read from its sketch.json player block); the narration is captioned word by word from the film's own word timings, centred at 75% of the height (Shorts guidebook rules 24-27).",
+  "canvas": [1080, 1920],
+  "fps": 30,
+  "picture": {
+    "aspect": [4, 5],
+    "y": 336,
+    "_aspect": "4:5 of a 1080-high episode is 864 px of its 1920: the cast and the meter both fit, and the picture is 1.25x the source, which stays crisp on a crayon line. A 9:16 window (608 px) would cut the meter and the props round the cast."
+  },
+  "backdrop": {
+    "blur_px": 12,
+    "brightness": -0.18,
+    "saturation": 0.8
+  },
+  "title": {
+    "font": "fonts/BalsamiqSans-Bold.ttf",
+    "max_size": 92,
+    "min_size": 64,
+    "max_width": 940,
+    "max_lines": 2,
+    "line_gap": 1.08,
+    "band": [20, 330],
+    "pad": [36, 22],
+    "radius": 30,
+    "border_px": 6,
+    "tilt_deg": -1.5,
+    "paper": "#f7f2e7",
+    "ink": "#2a2521",
+    "accent": "#d9733f"
+  },
+  "captions": "config/presets/cartoon-short.json",
+  "join_fade_ms": 30,
+  "pad": [0.12, 0.45],
+  "render": {
+    "cq": 19,
+    "preset": "p5",
+    "maxrate": "14M",
+    "bufsize": "28M",
+    "audio_bitrate": "192k"
+  }
+}

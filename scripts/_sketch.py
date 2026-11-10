@@ -38,6 +38,51 @@ def safe_name(name, what="name"):
     return name
 
 
+# a project's picture as a film names it (studio/library.py _seed_pictures): inputs/pic_<name>.*,
+# and a painted character of its cast (_seed_painted): inputs/cast_<name>.*
+PIC_NAME = re.compile(r"^(pic|cast)_[a-z][a-z0-9_]{0,30}$")
+# a picture the person attached (studio/film.py: inputs/upload<n>.*): a painting's reference only
+# when they said it shows how to draw something (its role "style", in inputs/roles.json)
+UPLOAD_NAME = re.compile(r"^upload[1-9][0-9]?$")
+PIC_EXT = (".png", ".jpg", ".jpeg", ".webp")
+# what a picture is for, as the person said (the studio writes inputs/roles.json): "show" it as
+# it is, "scene" -- read what a place has, never sent to the painter -- or "style", a drawn
+# example of one kind of thing, a reference for the paintings that show it
+ROLES = ("show", "scene", "style")
+
+
+def picture_roles(film_dir):
+    """{picture name: role} from the film's inputs/roles.json ({} without one)."""
+    try:
+        with open(os.path.join(film_dir, "inputs", "roles.json"), encoding="utf-8") as f:
+            got = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(got, dict):
+        return {}
+    return {k: v for k, v in got.items() if isinstance(k, str) and v in ROLES}
+
+
+def project_picture(film_dir, name):
+    """The file of the film's own project picture `name` (pic_<name> or cast_<name>, in its
+    inputs/), or of a picture the person attached as a style example (upload<n>, its role
+    "style"), or None:
+    a name of another shape, no such picture, an attachment of another role, a picture marked
+    "scene" (a photo sent as a reference pulls a painting towards a photo), or a file that
+    resolves outside the film's inputs/ (a link) is not one."""
+    if not isinstance(name, str) or not (PIC_NAME.match(name) or UPLOAD_NAME.match(name)):
+        return None
+    role = picture_roles(film_dir).get(name)
+    if role == "scene" or (UPLOAD_NAME.match(name) and role != "style"):
+        return None
+    inputs = os.path.realpath(os.path.join(film_dir, "inputs"))
+    for ext in PIC_EXT:
+        p = os.path.realpath(os.path.join(inputs, name + ext))
+        if p.startswith(inputs + os.sep) and os.path.isfile(p):
+            return p
+    return None
+
+
 # ------------------------------------------------------------------ manifest
 def load(path):
     """Read a sketch manifest and resolve everything it names relative to its folder."""
@@ -47,8 +92,13 @@ def load(path):
     d = os.path.dirname(path)
     m["_path"], m["_dir"] = path, d
     m["_id"] = _project.project_id(m, path)
+    # "work": "temp/unbrand" -- where the tools WRITE (audio/, outputs/, temp/), when that is not
+    # beside the manifest. Everything the manifest names is still read from its own folder, so a
+    # finished film can be rendered a second time next to itself (the studio's unbrand.py) and
+    # the one that is online stays whole until the new one is.
+    w = os.path.join(d, m["work"]) if m.get("work") else d
     for sub in ("audio", "outputs", "temp"):
-        m["_" + sub] = os.path.join(d, sub)
+        m["_" + sub] = os.path.join(w, sub)
         os.makedirs(m["_" + sub], exist_ok=True)
     m.setdefault("duration", 30.0)
     m.setdefault("fps", 60)
