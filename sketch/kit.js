@@ -165,7 +165,7 @@
                                       options, or false), ground (the y a foot stands at). l: {knee, ankle,
                                       foot}. Sitting puts the hips on the seat, the feet on the ground.
      SK.shoe(x, y, o)                 a shoe on the ground at (x, y), the kind the person would wear there:
-                                      o.kind 'sneaker' | 'clog' | 'boot' (a tall rain or winter boot) |
+                                      o.kind 'sneaker' | 'clog' | 'boot' (a rain boot: Leo's) |
                                       'sandal' (the bare foot under a strap) | 'slipper' (a soft house
                                       slipper) | 'dress' (a smart low shoe) | 'heel' | 'bare' (a bare foot,
                                       five toes); view 'front' | 'side' (dir, rot); col (each kind has a
@@ -1590,11 +1590,11 @@
     return { knee: k2, ankle: a2, foot };
   };
   /** A shoe standing on the ground at (x, y), under its ankle: whatever the person would wear there. */
-  const SHOE_COL = { sneaker: '#3f86dc', clog: '#fbd437', boot: '#6b4a33', sandal: '#c98d55', slipper: '#9fb8d8', dress: '#3b2a22', heel: '#c0392b' };
+  const SHOE_COL = { sneaker: '#3f86dc', clog: '#fbd437', boot: '#f7c821', sandal: '#c98d55', slipper: '#9fb8d8', dress: '#3b2a22', heel: '#c0392b' };
   SK.shoe = function (x, y, o = {}) {
     const z = o.size ?? 1, kind = o.kind ?? 'sneaker', seed = o.seed ?? 3900, skin = o.skin ?? C().skin;
     const w = (p, c, sd2) => SK.wash(p, c, { seed: sd2, dx: 0, dy: 0, tex: false }), k = (p, sd2, wd = 4.5) => SK.ink(p, { w: wd, seed: sd2, dbl: false });
-    const col = o.col ?? SHOE_COL[kind] ?? '#3b3f4a', dk = o.dark ?? SK.mix(col, '#000000', .2), sole = o.sole ?? (kind === 'sneaker' ? '#ffffff' : dk);
+    const col = o.col ?? SHOE_COL[kind] ?? '#3b3f4a', dk = o.dark ?? (kind === 'boot' && !o.col ? '#d39a12' : SK.mix(col, '#000000', .2)), sole = o.sole ?? (kind === 'sneaker' ? '#ffffff' : dk);
     const toes = (pts, sd2) => pts.forEach(([tx, ty, r], i) => { w(S.ellC(tx, ty, r, r), skin, sd2 + i); SK.ink(S.arc(tx, ty, r, -.2, Math.PI + .2), { w: 2.6, seed: sd2 + 9 + i, dbl: false }); });
     if (o.view === 'side') { // in profile, the toe towards o.dir, turned by o.rot about the ankle; drawn on the ground (y 0) under it
       const dir = o.dir ?? 1;
@@ -1605,11 +1605,11 @@
           const up = S.path([['M', -24, -6], ['Q', -27, -26, -12, -29], ['L', 2, -29], ['Q', 12, -27, 22, -22], ['Q', 46, -17, 46, -6], ['Z']]); w(up, col, seed + 2); k(up, seed + 3);
           for (const [hx, hy] of [[10, -21], [20, -18], [30, -14], [16, -12], [27, -9]]) w(S.ellC(hx, hy, 2.6, 2.2), dk, seed + 4);
         });
-        else if (kind === 'boot') SK.at(4, 0, 0, 1, () => { // Leo's rain boot: a tall shaft, a rim, a ribbed sole
+        else if (kind === 'boot') SK.at(4, 0, 0, 1, () => { // Leo's rain boot: glossy, a tall shaft, a rim, the sole
           const b = S.path([['M', -22, -60], ['L', 22, -60], ['L', 23, -26], ['Q', 42, -24, 46, -8], ['L', 46, 0], ['L', -24, 0], ['Q', -26, -30, -22, -60]]);
           w(b, col, seed); w(S.poly([[-24, -9], [46, -9], [46, 1], [-24, 1]], true), dk, seed + 1); k(b, seed + 2);
           const rim = S.rrect(-25, -68, 50, 12, 5); w(rim, dk, seed + 3); k(rim, seed + 4, 4);
-          SK.ink(S.line(-11, -50, -11, -24), { w: 4, col: 'rgba(255,255,255,.6)', seed: seed + 6, dbl: false });
+          SK.ink(S.line(-11, -50, -11, -24), { w: 4, col: 'rgba(255,255,255,.75)', seed: seed + 6, dbl: false });
         });
         else if (kind === 'sandal') SK.at(8, 0, 0, .52, () => { // Mom's slide: a flat sole, the bare foot, one wide strap
           const so = S.rrect(-82, -12, 128, 16, 8); w(so, dk, seed); k(so, seed + 1);
@@ -1645,12 +1645,13 @@
         const up = S.path([['M', -29, -6], ['Q', -33, -28, -10, -31], ['Q', 14, -33, 28, -22], ['Q', 34, -13, 30, -6], ['Z']]); w(up, col, seed + 2); k(up, seed + 3);
         for (const [hx, hy] of [[-16, -22], [-4, -25], [8, -24], [19, -19], [-10, -14], [4, -15], [17, -11]]) w(S.ellC(hx, hy, 2.8, 2.4), dk, seed + 4);
         for (const s2 of [-1, 1]) w(S.ellC(s2 * 25, -11, 2.6, 2.6), dk, seed + 5);
-      } else if (kind === 'boot') { // the rain boot from the front: the shaft, its rim, the toe, the sole
-        const sh = S.rrect(-20, -64, 40, 50, 8); w(sh, col, seed); k(sh, seed + 1);
-        const toe = S.path([['M', -28, -2], ['Q', -30, -24, -18, -26], ['L', 18, -26], ['Q', 30, -24, 28, -2], ['Z']]); w(toe, col, seed + 2); k(toe, seed + 3);
-        const so = S.rrect(-30, -6, 60, 8, 3); w(so, dk, seed + 4); k(so, seed + 5, 4);
-        const rim = S.rrect(-23, -70, 46, 10, 4); w(rim, dk, seed + 6); k(rim, seed + 7, 4);
-        SK.ink(S.line(-10, -54, -10, -28), { w: 4, col: 'rgba(255,255,255,.6)', seed: seed + 8, dbl: false });
+      } else if (kind === 'boot') { // Leo's rain boot, as his front view draws it: the boot in profile, its toe turned out
+        SK.at(-6, 0, 0, .92, () => {
+          const bt = S.path([['M', -22, -60], ['L', 22, -60], ['L', 23, -26], ['Q', 42, -24, 46, -8], ['L', 46, 0], ['L', -24, 0], ['Q', -26, -30, -22, -60]]);
+          w(bt, col, seed); w(S.poly([[-24, -9], [46, -9], [46, 1], [-24, 1]], true), dk, seed + 1); k(bt, seed + 2);
+          const rim = S.rrect(-25, -68, 50, 12, 5); w(rim, dk, seed + 3); k(rim, seed + 4, 4);
+          SK.ink(S.line(-11, -50, -11, -24), { w: 4, col: 'rgba(255,255,255,.75)', seed: seed + 6, dbl: false });
+        });
       } else if (kind === 'sandal' || kind === 'bare') { // the bare foot (Leo's: five toes along its tip), on a sandal's sole under a strap
         if (kind === 'sandal') { const so = S.rrect(-30, -1, 62, 9, 4); w(so, dk, seed); k(so, seed + 1, 4); } // the sole under the toes
         const ft = S.path([['M', -22, -6], ['Q', -24, -26, -8, -28], ['Q', 18, -28, 30, -12], ['Q', 34, 2, 14, 2], ['L', -16, 2], ['Q', -24, 0, -22, -6], ['Z']]); w(ft, skin, seed + 2); k(ft, seed + 3, 4);
