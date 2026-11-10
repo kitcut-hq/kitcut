@@ -110,7 +110,12 @@ PICTURE_EXT = ("png", "jpg", "webp")
 # film's attachments and in the MCP): no role is the old way, Claude reads it and decides
 PICTURE_ROLES = _sketch.ROLES
 ROLE_NOTE = {
-    "show": "show it as it is (SK.image); never repaint it, never a painting's ref",
+    "show": (
+        "show it as it is (SK.image), somewhere in the film, even where the prompt seems to "
+        "leave no room for it (then a framed print, a card, or the closing frame, and say so at "
+        "the end); never repaint it, never a painting's ref. Its role is the person's word: a "
+        "film whose code never draws it is not finished"
+    ),
     "scene": (
         "what a place has: Read it, and write two or three of the things in it (a chair, three "
         "windows, palm trees) plainly into the prompt of the paintings of that place, no fine "
@@ -135,9 +140,20 @@ ROLE_NOTE_DRAWN = ROLE_NOTE | {
 }
 
 
-def role_line(role, painted=True):
-    """A picture's role, said to Claude ("" for a picture without one)."""
+# a project's picture marked "show": shown as it is when an episode uses it, and left out by one
+# that does not (validate._show_these holds only a film's own attachments to it)
+SHOW_IF_USED = (
+    "show it as it is (SK.image) where this episode uses it; never repaint it, never a "
+    "painting's ref"
+)
+
+
+def role_line(role, painted=True, required=True):
+    """A picture's role, said to Claude ("" for a picture without one). required: False for a
+    project's picture, which an episode may leave out."""
     notes = ROLE_NOTE if painted else ROLE_NOTE_DRAWN
+    if role == "show" and not required:
+        return " -- show: " + SHOW_IF_USED
     return " -- %s: %s" % (role, notes[role]) if role in notes else ""
 
 
@@ -150,6 +166,8 @@ def write_roles(film, roles):
     got = _sketch.picture_roles(film.dir) | roles
     os.makedirs(os.path.dirname(p), exist_ok=True)
     _write_json(p, got)
+
+
 VOICE_LINES = 12  # a project's approved voice lines: every episode carries them all
 VOICE_KEY = re.compile(r"^[0-9a-f]{12}$")
 CLASHED = "clashed"  # a project library's members that did not merge: <name>/<film id>.js
@@ -766,7 +784,7 @@ def note(film):
                 p.get("w"),
                 p.get("h"),
                 p["file"],
-                role_line(p.get("role"), bool(paint_kinds(film.caps))),
+                role_line(p.get("role"), bool(paint_kinds(film.caps)), required=False),
             )
             for p in pics
         ]

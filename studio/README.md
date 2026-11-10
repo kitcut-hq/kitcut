@@ -1080,7 +1080,19 @@ film it vouches is the person's. That film is an episode:
   take the same (`picture_roles: {upload id: role}` on `POST /api/films`). Both reach the film's
   `inputs\roles.json` (the studio's; Claude never writes `inputs\`) and Claude's note, and an
   attachment (`upload<n>`) is a painting's `ref` only when its role is `style`, a `scene` picture
-  never (`_sketch.project_picture`). Every episode gets them as
+  never (`_sketch.project_picture`). The roles are held, not hinted, each at the earliest file
+  that can show it (`validate.held_roles`): a film's own `show` attachment must be named in its
+  code (film.js, its scenes, a template's data; comments do not count) once the picture is
+  written; a `scene` picture is never named in code; a `style` attachment is the `ref` of at
+  least one painting, said when paint.json is saved, before anything is painted; in a film made
+  in scenes, scenes.json names each `show` picture in the plan of the scene that shows it, and
+  that scene's pass is told what it is for (`validate.scene_pictures`). Held only where it can
+  be kept: a film's own attachments (a project's `show` picture is shown when an episode uses
+  it, and optional), and only while Claude writes a film for the first time (not a round, a
+  translation or a template's film). The agent's note says the role beats the prompt's wording.
+  Replayed on the 42 finished films with roles (2026-11-09): 40 pass, and the two it stops are
+  the two that broke a role -- a fashion film that painted a stranger instead of showing the
+  portrait, and an app promo that left 5 of its 9 screenshots out. Every episode gets them as
   `inputs\pic_<name>.*`, in the manifest as `pic_<name>`; the ones neither film.js nor the cast
   draws leave before the final render, like unused attachments. `once: true` seeds only the
   project's next episode: `_seed_pictures` removes it from the project's library right after, so

@@ -404,12 +404,10 @@ async def projects(c, auth, mem, check):
         f.record().get("member") == "u:proj" and mem.docs[ep].get("member") == "u:proj",
         "the film and its run record who asked",
     )
-    with open(f.path("vo.json"), encoding="utf-8") as vf:
-        check(
-            f.record().get("narrator") == {"source": "kitcut", "voice": "Puck"}
-            and json.load(vf)["voice"] == "Puck",
-            "the narrator the project set is the film's voice",
-        )
+    check(
+        f.record().get("narrator") == {"source": "kitcut", "voice": "Puck"},
+        "the narrator the project set is in the film's record",
+    )
     r = await c.get("/api/films/%s" % ep, headers=me)
     check(r.status == 200, "and the person's old name still owns it")
     lim = await (await c.get("/api/limits", headers=auth)).json()
@@ -428,6 +426,11 @@ async def projects(c, auth, mem, check):
         st.get("status") == "done" and "brief" not in json.dumps(st) and "project" not in st,
         "the film's status says nothing of the project",
     )
+    # read once the film is done: the stand-in Claude writes "Kore" into vo.json on purpose and
+    # the studio pins the person's voice back at its next check, so a read while the film runs
+    # saw either, depending on who got there first
+    with open(f.path("vo.json"), encoding="utf-8") as vf:
+        check(json.load(vf)["voice"] == "Puck", "the narrator the project set is the film's voice")
     check("title" in mem.docs[ep] and mem.docs[ep]["project_id"] == P, "the final record has both")
     lib = await (await c.get("/api/library?project=" + P, headers=me)).json()
     own = await (await c.get("/api/library", headers=me)).json()

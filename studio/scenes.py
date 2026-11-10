@@ -253,7 +253,7 @@ def scene_message(film, k, sheet=None):
             if existing
             else "Write %s from scratch." % scene_file(scene)
         ),
-    ) + mark_note(film)
+    ) + validate.scene_pictures(film, scene) + mark_note(film)
 
 
 def _sounds(film):

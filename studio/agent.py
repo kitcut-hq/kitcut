@@ -849,12 +849,21 @@ def attached_note(film):
             "(a logo, a product, a person, a place: put it on screen with SK.image), a reference "
             "to match (a look, a character, a layout: draw in its spirit, don't paste it), or the "
             "brief itself (a screenshot, a note, a sketch of the story: read it as the prompt). "
-            "Where the person said how to use one (its role above, or the prompt), do that; "
-            "otherwise decide. Before you write anything, say in one short sentence per picture "
-            "what you took it to be. A photo in a drawn film sits best framed, as a pinned print "
-            "or a card, so it belongs to the drawn world. A picture you don't draw never leaves "
-            "the studio.",
+            "Where the person gave one a role above, the role is what it is for, whatever the "
+            'prompt\'s wording seems to say ("no other elements", "use it as a reference"): '
+            "the studio checks the roles and the film does not finish without them. Where there "
+            "is no role, the prompt says, or you decide. Before you write anything, say in one "
+            "short sentence per picture what you took it to be and, for one with a role, where "
+            "it goes. A photo in a drawn film sits best framed, as a pinned print or a card, so "
+            "it belongs to the drawn world; several to show in a short film can share a shot (a "
+            "wall of prints, a row of cards). A picture you don't draw never leaves the studio.",
         ]
+        if film.mode == "scenes" and any(a.get("role") == "show" for a in pics):
+            lines.append(
+                "This film is made in scenes, and a scene's pass sees only its own plan: name "
+                'each picture marked "show" in the "shows" of the scene that puts it on screen '
+                "(scenes.json is checked for it)."
+            )
     if not rec.get("prompt", "").strip():
         lines += [
             "",
@@ -879,9 +888,7 @@ def _doc_text(path):
         return None
 
 
-# the visitor's pictures, their project's, its brand's (brandkit.py: brand_pic_<name>; never its
-# logos, which the end card draws through SK.BRAND), and what Claude took from the web (web-grab.py)
-PICTURE = r"upload\d+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+|web_[a-z0-9_]+"
+PICTURE = validate.PICTURE  # the pictures a film may carry: the person's, a project's, the web's
 
 
 def drop_unused_uploads(film):
@@ -889,21 +896,12 @@ def drop_unused_uploads(film):
     web) that neither film.js nor the cast draws leave the manifest before the final render, so
     they are never bundled into the film's files. Returns the names dropped. A template's film
     names its pictures in its data (content.json), not its code: read too, or every photo it
-    found left the film and its frames drew empty (an open house remake, 2026-10-04)."""
+    found left the film and its frames drew empty (an open house remake, 2026-10-04). What is
+    drawn is validate.drawn_pictures, the same reading the gate holds a "show" picture to."""
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     images = m.get("images") or {}
-    code = [film.path("film.js")]
-    code += [film.path(*str(rel).split("/")) for rel in (m.get("data") or {}).values()]
-    if os.path.isdir(film.path("cast")):
-        code += [film.path("cast", n) for n in os.listdir(film.path("cast")) if n.endswith(".js")]
-    used = set()
-    for p in code:
-        try:
-            with open(p, encoding="utf-8") as f:
-                used |= set(re.findall(r"\b(?:%s)\b" % PICTURE, f.read()))
-        except OSError:
-            pass
+    used = validate.drawn_pictures(film)
     gone = [k for k in images if re.fullmatch(PICTURE, k) and k not in used]
     if gone:
         for k in gone:

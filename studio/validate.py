@@ -39,7 +39,15 @@ MAX_SCENE_JS = 64 * 1024  # one scene of a film made in scenes: 12-75 s, not a w
 # writes must be here, or the guard puts it back and this refuses it on every check
 # "dry": a voice mixed with no room (_sketchaudio.vo_stereo)
 VO_KEYS = set(VO_PINNED) | {
-    "model", "voice", "style", "language", "lines", "cast", "jobs", "say", "dry",
+    "model",
+    "voice",
+    "style",
+    "language",
+    "lines",
+    "cast",
+    "jobs",
+    "say",
+    "dry",
 }
 # "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
 VO_LINE_KEYS = {"text", "start", "who", "pause"}
@@ -450,7 +458,7 @@ def problems(film, name):
         p = film.path("film.js")
         if os.path.exists(p) and os.path.getsize(p) > MAX_JS:
             return ["film.js is over %d KB; keep it short" % (MAX_JS // 1024)]
-        return []
+        return _roles(film)
     if name.startswith("scenes/"):  # a scene of a film made in scenes (studio/scenes.py)
         p = film.path(*name.split("/"))
         if os.path.exists(p) and os.path.getsize(p) > MAX_SCENE_JS:
@@ -483,7 +491,7 @@ def problems(film, name):
             out = _verbatim(d, *script)
         return out
     if name == "paint.json":
-        return _paint(d, film.length, film.caps, film.dir, _cast_of(film))
+        return _paint(d, film.length, film.caps, film.dir, _cast_of(film)) + _style_refs(film, d)
     if name in ("score.json", "sfx.json"):  # a kept sound or theme, played by name
         try:
             score, cues = A.expand_sounds(
@@ -497,7 +505,7 @@ def problems(film, name):
     if name == "sounds.json":
         return _sounds(d, film.length)
     if name == "scenes.json":
-        return _scenes(d, film)
+        return _scenes(d, film) + _scenes_show(film, d)
     return []
 
 
@@ -654,6 +662,190 @@ def _scenes(d, film):
             elif dur > SCENE_MAX_S:
                 out.append("%s runs %.1f s: at most %d s -- split it" % (s["id"], dur, SCENE_MAX_S))
     return out
+
+
+# the visitor's pictures, their project's, its brand's (brandkit.py: brand_pic_<name>; never its
+# logos, which the end card draws through SK.BRAND), and what Claude took from the web (web-grab.py)
+PICTURE = r"upload\d+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+|web_[a-z0-9_]+"
+# a JavaScript comment: a picture named only in one is not drawn (a "// upload3 goes here" note)
+JS_COMMENT = re.compile(r"/\*.*?\*/|(?<![:'\"\\])//[^\n]*", re.DOTALL)
+
+
+def _code_files(film):
+    """The files a film's pictures are drawn from: film.js, the scenes of a film made in scenes,
+    a template's data files (content.json: a template names its pictures in its data, not its
+    code) and the cast."""
+    try:
+        with open(film.manifest, encoding="utf-8") as f:
+            m = json.load(f)
+    except (OSError, ValueError):
+        m = {}
+    files = [film.path("film.js")]
+    files += [film.path(*str(rel).split("/")) for rel in (m.get("data") or {}).values()]
+    for d in ("scenes", "cast"):
+        if os.path.isdir(film.path(d)):
+            files += [
+                film.path(d, n) for n in sorted(os.listdir(film.path(d))) if n.endswith(".js")
+            ]
+    return files
+
+
+def drawn_pictures(film, comments=True):
+    """The pictures (PICTURE) the film's code names (_code_files). What drop_unused_uploads
+    (agent.py) keeps in the manifest, comments and all, so nothing named is ever dropped; the
+    roles' check (_roles) reads it without the comments. A name, not a call: films draw their
+    pictures through loops and helpers of their own (SK.IMG[n], SK.shots, SK.cutout, SK.logo),
+    and 0 of 30 finished films with a "show" picture drew it with a literal SK.image('upload1')
+    alone (2026-11-09)."""
+    used = set()
+    for p in _code_files(film):
+        try:
+            with open(p, encoding="utf-8") as f:
+                src = f.read()
+        except OSError:
+            continue
+        if not comments:
+            src = JS_COMMENT.sub("", src)
+        used |= set(re.findall(r"\b(?:%s)\b" % PICTURE, src))
+    return used
+
+
+def held_roles(film):
+    """{picture: role} that this film is held to (inputs/roles.json): only while Claude writes a
+    film for the first time. A round of changes (round_of) follows the person's notes, which may
+    take a picture out; a translation (localized) keeps the original's code, made before the
+    roles were held; a template's film (template) puts its pictures in the template's own places
+    under names of its own (template_pictures). Each of those would be stopped by a promise it
+    cannot keep, so none is."""
+    rec = film.record()
+    if rec.get("round_of") or rec.get("localized") or rec.get("template"):
+        return {}
+    return _sketch.picture_roles(film.dir)
+
+
+def _show_these(film):
+    """The pictures that must be on screen: the person's own attachments marked "show". A
+    project's picture marked "show" is shown as it is when an episode uses it, and an episode
+    that does not leaves it out (the site's docs promise that): never required."""
+    return sorted(
+        n for n, r in held_roles(film).items() if r == "show" and _sketch.UPLOAD_NAME.match(n)
+    )
+
+
+def _whole(film):
+    """Whether the film's picture is written: film.js, and for a film made in scenes every
+    scene scenes.json lists (the director writes film.js first, the scenes draw later)."""
+    if not os.path.exists(film.path("film.js")):
+        return False
+    if film.mode != "scenes":
+        return True
+    d, _ = _load(film, "scenes.json")
+    sc = d.get("scenes") if isinstance(d, dict) else None
+    if not isinstance(sc, list) or not sc:
+        return False
+    return all(
+        isinstance(s, dict)
+        and isinstance(s.get("id"), str)
+        and os.path.exists(film.path("scenes", s["id"] + ".js"))
+        for s in sc
+    )
+
+
+def _roles(film):
+    """What the person said a picture is for, held to in the code (film.js and the scenes):
+    one marked "Show it as it is" is named there, or the film is not finished; one marked
+    "What the place has" never is (any name of it in code is a way onto the screen). A fashion
+    film (2026-11-09) marked its portrait "show", the prompt said "no other elements", and
+    Claude kept the photo off screen and painted a stranger: the role is the person's word.
+    The show check waits for the whole picture (_whole); the scene check does not."""
+    held = held_roles(film)
+    if not held:
+        return []
+    named = drawn_pictures(film, comments=False)
+    out = []
+    if _whole(film):
+        out += [
+            "%s is marked \"Show it as it is\": put it on screen as it is (SK.image('%s', x, y, "
+            "w), framed as a print or a card if it is a photo) -- never repainted, never a "
+            "painting's ref. The film is not finished without it" % (n, n)
+            for n in _show_these(film)
+            if n not in named
+        ]
+    out += [
+        '%s is marked "What the place has": it is never on screen, so the code never names it. '
+        "Take it out and write two or three of the things in it into the paintings' prompts" % n
+        for n, r in sorted(held.items())
+        if r == "scene" and n in named
+    ]
+    return out
+
+
+def _style_refs(film, d):
+    """paint.json: each picture the person attached marked "How we draw this" is the ref of at
+    least one painting (the painter keeps what it sees there), checked when paint.json is saved
+    -- before anything is painted. Only for a film that paints, and once it lists a painting."""
+    want = sorted(
+        n for n, r in held_roles(film).items() if r == "style" and _sketch.UPLOAD_NAME.match(n)
+    )
+    ims = d.get("images") if isinstance(d, dict) else None
+    if not want or not isinstance(ims, list) or not ims or not paint_kinds(film.caps):
+        return []
+    used = set()
+    for im in ims:
+        if isinstance(im, dict):
+            r = im.get("ref")
+            used |= set(r if isinstance(r, list) else [r])
+    return [
+        'paint.json: %s is marked "How we draw this": paint every painting that shows what it '
+        'shows with "ref": "%s" (in a list beside other refs, at most %d); none does yet'
+        % (n, n, MAX_REFS)
+        for n in want
+        if n not in used
+    ]
+
+
+def _scenes_show(film, d):
+    """scenes.json: each picture that must be on screen (_show_these) is named in the plan of
+    the scene that shows it (its "shows" or "notes"), so the scene's pass is told to draw it --
+    a scene's pass sees only its own plan, and a picture no scene was given surfaced only after
+    the last scene, a whole film late."""
+    sc = d.get("scenes") if isinstance(d, dict) else None
+    if not isinstance(sc, list):
+        return []
+    text = " ".join(
+        "%s %s" % (s.get("shows", ""), s.get("notes", "")) for s in sc if isinstance(s, dict)
+    )
+    return [
+        'scenes.json: %s is marked "Show it as it is": name it in the "shows" of the scene that '
+        "puts it on screen" % n
+        for n in _show_these(film)
+        if not re.search(r"\b%s\b" % re.escape(n), text)
+    ]
+
+
+def scene_pictures(film, scene):
+    """The note a scene's pass gets for the held pictures its plan names (scenes.scene_message):
+    what each is for, so the pass that draws it knows."""
+    import library  # noqa: PLC0415 -- library imports this module
+
+    held = held_roles(film)
+    text = "%s %s" % (scene.get("shows", ""), scene.get("notes", ""))
+    lines = [
+        "- %s%s"
+        % (
+            n,
+            library.role_line(
+                r, bool(paint_kinds(film.caps)), required=bool(_sketch.UPLOAD_NAME.match(n))
+            ),
+        )
+        for n, r in sorted(held.items())
+        if re.search(r"\b%s\b" % re.escape(n), text)
+    ]
+    return (
+        ("\n\nPictures this scene's plan names, as the person marked them:\n" + "\n".join(lines))
+        if lines
+        else ""
+    )
 
 
 def gate(film):
