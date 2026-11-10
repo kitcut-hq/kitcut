@@ -135,6 +135,15 @@ async def main():
         expect("the tools refuse a film with bad files", "Fix these first" in str(e))
 
     # ---------------------------------------------------------------- secrets
+    # stand-in keys through the studio's own loader, so the checks below are the same on the VM,
+    # on a laptop and in a fresh worktree with no .env (a real key, where there is one, stays:
+    # load_secrets never overwrites); one comes in through the environment, as a parent might
+    # pass it, and must leave it
+    stand_in = os.path.join(HOME, "stand-in.env")
+    with open(stand_in, "w", encoding="utf-8") as f:
+        f.write("OPENROUTER_API_KEY=sk-or-stand-in-0000\nGEMINI_API_KEY=gm-stand-in-0000\n")
+    os.environ["ELEVENLABS_API_KEY"] = "el-stand-in-0000"
+    procs.load_secrets(stand_in)
     kept = set(procs.SECRETS)
     expect(
         "the studio holds its keys (%d), none in its environment" % len(kept),
