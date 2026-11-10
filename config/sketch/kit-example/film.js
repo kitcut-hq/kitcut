@@ -124,11 +124,12 @@ const PAGES = [
       SK.arm(2, -252, 2 - Math.sin(.5 * sw) * 115, -252 + Math.cos(.5 * sw) * 115, { view: 'side', skin, sleeve: '#f26d64' });
     });
     ['relax', 'flat', 'open', 'fist', 'grip', 'point', 'cupped'].forEach((k, i) => {
-      const x = 470 + (i % 4) * 120, y = -300 + Math.floor(i / 4) * 160;
-      SK.hand(x, y, -Math.PI / 2, { kind: k, skin, size: 1.4 }); SK.label(k, x, y + 66, { size: 22 });
+      const x = 380 + i * 82, y = -330;
+      SK.hand(x, y, -Math.PI / 2, { kind: k, skin, size: 1.2 }); SK.label(k, x, y + 58, { size: 18 });
     });
-    [['sneaker', 'front'], ['clog', 'front'], ['sneaker', 'side'], ['clog', 'side']].forEach(([k, v], i) => {
-      const x = 460 + i * 128; SK.shoe(x, 130, { kind: k, view: v, size: 1.2 }); SK.label(k, x, 172, { size: 20 }); SK.label(v, x, 198, { size: 20 });
+    ['sneaker', 'clog', 'boot', 'sandal', 'slipper', 'dress', 'heel', 'bare'].forEach((k, i) => { // every kind, front then side
+      const x = 360 + i * 76;
+      SK.shoe(x, -60, { kind: k, size: .9, skin }); SK.shoe(x - 10, 60, { kind: k, view: 'side', size: .9, skin }); SK.label(k, x, 104, { size: 17 });
     });
   },
 ];

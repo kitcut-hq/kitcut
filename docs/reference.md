@@ -5298,7 +5298,10 @@ the body; a forearm drawn under the upper arm; a knee or an elbow bent the wrong
 floating over a fist (what a hand holds is drawn between the arm and the fingers, `held`); a
 steering-wheel grip from the side drawn inside out because the front view's grip turns the
 fingers in towards a held box; legs as one straight stroke and a square cuff where they meet
-the shorts; shoes as blobs. `SK.P.kid` and `SK.P.person` draw with them when the film has the
+the shorts; shoes as blobs. `SK.shoe` has eight kinds (sneaker, clog, boot, sandal, slipper, dress,
+heel, bare), five of them drawn from her own casts (Mikey's sneaker, Leo's clog, rain boot and bare
+feet, Mom's slide sandal): shoes are shaped like shoes, and of the kind the person and the moment
+call for -- she asked for that variety from film to film. `SK.P.kid` and `SK.P.person` draw with them when the film has the
 kit (`kit: false` keeps the old stick limbs). The studio's brief names the mistakes (prompt.md,
 "Hands and feet are a person's") and its kit step says a new pose or hold reuses these and
 never draws its own hand; the reviewer reports them as `limbs`. Her standing rule: a new

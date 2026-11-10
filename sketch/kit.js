@@ -164,9 +164,12 @@
                                       its hem is where a leg begins; o.w (15), col, size, shoe (SK.shoe's
                                       options, or false), ground (the y a foot stands at). l: {knee, ankle,
                                       foot}. Sitting puts the hips on the seat, the feet on the ground.
-     SK.shoe(x, y, o)                 a shoe on the ground at (x, y): o.kind 'sneaker' (a low toe box on its
-                                      sole, laces) | 'clog' (a rounded clog with holes); view 'front' |
-                                      'side' (dir, rot); col, sole, lace, size, side
+     SK.shoe(x, y, o)                 a shoe on the ground at (x, y), the kind the person would wear there:
+                                      o.kind 'sneaker' | 'clog' | 'boot' (a tall rain or winter boot) |
+                                      'sandal' (the bare foot under a strap) | 'slipper' (a soft house
+                                      slipper) | 'dress' (a smart low shoe) | 'heel' | 'bare' (a bare foot,
+                                      five toes); view 'front' | 'side' (dir, rot); col (each kind has a
+                                      plain default), dark, sole, lace, sock, skin, size, side
 
    Paths: S.len(pts), S.at(pts, u) -> [x, y, angle], S.cut(pts, u0, u1)
 */
@@ -1451,7 +1454,8 @@
          wave spreads them; a point is the first finger; never a ball, a mitten or a claw
        - what a hand holds is drawn between the arm and the fingers (held), so the fingers close
          over it; from the side a grip carries on along the forearm, thumb on top
-       - a leg begins under the shorts or skirt (draw the legs first); a shoe is a shoe, not a blob */
+       - a leg begins under the shorts or skirt (draw the legs first); a shoe is a shoe, not a blob,
+         and of the kind the person and the moment call for (SK.shoe has eight) */
   const lSeg = (x0, y0, x1, y1) => [[x0, y0], [(x0 + x1) / 2, (y0 + y1) / 2], [x1, y1]];
   // a finger from (x, y) at angle a, l long, bent by c (radians, towards -y) along its length
   const lFinger = (x, y, a, l, c = 0) => { const p = [[x, y]]; let px = x, py = y, aa = a; for (let i = 0; i < 3; i++) { px += Math.cos(aa) * l / 3; py += Math.sin(aa) * l / 3; p.push([px, py]); aa += c / 3; } return p; };
@@ -1585,34 +1589,84 @@
     }
     return { knee: k2, ankle: a2, foot };
   };
-  /** A shoe standing on the ground at (x, y), under its ankle. */
+  /** A shoe standing on the ground at (x, y), under its ankle: whatever the person would wear there. */
+  const SHOE_COL = { sneaker: '#3f86dc', clog: '#fbd437', boot: '#6b4a33', sandal: '#c98d55', slipper: '#9fb8d8', dress: '#3b2a22', heel: '#c0392b' };
   SK.shoe = function (x, y, o = {}) {
-    const z = o.size ?? 1, kind = o.kind ?? 'sneaker', seed = o.seed ?? 3900, w = (p, c, sd2) => SK.wash(p, c, { seed: sd2, dx: 0, dy: 0, tex: false }), k = (p, sd2, wd = 4.5) => SK.ink(p, { w: wd, seed: sd2, dbl: false });
-    const col = o.col ?? (kind === 'clog' ? '#fbd437' : '#3f86dc'), dk = o.dark ?? SK.mix(col, '#000000', .18), sole = o.sole ?? '#ffffff';
-    if (o.view === 'side') { // in profile, the toe towards o.dir, turned by o.rot about the ankle
+    const z = o.size ?? 1, kind = o.kind ?? 'sneaker', seed = o.seed ?? 3900, skin = o.skin ?? C().skin;
+    const w = (p, c, sd2) => SK.wash(p, c, { seed: sd2, dx: 0, dy: 0, tex: false }), k = (p, sd2, wd = 4.5) => SK.ink(p, { w: wd, seed: sd2, dbl: false });
+    const col = o.col ?? SHOE_COL[kind] ?? '#3b3f4a', dk = o.dark ?? SK.mix(col, '#000000', .2), sole = o.sole ?? (kind === 'sneaker' ? '#ffffff' : dk);
+    const toes = (pts, sd2) => pts.forEach(([tx, ty, r], i) => { w(S.ellC(tx, ty, r, r), skin, sd2 + i); SK.ink(S.arc(tx, ty, r, -.2, Math.PI + .2), { w: 2.6, seed: sd2 + 9 + i, dbl: false }); });
+    if (o.view === 'side') { // in profile, the toe towards o.dir, turned by o.rot about the ankle; drawn on the ground (y 0) under it
       const dir = o.dir ?? 1;
-      SK.at(x, y - 12 * z, o.rot ?? 0, [dir * z, z], () => {
-        if (kind === 'clog') {
-          SK.ink(S.path([['M', -8, -12], ['Q', -24, -18, -27, 0]]), { w: 7, col: dk, seed: seed + 7, dbl: false, taper: false }); // the heel strap
-          const so = S.path([['M', -26, 5], ['L', 45, 5], ['Q', 51, 9, 46, 14], ['L', -25, 14], ['Q', -30, 10, -26, 5], ['Z']]); w(so, dk, seed); k(so, seed + 1, 4);
-          const up = S.path([['M', -24, 6], ['Q', -27, -14, -12, -17], ['L', 2, -17], ['Q', 12, -15, 22, -10], ['Q', 46, -5, 46, 6], ['Z']]); w(up, col, seed + 2); k(up, seed + 3);
-          for (const [hx, hy] of [[10, -9], [20, -6], [30, -2], [16, 0], [27, 3]]) w(S.ellC(hx, hy, 2.6, 2.2), dk);
-        } else SK.at(6, 12, 0, 1.12, () => {
+      SK.at(x, y - 12 * z, o.rot ?? 0, [dir * z, z], () => SK.at(0, 12, 0, 1, () => {
+        if (kind === 'clog') SK.at(6, 0, 0, 1, () => { // Leo's clog: a rounded toe, a thick sole, holes, the strap round the heel
+          SK.ink(S.path([['M', -8, -24], ['Q', -24, -30, -27, -12]]), { w: 7, col: dk, seed: seed + 7, dbl: false, taper: false });
+          const so = S.path([['M', -26, -7], ['L', 45, -7], ['Q', 51, -3, 46, 2], ['L', -25, 2], ['Q', -30, -2, -26, -7], ['Z']]); w(so, dk, seed); k(so, seed + 1, 4);
+          const up = S.path([['M', -24, -6], ['Q', -27, -26, -12, -29], ['L', 2, -29], ['Q', 12, -27, 22, -22], ['Q', 46, -17, 46, -6], ['Z']]); w(up, col, seed + 2); k(up, seed + 3);
+          for (const [hx, hy] of [[10, -21], [20, -18], [30, -14], [16, -12], [27, -9]]) w(S.ellC(hx, hy, 2.6, 2.2), dk, seed + 4);
+        });
+        else if (kind === 'boot') SK.at(4, 0, 0, 1, () => { // Leo's rain boot: a tall shaft, a rim, a ribbed sole
+          const b = S.path([['M', -22, -60], ['L', 22, -60], ['L', 23, -26], ['Q', 42, -24, 46, -8], ['L', 46, 0], ['L', -24, 0], ['Q', -26, -30, -22, -60]]);
+          w(b, col, seed); w(S.poly([[-24, -9], [46, -9], [46, 1], [-24, 1]], true), dk, seed + 1); k(b, seed + 2);
+          const rim = S.rrect(-25, -68, 50, 12, 5); w(rim, dk, seed + 3); k(rim, seed + 4, 4);
+          SK.ink(S.line(-11, -50, -11, -24), { w: 4, col: 'rgba(255,255,255,.6)', seed: seed + 6, dbl: false });
+        });
+        else if (kind === 'sandal') SK.at(8, 0, 0, .52, () => { // Mom's slide: a flat sole, the bare foot, one wide strap
+          const so = S.rrect(-82, -12, 128, 16, 8); w(so, dk, seed); k(so, seed + 1);
+          const ft = S.path([['M', 30, -40], ['L', 0, -40], ['Q', -30, -30, -66, -22], ['Q', -82, -18, -78, -10], ['L', 34, -10], ['Z']]);
+          SK.at(-16, 0, 0, [-1, 1], () => { w(ft, skin, seed + 2); k(ft, seed + 3); });
+          const st = S.path([['M', -18, -10], ['Q', -12, -42, 14, -38], ['Q', 28, -36, 32, -10], ['Z']]); w(st, col, seed + 4); k(st, seed + 5);
+        });
+        else if (kind === 'bare') { // a bare foot: heel, arch, the toes in front
+          const ft = S.path([['M', -22, 0], ['Q', -26, -14, -16, -26], ['L', -6, -28], ['Q', 8, -16, 30, -12], ['Q', 46, -8, 44, 0], ['Z']]); w(ft, skin, seed); k(ft, seed + 1);
+          for (const tx of [36, 28]) SK.ink(S.arc(tx, -3, 4, Math.PI * 1.1, Math.PI * 1.9), { w: 2.4, seed: seed + tx, dbl: false });
+        } else if (kind === 'slipper') { // a soft house slipper, its opening a lighter rim
+          const sl = S.path([['M', -24, 2], ['Q', -30, -18, -10, -22], ['Q', 20, -26, 40, -10], ['Q', 50, -2, 42, 2], ['Z']]); w(sl, col, seed); k(sl, seed + 1);
+          SK.ink(S.path([['M', -18, -18], ['Q', -4, -14, 10, -20]]), { w: 5, col: SK.mix(col, '#ffffff', .45), seed: seed + 2, dbl: false });
+        } else if (kind === 'dress') { // a smart low shoe: a smooth upper, a low heel, a shine
+          const up = S.path([['M', -22, -4], ['L', -22, -22], ['Q', -6, -24, 8, -18], ['Q', 30, -14, 44, -7], ['Q', 49, -1, 40, 0], ['L', -22, 0], ['Z']]); w(up, col, seed); k(up, seed + 1);
+          const hl = S.rrect(-24, -5, 14, 7, 2); w(hl, dk, seed + 2); k(hl, seed + 3, 3.5);
+          SK.ink(S.path([['M', 14, -15], ['Q', 26, -12, 34, -8]]), { w: 3, col: 'rgba(255,255,255,.5)', seed: seed + 4, dbl: false });
+        } else if (kind === 'heel') { // a heeled shoe: a pointed toe, the arch lifted, a slim heel
+          const up = S.path([['M', -20, -30], ['Q', -6, -30, 6, -18], ['Q', 26, -8, 46, -2], ['Q', 48, 2, 40, 2], ['L', 14, 2], ['Q', 0, -10, -16, -14], ['L', -20, -14], ['Z']]); w(up, col, seed); k(up, seed + 1);
+          SK.ink(S.line(-18, -14, -17, 2), { w: 5, col: dk, seed: seed + 2, dbl: false, taper: false });
+        } else SK.at(6, 0, 0, 1.12, () => { // Mikey's sneaker: a low toe box on its sole, the laces
           const p = S.path([['M', -22, -30], ['L', 6, -30], ['Q', 16, -18, 30, -15], ['Q', 44, -12, 44, -2], ['L', 44, 2], ['L', -24, 2], ['Q', -27, -14, -22, -30]]);
           w(p, col, seed); w(S.poly([[-24, -5], [44, -5], [44, 3], [-24, 3]], true), sole, seed + 3); k(p, seed + 1);
           for (const lx of [4, 14]) SK.ink(S.line(lx - 4, -26 + lx * .4, lx + 6, -22 + lx * .4), { w: 3, col: o.lace ?? '#ffffff', seed: seed + lx, dbl: false });
         });
-      });
+      }));
       return;
     }
     const sd = o.side ?? 1; // from the front, the toe a little towards its own side
     SK.at(x + sd * 5 * z, y, 0, [sd * z, z], () => {
-      if (kind === 'clog') { // a wide rounded toe on a thick flat sole, holes on top (the strap goes round the back)
+      if (kind === 'clog') { // Leo's clog: a wide rounded toe on a thick flat sole, holes on top
         const so = S.rrect(-31, -8, 62, 10, 4); w(so, dk, seed); k(so, seed + 1, 4);
         const up = S.path([['M', -29, -6], ['Q', -33, -28, -10, -31], ['Q', 14, -33, 28, -22], ['Q', 34, -13, 30, -6], ['Z']]); w(up, col, seed + 2); k(up, seed + 3);
-        for (const [hx, hy] of [[-16, -22], [-4, -25], [8, -24], [19, -19], [-10, -14], [4, -15], [17, -11]]) w(S.ellC(hx, hy, 2.8, 2.4), dk);
-        for (const s2 of [-1, 1]) w(S.ellC(s2 * 25, -11, 2.6, 2.6), dk);
-      } else { // a low, wide toe box on its sole, the laces across the top: the side view's shoe seen head-on
+        for (const [hx, hy] of [[-16, -22], [-4, -25], [8, -24], [19, -19], [-10, -14], [4, -15], [17, -11]]) w(S.ellC(hx, hy, 2.8, 2.4), dk, seed + 4);
+        for (const s2 of [-1, 1]) w(S.ellC(s2 * 25, -11, 2.6, 2.6), dk, seed + 5);
+      } else if (kind === 'boot') { // the rain boot from the front: the shaft, its rim, the toe, the sole
+        const sh = S.rrect(-20, -64, 40, 50, 8); w(sh, col, seed); k(sh, seed + 1);
+        const toe = S.path([['M', -28, -2], ['Q', -30, -24, -18, -26], ['L', 18, -26], ['Q', 30, -24, 28, -2], ['Z']]); w(toe, col, seed + 2); k(toe, seed + 3);
+        const so = S.rrect(-30, -6, 60, 8, 3); w(so, dk, seed + 4); k(so, seed + 5, 4);
+        const rim = S.rrect(-23, -70, 46, 10, 4); w(rim, dk, seed + 6); k(rim, seed + 7, 4);
+        SK.ink(S.line(-10, -54, -10, -28), { w: 4, col: 'rgba(255,255,255,.6)', seed: seed + 8, dbl: false });
+      } else if (kind === 'sandal' || kind === 'bare') { // the bare foot (Leo's: five toes along its tip), on a sandal's sole under a strap
+        if (kind === 'sandal') { const so = S.rrect(-30, -1, 62, 9, 4); w(so, dk, seed); k(so, seed + 1, 4); } // the sole under the toes
+        const ft = S.path([['M', -22, -6], ['Q', -24, -26, -8, -28], ['Q', 18, -28, 30, -12], ['Q', 34, 2, 14, 2], ['L', -16, 2], ['Q', -24, 0, -22, -6], ['Z']]); w(ft, skin, seed + 2); k(ft, seed + 3, 4);
+        toes([[-14, 0, 6.5], [-2, 2, 5], [8, 2, 4.6], [17, 0, 4.3], [25, -4, 4]], seed + 10);
+        if (kind === 'sandal') { const st = S.rrect(-26, -22, 54, 11, 5); w(st, col, seed + 4); k(st, seed + 5, 4); }
+      } else if (kind === 'slipper') { // a soft rounded slipper, its opening a lighter rim
+        const sl = S.path([['M', -30, -2], ['Q', -34, -26, 0, -28], ['Q', 34, -26, 30, -2], ['Z']]); w(sl, col, seed); k(sl, seed + 1);
+        const op = S.ellC(0, -22, 15, 5); w(op, SK.mix(col, '#ffffff', .5), seed + 2); k(S.ell(0, -22, 15, 5), seed + 3, 3); // the opening, its soft rim
+      } else if (kind === 'dress' || kind === 'heel') { // a smart shoe or a heel from the front: a narrower toe, a shine
+        const nar = kind === 'heel' ? .8 : 1, up = S.path([['M', -24 * nar, -3], ['Q', -26 * nar, -20, 0, -26], ['Q', 26 * nar, -20, 24 * nar, -3], ['Z']]); w(up, col, seed); k(up, seed + 1);
+        const so = S.rrect(-25 * nar, -5, 50 * nar, 6, 3); w(so, dk, seed + 2); k(so, seed + 3, 3.5);
+        SK.ink(S.arc(-6, -14, 8, Math.PI * 1.15, Math.PI * 1.6), { w: 3, col: 'rgba(255,255,255,.5)', seed: seed + 4, dbl: false });
+        // its opening with the foot in it: a dark sock in a smart shoe, the instep's skin above a heel
+        const op = kind === 'heel' ? S.path([['M', -13, -19], ['Q', 0, -34, 13, -19], ['Q', 0, -15, -13, -19], ['Z']]) : S.path([['M', -12, -20], ['Q', 0, -30, 12, -20], ['Q', 0, -17, -12, -20], ['Z']]);
+        w(op, kind === 'heel' ? skin : (o.sock ?? '#7a8090'), seed + 5); k(op, seed + 6, 3);
+      } else { // Mikey's sneaker: a low, wide toe box on its sole, the laces across the top
         const up = S.path([['M', -27, -5], ['Q', -30, -21, -16, -25], ['L', 14, -25], ['Q', 29, -21, 27, -5], ['Z']]); w(up, col, seed); k(up, seed + 2);
         const so = S.rrect(-30, -7, 60, 9, 4); w(so, sole, seed + 1); k(so, seed + 3, 4);
         SK.ink(S.path([['M', -8, -25], ['Q', 0, -31, 8, -25]]), { w: 3.5, seed: seed + 4, dbl: false });

@@ -164,7 +164,8 @@
    * o: x, y, s, hair ('spiky'|'bun'), hairCol, glasses, shirt, mood, mouth, blink, arms {F,B},
    *    p (draw-on), wave (phase; waves the front hand), headTilt, bounce, stool (true); with the kit its arms,
    *    hands, legs and shoes are the kit's (SK.arm, SK.leg, SK.shoe): hands (a shape for each, [F, B]), skin,
-   *    pants, shoe (colours); kit: false draws the old stick limbs
+   *    pants, shoe (colours), shoeKind (SK.shoe's kinds: sneaker, boot, sandal, slipper, dress, heel...);
+   *    kit: false draws the old stick limbs
    */
   P.person = function (o) {
     const p = o.p ?? 1; if (p <= 0) return;
@@ -180,7 +181,7 @@
     }
     // the kit's legs and shoes (SK.leg, SK.shoe: the approved ones) when the film has the kit
     const kit = !!SK.leg && o.kit !== false, skin = o.skin ?? C().skin, kinds = o.hands ?? (o.arms ?? P.POSE.rest).h ?? ['relax', 'relax'];
-    if (kit) SK.alpha(pp(.1, .4), () => { for (const [hx, fx, i] of [[-14, 92, 1], [10, 122, 0]]) SK.leg(hx, 58, fx, 226, { view: 'side', thigh: 112, shin: 176, w: 15, col: o.pants ?? '#5b6476', seed: 110 + i, shoe: { kind: 'sneaker', col: o.shoe ?? '#3b3f4a', size: 1.25 }, ground: 226 }); });
+    if (kit) SK.alpha(pp(.1, .4), () => { for (const [hx, fx, i] of [[-14, 92, 1], [10, 122, 0]]) SK.leg(hx, 58, fx, 226, { view: 'side', thigh: 112, shin: 176, w: 15, col: o.pants ?? '#5b6476', seed: 110 + i, shoe: { kind: o.shoeKind ?? 'sneaker', col: o.shoe ?? (o.shoeKind ? undefined : '#3b3f4a'), size: 1.25 }, ground: 226 }); });
     else for (const [hx, kx, fx, i] of [[10, 118, 122, 0], [-14, 96, 92, 1]]) {
       ink(S.path([['M', hx, 58], ['Q', kx - 30, 50 + i * 6, kx, 66 + i * 6], ['L', fx, 238]]), { w: 6.5, seed: 110 + i, p: pp(.1, .4) });
       wash(S.ellC(fx + 16, 243, 26, 12), C().ink, { dx: 0, dy: 0, tex: false, alpha: pp(.3, .45) });
@@ -496,7 +497,7 @@
         skin, mood, mouth, blink, walk (phase in cycles; 0 = standing), sit (0..1),
         arms {F:[x,y], B:[x,y]} hand targets (F = viewer's right), backpack (colour),
         lookX (-1..1 eye direction), flip (mirror), hands (a shape for each, [F, B]; each pose has its own),
-        shoe (a colour). With the kit its arms, hands, legs and shoes are the kit's (SK.arm, SK.leg, SK.shoe);
+        shoe (a colour), shoeKind (SK.shoe's: sneaker, clog, boot, sandal, slipper, dress, heel, bare). With the kit its arms, hands, legs and shoes are the kit's (SK.arm, SK.leg, SK.shoe);
         kit: false draws the old ones */
   P.KIDPOSE = {
     rest: { F: [62, -128], B: [-62, -128] }, stop: { F: [96, -318], B: [-60, -130], h: ['flat', 'relax'] },
@@ -531,7 +532,7 @@
     if (kit) for (const [side, i] of [[-1, 0], [1, 1]]) {
       const sw = walking ? Math.sin(ph + i * Math.PI) : 0, fx = side * lerp(26, 40, sit) + sw * 8 * (1 - sit), fy = (walking ? -Math.max(0, Math.cos(ph + i * Math.PI)) * 16 : 0) - 11;
       SK.alpha(pp(0, .3), () => SK.leg(side * 22, hipY, fx, fy, { side, thigh: 56, shin: 56, w: 13, col: pants, z: sit * 40 + sw * 16 * (1 - sit), pole: [side * (.3 + 1.5 * sit), -.6 * sit, 1 - .5 * sit], ground: -11, size: .9, seed: sd + 700 + i,
-        shoe: { kind: 'sneaker', col: o.shoe ?? '#3b3f4a', size: .9 } }));
+        shoe: { kind: o.shoeKind ?? 'sneaker', col: o.shoe ?? (o.shoeKind ? undefined : '#3b3f4a'), size: .9 } }));
     }
     else for (const [side, i] of [[-1, 0], [1, 1]]) {
       const hx = side * 22;
