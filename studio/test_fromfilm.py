@@ -145,7 +145,13 @@ def main():
             check(e.status == 404, "a project id that is not one")
 
         # what Claude is asked
-        text = fromfilm.ask_text(fromfilm.material(F, got))
+        mat = fromfilm.material(F, got)
+        seen = fromfilm.images(F, mat)
+        check(
+            len(seen) == 2 and all(b[:2] == b"\xff\xd8" for b in seen),
+            "Claude sees each picture, as a JPEG (no sheet of frames: this film was never rendered)",
+        )
+        text = fromfilm.ask_text(mat)
         for want, what in [
             ("Pip learns why the sky is blue", "the person's idea"),
             ("children of 4 to 6", "who it was made for"),
@@ -154,7 +160,9 @@ def main():
             ("#fdf6e3", "the ground's colours"),
             ("Anton", "the typefaces"),
             ("- pip: Pip, a small orange fox", "the cast by name, described"),
-            ("- pic_picture1 -- show", "the pictures by their project names, with roles"),
+            ("- pic_picture1 (image 1) -- show", "the pictures by their names, images and roles"),
+            ("- pic_picture2 (image 2)", "each picture named by the image it is"),
+            ("what it really shows", "and is asked to say what each really shows"),
             ("Why is the sky so blue?", "the narration"),
             ("Leave out this film's own topic", "and to leave its own story out"),
         ]:
@@ -174,7 +182,10 @@ def main():
         # the brief in the background, with Claude stubbed
         check(fromfilm.state("u:alice", "p-bbbbbbbbbb")["state"] == "none", "none asked: none")
 
+        asked = []
+
         async def answer(*a, **k):
+            asked.append(a)
             return {"name": "Pip's Sky", "brief": "For children of 4 to 6. Pip the fox..."}, 0.01
 
         async def fails(*a, **k):
@@ -188,6 +199,10 @@ def main():
             check(
                 st["state"] == "done" and st["name"] == "Pip's Sky" and st["film"] == F.id,
                 "written: done, with its name and brief",
+            )
+            check(
+                len(asked[0][1]) == 2 and "(image 2)" in asked[0][0],
+                "and the call carried the pictures, named in its text",
             )
             ytdraft.ask_json = fails
             asyncio.run(fromfilm.write("u:alice", P1, F.id, got))

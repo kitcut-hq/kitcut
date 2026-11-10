@@ -15,7 +15,9 @@ as the project's workspace: POST /api/library/from-film {"project", "film"}. Two
              project is replaced, so asking twice copies nothing twice.
     write()  in the background, one Claude call with no tools: the project's brief, from what
              the film is -- the person's idea, who it was made for, its narration, its narrator,
-             music, colours and lettering, its cast with their descriptions, its pictures -- only
+             music, colours and lettering, its cast with their descriptions, and the film's
+             frames and its pictures themselves as images (so it says what each picture really
+             shows, not a guess from where the film used it) -- only
              what every episode should share, never this film's own story, facts or numbers.
 
 What write() is doing is kept in <project library>/from_film.json, which any server answers
@@ -77,7 +79,9 @@ how a frame is laid out, what recurs on screen.
 - The lettering: the typefaces named below, and what each is used for.
 - The characters: each by their cast name, with how they look and who they are, so an episode \
 can bring them back. The places and things that recur.
-- The pictures: each by its name (pic_<name>), what it shows, and how an episode uses it.
+- The pictures: each by its name (pic_<name>), what it really shows (each is one of the images \
+you are given: look at it, and read what the person's idea says it is for), and how an episode \
+uses it.
 - What always happens and what never does (how an episode opens and ends, things to avoid).
 
 Leave out this film's own topic, story, facts, numbers and dates: the next episode is about \
@@ -292,7 +296,7 @@ def material(film, got=None):
         about = library._about(library._read(film.path("cast", n + ".js")) or "")  # noqa: SLF001
         cast.append({"name": n, "about": about})
     painted = [{"name": n, "about": a} for n, _, a in painted_of(film)]
-    pictures = [{"name": "pic_" + n, "role": r} for n, _, _, r in pictures_of(film)]
+    pictures = [{"name": "pic_" + n, "role": r, "path": p} for n, p, _, r in pictures_of(film)]
     return {
         "prompt": str(rec.get("prompt") or "")[:PROMPT_MAX],
         "title": rec.get("title") or "",
@@ -319,6 +323,40 @@ def material(film, got=None):
         # the ones the project got, when it has been seeded (a full project skips some)
         "pictures": [p for p in pictures if got is None or p["name"][4:] in got["pictures"]],
     }
+
+
+def _jpeg(path, side=1024):
+    """A picture as JPEG bytes for Claude, at most `side` px a side; None if it cannot be read."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    try:
+        with Image.open(path) as im:
+            im = im.convert("RGB")
+            im.thumbnail((side, side))
+            buf = BytesIO()
+            im.save(buf, "JPEG", quality=85)
+            return buf.getvalue()
+    except (OSError, ValueError):
+        return None
+
+
+def images(film, mat):
+    """What Claude sees, in order: a sheet of the film's frames (when there is one), then each of
+    its pictures that could be read -- which mat["pictures"] records as "image": its number among
+    them, so the ask can name it. -> [JPEG bytes]."""
+    out = []
+    sheet = ytdraft._sheet(film)  # noqa: SLF001
+    if sheet:
+        out.append(sheet)
+    mat["sheet_image"] = 1 if sheet else None
+    for p in mat["pictures"]:
+        b = _jpeg(p["path"]) if p.get("path") else None
+        if b:
+            out.append(b)
+            p["image"] = len(out)
+    return out
 
 
 def ask_text(mat):
@@ -360,10 +398,17 @@ def ask_text(mat):
             "- %s (a painted character): %s" % (c["name"], c["about"] or "(no description)")
             for c in mat["painted"]
         ]
+    if mat.get("sheet_image"):
+        lines += ["", "Image %d is a sheet of the film's frames." % mat["sheet_image"]]
     if mat["pictures"]:
         lines += ["", "## Its pictures (now the project's, by these names)"]
         lines += [
-            "- %s%s" % (p["name"], library.role_line(p["role"], mat["look"] != "drawn"))
+            "- %s%s%s"
+            % (
+                p["name"],
+                " (image %d)" % p["image"] if p.get("image") else "",
+                library.role_line(p["role"], mat["look"] != "drawn"),
+            )
             for p in mat["pictures"]
         ]
     lines += ["", "# What to write", ASK.format(most=films.BRIEF_MAX - 500, name_max=NAME_MAX)]
@@ -407,10 +452,10 @@ async def write(client, project, film_id, got=None, auth="login", model=MODEL, e
     films._write_json(path, {"state": "writing", "film": film_id, "at": _now()})  # noqa: SLF001
     try:
         f = source(client, film_id)
-        text = ask_text(material(f, got))
-        sheet = ytdraft._sheet(f)  # noqa: SLF001
+        mat = material(f, got)
+        seen = images(f, mat)
         d, cost = await ytdraft.ask_json(
-            text, sheet, auth, f, model, effort, WRITER, "from-film-%s" % project
+            ask_text(mat), seen, auth, f, model, effort, WRITER, "from-film-%s" % project
         )
         out = clean(d)
         films._write_json(  # noqa: SLF001
@@ -452,14 +497,15 @@ def main():
     f = films.Film.open(a.film)
     if f is None:
         sys.exit("no such film: %s" % a.film)
-    text = ask_text(material(f))
+    mat = material(f)
+    seen = images(f, mat)
+    text = ask_text(mat)
     if a.plan:
         print(text)
+        print("\n(%d images)" % len(seen))
         return
     d, cost = asyncio.run(
-        ytdraft.ask_json(
-            text, ytdraft._sheet(f), "login", f, a.model, a.effort, WRITER, "from-film"
-        )  # noqa: SLF001
+        ytdraft.ask_json(text, seen, "login", f, a.model, a.effort, WRITER, "from-film")
     )
     out = clean(d)
     print("# %s\n\n%s\n\n(%.4f USD)" % (out["name"], out["brief"], cost))
