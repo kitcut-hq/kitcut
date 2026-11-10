@@ -64,6 +64,12 @@ the day's budget still holds.
                                  next episodes play that recording for the same words and voice
                                  (docs/studio-voice-lines.md); GET .../voice/{key}.mp3 and
                                  DELETE .../voice/{key}, with ?project=
+    POST /api/library/from-film  {"project", "film"}: one of the asker's finished films starts the
+                                 project (fromfilm.py): its pictures, cast and painted characters
+                                 are copied in at once (the answer says which, with its narrator's
+                                 voice), and its brief is written in the background; GET
+                                 .../from-film?project= says how that stands: writing, done
+                                 {brief, name} or failed
     GET  /api/library/style      ?project=: the project's style (stylekit.py), as the Style tab
                                  shows it; PATCH (the card's fields and picks), DELETE, POST
                                  .../style/read {"project", "look", "brief"}, .../style/proof
@@ -170,6 +176,7 @@ import thumbs  # noqa: E402
 import uploads  # noqa: E402
 import youtube  # noqa: E402
 import ytdraft  # noqa: E402
+import fromfilm  # noqa: E402 -- a finished film made the start of a project
 import live as nowline  # noqa: E402 -- `live` is this module's own (its films in the making)
 import rounds  # noqa: E402
 import unbrand  # noqa: E402
@@ -2364,6 +2371,36 @@ async def picture_add(req):
     return web.json_response(entry, status=201)
 
 
+async def from_film(req):
+    """Start the asker's project from one of their finished films: {"project", "film"}. What the
+    film used is copied in now and answered (fromfilm.seed); the brief is written in the
+    background (fromfilm.start), and GET says how it stands. Asking again copies nothing twice and
+    writes the brief again."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    body = await _json(req)
+    client, project = client_of(req), str(body.get("project") or "")
+    film_id = str(body.get("film") or "")
+    try:
+        got = await asyncio.to_thread(fromfilm.seed, client, project, film_id)
+    except fromfilm.FromFilmError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    auth = (
+        (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else site_auth()
+    )
+    brief = fromfilm.start(client, project, film_id, got, auth)
+    return web.json_response(got | {"brief": brief}, status=202)
+
+
+async def from_film_state(req):
+    """How the brief of a project started from a film stands: ?project=."""
+    try:
+        st = fromfilm.state(client_of(req), str(req.query.get("project") or ""))
+    except fromfilm.FromFilmError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(st)
+
+
 async def picture_role(req):
     """Say what one of the asker's project pictures is for: {"project": id, "role": "style"}."""
     try:
@@ -3221,6 +3258,8 @@ def make_app(token):
             web.get("/api/library", library_list),
             web.post("/api/library/pictures", picture_add),
             web.post("/api/library/characters", character_add),
+            web.post("/api/library/from-film", from_film),
+            web.get("/api/library/from-film", from_film_state),
             web.get("/api/library/pictures/{name}/thumb.png", picture_thumb),
             web.delete("/api/library/pictures/{name}", picture_delete),
             web.post("/api/library/pictures/{name}/role", picture_role),
