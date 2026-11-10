@@ -111,8 +111,10 @@ PICTURE_EXT = ("png", "jpg", "webp")
 PICTURE_ROLES = _sketch.ROLES
 ROLE_NOTE = {
     "show": (
-        "show it as it is (SK.image); never repaint it, never a painting's ref. The film is not "
-        "finished until film.js draws it: the check and every tool say so until then"
+        "show it as it is (SK.image), somewhere in the film, even where the prompt seems to "
+        "leave no room for it (then a framed print, a card, or the closing frame, and say so at "
+        "the end); never repaint it, never a painting's ref. Its role is the person's word: a "
+        "film whose code never draws it is not finished"
     ),
     "scene": (
         "what a place has: Read it, and write two or three of the things in it (a chair, three "
@@ -138,9 +140,20 @@ ROLE_NOTE_DRAWN = ROLE_NOTE | {
 }
 
 
-def role_line(role, painted=True):
-    """A picture's role, said to Claude ("" for a picture without one)."""
+# a project's picture marked "show": shown as it is when an episode uses it, and left out by one
+# that does not (validate._show_these holds only a film's own attachments to it)
+SHOW_IF_USED = (
+    "show it as it is (SK.image) where this episode uses it; never repaint it, never a "
+    "painting's ref"
+)
+
+
+def role_line(role, painted=True, required=True):
+    """A picture's role, said to Claude ("" for a picture without one). required: False for a
+    project's picture, which an episode may leave out."""
     notes = ROLE_NOTE if painted else ROLE_NOTE_DRAWN
+    if role == "show" and not required:
+        return " -- show: " + SHOW_IF_USED
     return " -- %s: %s" % (role, notes[role]) if role in notes else ""
 
 
@@ -771,7 +784,7 @@ def note(film):
                 p.get("w"),
                 p.get("h"),
                 p["file"],
-                role_line(p.get("role"), bool(paint_kinds(film.caps))),
+                role_line(p.get("role"), bool(paint_kinds(film.caps)), required=False),
             )
             for p in pics
         ]

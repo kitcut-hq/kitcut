@@ -19,6 +19,7 @@ os.environ["STUDIO_HOME"] = HOME
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402
 import film as films  # noqa: E402
+import library  # noqa: E402
 import validate  # noqa: E402
 from guard import guard, pin_after  # noqa: E402
 from sched import Sched  # noqa: E402
@@ -96,86 +97,139 @@ def caps_cases(expect, A, B, C):
 
 
 def role_cases(expect):
-    """What a person said a picture is for is held (validate._shown): a "show" picture must be
-    drawn by film.js, a "scene" picture never is; nothing is asked before the picture is
-    written, and a film made in scenes is held once its last scene is."""
+    """What a person said a picture is for is held (validate._roles, _style_refs, _scenes_show),
+    each at the earliest file that can show it, and only where it can be kept: a film's own
+    attachments, while Claude writes the film for the first time."""
     D = films.Film.create("a film with marked pictures", 10, "painted")
     os.makedirs(D.path("inputs"), exist_ok=True)
+    roles = {"upload1": "show", "upload2": "scene", "upload3": "style", "pic_logo": "show"}
     with open(D.path("inputs", "roles.json"), "w", encoding="utf-8") as f:
-        json.dump({"upload1": "show", "upload2": "scene", "upload3": "style"}, f)
+        json.dump(roles, f)
+    for n in ("upload1", "upload2", "upload3", "pic_logo"):  # the files a ref must find
+        with open(D.path("inputs", n + ".png"), "wb") as f:
+            f.write(b"\x89PNG")
 
-    def js(code):
-        with open(D.path("film.js"), "w", encoding="utf-8") as f:
+    def js(code, where="film.js"):
+        with open(D.path(*where.split("/")), "w", encoding="utf-8") as f:
             f.write(code)
 
-    expect("roles: nothing asked before film.js", validate.problems(D, "film.js"), [])
+    def problems(name="film.js"):
+        return validate.problems(D, name)
+
+    # show: nothing asked before film.js; then the attachment, never the project's picture
+    expect("roles: nothing asked before film.js", problems(), [])
     js("SK.setGround('white');\n")
-    got = validate.problems(D, "film.js")
+    got = problems()
     expect(
-        "roles: a show picture film.js never draws stops the film",
-        (
-            len(got),
-            "upload1" in got[0],
-            "SK.image('upload1'" in got[0],
-            "Show it as it is" in got[0],
-        ),
-        (1, True, True, True),
+        "roles: a show attachment film.js never names stops the film",
+        (len(got), "upload1" in got[0], "Show it as it is" in got[0]),
+        (1, True, True),
+    )
+    expect(
+        "roles: a project's show picture an episode leaves out is not asked for",
+        any("pic_logo" in g for g in got),
+        False,
     )
     expect("roles: the gate says it too", validate.gate(D) == got, True)
-    js("SK.setGround('white');\nSK.image('upload1', 0, -200, 600);\n")
-    expect("roles: drawn, the film may finish", validate.problems(D, "film.js"), [])
-    js('SK.setGround("white");\nSK.image( "upload1", 0, -200, 600);\n')
-    expect("roles: double quotes and a space are a draw too", validate.problems(D, "film.js"), [])
-    js("SK.image('upload1', 0, 0, 600);\nSK.image('upload2', 0, 400, 600);\n")
-    got = validate.problems(D, "film.js")
+    js("SK.setGround('white');\n// upload1 goes on the wall later\n/* and upload1 here */\n")
+    expect("roles: a name in a comment is not a draw", len(problems()), 1)
+    js("const wall = ['upload1'];\nwall.forEach((n, i) => SK.image(n, i * 300, 0, 280));\n")
+    expect("roles: drawn through a loop of its own counts", problems(), [])
+    js('SK.image("upload1", 0, 0, 600); // https://example.com/a\n')
+    expect("roles: a link in a comment after the draw does not hide it", problems(), [])
+
+    # scene: never named in code
+    js("SK.image('upload1', 0, 0, 600);\nSK.cutout('upload2', 0, 400, 600);\n")
+    got = problems()
     expect(
-        "roles: a scene picture on screen is refused",
+        "roles: a scene picture in code is refused, whatever helper draws it",
         (len(got), "upload2" in got[0], "never on screen" in got[0]),
         (1, True, True),
     )
     js("SK.image('upload1', 0, 0, 600);\n// upload2: three windows, a palm tree\n")
+    expect("roles: a scene picture named in a comment is fine", problems(), [])
+
+    # style: checked when paint.json is saved, before anything is painted
+    paint = json.load(open(D.path("paint.json"), encoding="utf-8"))
+    paint["images"] = [{"name": "street", "prompt": "a street at dusk"}]
+    with open(D.path("paint.json"), "w", encoding="utf-8") as f:
+        json.dump(paint, f)
+    got = problems("paint.json")
     expect(
-        "roles: a scene picture named in a comment is not on screen",
-        validate.problems(D, "film.js"),
+        "roles: a style attachment no painting is made from is said at paint.json",
+        any("upload3" in g and "How we draw this" in g for g in got),
+        True,
+    )
+    paint["images"] = [
+        {"name": "street", "prompt": "a street at dusk", "ref": "upload3"},
+        {"name": "door", "prompt": "the same street, a door", "ref": ["street", "upload3"]},
+    ]
+    with open(D.path("paint.json"), "w", encoding="utf-8") as f:
+        json.dump(paint, f)
+    expect(
+        "roles: made from it, paint.json passes",
+        [g for g in problems("paint.json") if "upload3" in g],
         [],
     )
-    js("SK.image('upload3', 0, 0, 600);\nSK.image('upload1', 0, 0, 600);\n")
-    expect("roles: a style picture on screen is Claude's call", validate.problems(D, "film.js"), [])
-    # a film made in scenes: film.js comes first and draws nothing of the kind; the scenes do
+
+    # a round, a translation and a template are not held: their promise is another one
+    js("SK.setGround('white');\nSK.image('upload2', 0, 0, 600);\n")
+    for k, v in (("round_of", {"film": "x"}), ("localized", {"from": "x"}), ("template", "t")):
+        D.update(**{k: v})
+        expect("roles: a film with %s is not held" % k, problems(), [])
+        D.update(**{k: None})
+    expect("roles: and the same film, first written, is", len(problems()), 2)
+
+    # a film made in scenes: the plan names the show picture before any scene is written
+    js("SK.image('upload1', 0, 0, 600);\n")
     os.makedirs(D.path("scenes"), exist_ok=True)
     D.update(mode="scenes")
     js("SK.setGround('white');\n")
+    plan = {"scenes": [{"id": "s1", "shows": "the street"}, {"id": "s2", "shows": "the end"}]}
     with open(D.path("scenes.json"), "w", encoding="utf-8") as f:
-        json.dump({"scenes": [{"id": "s1"}, {"id": "s2"}]}, f)
+        json.dump(plan, f)
     expect(
-        "roles: in scenes, nothing asked while a scene is unwritten",
-        validate.problems(D, "film.js"),
+        "roles: in scenes, a plan that gives no scene the show picture is told at once",
+        any("upload1" in g and "shows" in g for g in problems("scenes.json")),
+        True,
+    )
+    expect("roles: in scenes, film.js is not held while a scene is unwritten", problems(), [])
+    plan["scenes"][1]["shows"] = "the photo upload1, pinned to the wall"
+    with open(D.path("scenes.json"), "w", encoding="utf-8") as f:
+        json.dump(plan, f)
+    expect(
+        "roles: in scenes, the plan names it",
+        [g for g in problems("scenes.json") if "upload1" in g],
         [],
     )
-    with open(D.path("scenes", "s1.js"), "w", encoding="utf-8") as f:
-        f.write("// the opening\n")
-    with open(D.path("scenes", "s2.js"), "w", encoding="utf-8") as f:
-        f.write("// the close\n")
-    got = validate.problems(D, "film.js")
+    import scenes  # noqa: PLC0415
+
     expect(
-        "roles: in scenes, every scene written and none draws it",
-        (len(got), "upload1" in got[0]),
-        (1, True),
+        "roles: the scene that shows it is told what it is for, the other is not",
+        (
+            "upload1" in validate.scene_pictures(D, plan["scenes"][1]),
+            validate.scene_pictures(D, plan["scenes"][0]),
+        ),
+        (True, ""),
     )
-    with open(D.path("scenes", "s2.js"), "w", encoding="utf-8") as f:
-        f.write("SK.image('upload2', 0, 0, 600);\nSK.image('upload1', 0, 0, 600);\n")
-    got = validate.problems(D, "film.js")
-    expect(
-        "roles: a scene draws the show picture, and the scene picture is refused there",
-        (len(got), "upload2" in got[0]),
-        (1, True),
-    )
-    with open(D.path("scenes", "s2.js"), "w", encoding="utf-8") as f:
-        f.write("SK.image('upload1', 0, 0, 600);\n")
-    expect("roles: in scenes, drawn", validate.problems(D, "film.js"), [])
-    # what the final render drops is read the same way
+    expect("roles: scene_message carries it", callable(scenes.scene_message), True)
+    js("// the opening\n", "scenes/s1.js")
+    js("// the close\n", "scenes/s2.js")
+    expect("roles: in scenes, every scene written and none draws it", len(problems()), 1)
+    js("SK.image('upload1', 0, 0, 600);\n", "scenes/s2.js")
+    expect("roles: in scenes, drawn", problems(), [])
     expect(
         "roles: drawn_pictures is what the render keeps", validate.drawn_pictures(D), {"upload1"}
+    )
+
+    # what Claude reads: the role wins over the prompt; a project's show picture is optional
+    expect(
+        "roles: the attachment's note says it is required, a project picture's that it is not",
+        (
+            "not finished" in library.role_line("show"),
+            "where this episode uses it" in library.role_line("show", required=False),
+        ),
+        (True, True),
     )
 
 

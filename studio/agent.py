@@ -849,12 +849,21 @@ def attached_note(film):
             "(a logo, a product, a person, a place: put it on screen with SK.image), a reference "
             "to match (a look, a character, a layout: draw in its spirit, don't paste it), or the "
             "brief itself (a screenshot, a note, a sketch of the story: read it as the prompt). "
-            "Where the person said how to use one (its role above, or the prompt), do that; "
-            "otherwise decide. Before you write anything, say in one short sentence per picture "
-            "what you took it to be. A photo in a drawn film sits best framed, as a pinned print "
-            "or a card, so it belongs to the drawn world. A picture you don't draw never leaves "
-            "the studio.",
+            "Where the person gave one a role above, the role is what it is for, whatever the "
+            'prompt\'s wording seems to say ("no other elements", "use it as a reference"): '
+            "the studio checks the roles and the film does not finish without them. Where there "
+            "is no role, the prompt says, or you decide. Before you write anything, say in one "
+            "short sentence per picture what you took it to be and, for one with a role, where "
+            "it goes. A photo in a drawn film sits best framed, as a pinned print or a card, so "
+            "it belongs to the drawn world; several to show in a short film can share a shot (a "
+            "wall of prints, a row of cards). A picture you don't draw never leaves the studio.",
         ]
+        if film.mode == "scenes" and any(a.get("role") == "show" for a in pics):
+            lines.append(
+                "This film is made in scenes, and a scene's pass sees only its own plan: name "
+                'each picture marked "show" in the "shows" of the scene that puts it on screen '
+                "(scenes.json is checked for it)."
+            )
     if not rec.get("prompt", "").strip():
         lines += [
             "",
