@@ -2779,9 +2779,18 @@ async def versions_make(req):
     sharp = body.get("sharpen")
     if sharp is not None and (hand is not None or body.get("notes")):
         return web.json_response({"error": "sharpen takes no notes"}, status=400)
+    # a fresh pass to the film's own ElevenLabs voice (the site mints one, as for a translation):
+    # with it the round may record the narration again (rounds.words)
+    voice = None
+    if body.get("voice") is not None and hand is None and sharp is None:
+        voice, bad = narrator_of(body.get("voice"))
+        if bad:
+            return web.json_response({"error": bad}, status=400)
+        if (voice or {}).get("source") != "elevenlabs":
+            voice = None  # KitCut's own voices need no pass
     try:
         bare = hand is not None or sharp is not None
-        notes = [] if bare else rounds.clean_notes(f, body.get("notes"))
+        notes = [] if bare else rounds.clean_notes(f, body.get("notes"), fresh=voice is not None)
     except rounds.RoundError as e:
         return _round_error(e)
     if not await leading():
@@ -2822,6 +2831,7 @@ async def versions_make(req):
                 src=body.get("from"),
                 hand=hand,
                 sharpen=sharp,
+                voice=voice,
             )
         except rounds.RoundError as e:
             return _round_error(e)
