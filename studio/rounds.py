@@ -200,14 +200,44 @@ def version_of(rec):
     return int(rec.get("version") or 1)
 
 
-def words(rec):
-    """May a round change what is said? Not in a person's own ElevenLabs voice yet (its pass to
-    their account is for the film's making, and has run out), and not where nothing is said."""
-    if (rec.get("narrator") or {}).get("source") == "elevenlabs":
-        return {"can": False, "why": "own_voice"}
+def words(rec, fresh=False):
+    """May a round change what is said, or record a line again? Not where nothing is said. In a
+    person's own ElevenLabs voice only with a fresh pass to it (`fresh`: the site mints one, as
+    for a translation, and sends it as the round's `voice`; the film's making's has run out):
+    without one the answer is own_voice with `with_pass`, so the site knows to send one."""
     if rec.get("narration") is False:
         return {"can": False, "why": "no_voice"}
+    if (rec.get("narrator") or {}).get("source") == "elevenlabs" and not fresh:
+        return {"can": False, "why": "own_voice", "with_pass": True}
     return {"can": True}
+
+
+VOICE_PASS = "round-voice.json"  # in the film's temp/: the pass a round was asked with (0600)
+
+
+def keep_pass(film, narrator):
+    """Keep the fresh pass to the film's own ElevenLabs voice a round was asked with in the
+    film's temp/ (never in the record), for copy_of to give the round's copy. Raises RoundError
+    when the film is not told in that voice."""
+    own = film.record().get("narrator") or {}
+    if own.get("source") != "elevenlabs":
+        raise RoundError(
+            409, "This film is not told in an ElevenLabs voice of its own.", "own_voice"
+        )
+    if (narrator or {}).get("voice") != own.get("voice"):
+        raise RoundError(
+            409, "The voice asked with is not the one this film is told in.", "own_voice"
+        )
+    os.makedirs(film.path("temp"), exist_ok=True)
+    p = film.path("temp", VOICE_PASS)
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with open(fd, "w", encoding="utf-8") as f:
+        json.dump({"grant": narrator["grant"]}, f)
+
+
+def can_voice(work):
+    """Whether a round's copy may record: its record allows it, with the pass it was given."""
+    return words(work.record(), fresh=work.own_voice() is not None)["can"]
 
 
 def rounds_today(rec):
@@ -375,9 +405,10 @@ def orphans():
 
 
 # ------------------------------------------------------------------ the notes, checked
-def clean_notes(film, notes):
+def clean_notes(film, notes, fresh=False):
     """The notes as the studio keeps them: [{id, kind, t, t2, x, y, w, h, line, was, words, text}],
-    times inside the film. Raises RoundError for what cannot be a round."""
+    times inside the film. Raises RoundError for what cannot be a round. `fresh`: the round
+    comes with a pass to the film's own ElevenLabs voice (words)."""
     rec = film.record()
     if not isinstance(notes, list) or not notes:
         raise RoundError(400, "Send the notes: a list of at least one.")
@@ -426,7 +457,7 @@ def clean_notes(film, notes):
             said = str(raw.get("words") or "").strip()[:NOTE_MAX]
             if said and said != ln["text"]:
                 n["words"] = said
-            if not words(rec)["can"]:
+            if not words(rec, fresh)["can"]:
                 raise RoundError(
                     409, "The words of this film cannot be changed in a round yet.", "words"
                 )
@@ -620,6 +651,10 @@ def copy_of(film, rid, notes):
         with contextlib.suppress(OSError):
             shutil.copy2(film.path("outputs", name), os.path.join(d, "outputs", name))
     _ours(d)
+    if (film.record().get("round") or {}).get("voice"):  # asked with a pass to its own voice
+        with contextlib.suppress(OSError):
+            os.makedirs(os.path.join(d, "temp"), exist_ok=True)
+            shutil.copy2(film.path("temp", VOICE_PASS), os.path.join(d, "temp", "voice.json"))
     for parts in SPENT:
         with contextlib.suppress(OSError):
             os.remove(os.path.join(d, *parts))
@@ -944,6 +979,9 @@ VOICE = (
     "(never add, remove or reorder lines), keep it about as long as it was, then `voice` with "
     "retake_line. Cues placed on words follow the new recording; look at any cue on a word you "
     "changed.\n"
+    "- A line whose words stay but whose recording is wrong (bad sound, a noise, a slip, the "
+    "wrong tone or pace): leave vo.json as it is and `voice` with retake_line -- a new take of "
+    "the same words in the same voice. That is a change: answer the note done.\n"
     "- This round has %(runs)d recordings, and every `voice` call is one. Before the first, count "
     "the lines the notes need said differently -- a note that removes or renames something "
     "needs every line that names it -- and keep a recording for each of them. A line fits its "
@@ -953,7 +991,8 @@ VOICE = (
 )
 NO_VOICE = (
     "- The narration stays as recorded: this film's words cannot be changed in a round, and "
-    "there is no `voice` tool. A note that asks for other words gets `note` with done false.\n"
+    "there is no `voice` tool. A note that asks for other words, or for a line to be recorded "
+    "again, gets `note` with done false.\n"
 )
 ANSWER = (
     "Before you stop: these notes have no `note` yet: %s. Call `note` for each now (done or "
@@ -968,7 +1007,7 @@ def ask(work, notes, frames, lim):
         "length": work.length,
         "minutes": lim["claude_s"] // 60,
         "notes": notes_text(notes, timeline(work), frames),
-        "voice": (VOICE % {"runs": lim["voice_runs"]}) if words(work.record())["can"] else NO_VOICE,
+        "voice": (VOICE % {"runs": lim["voice_runs"]}) if can_voice(work) else NO_VOICE,
     }
 
 
@@ -1089,13 +1128,16 @@ def start(
     src=None,
     hand=None,
     sharpen=None,
+    voice=None,
 ):
     """Make this finished film's next version from these notes; the round's job. Asked again
     with the same key, the round already asked for. Raises RoundError for what cannot be one.
     `src`: the version the notes were written on (it must be the film now). `hand`: files
     changed by hand instead of notes (clean_hand), which are not one of its maker's rounds of
     the day. `sharpen`: a quality instead of notes -- every picture painted again at it from
-    its own draft, with no Claude (pictures, sharpen); one of its maker's rounds."""
+    its own draft, with no Claude (pictures, sharpen); one of its maker's rounds. `voice`: a
+    fresh pass to the film's own ElevenLabs voice (server.narrator_of), so the round may record
+    (words): kept in the film's temp/, never in the record."""
     rec = film.record()
     if rec.get("state") != "done" or not rec.get("ok"):
         raise RoundError(409, "This film is not finished.", "state")
@@ -1137,8 +1179,10 @@ def start(
                 "sharpen",
             )
         return _begin(film, sched, [], key, client, member, priority, auth, sharpen=sharpen)
-    notes = clean_notes(film, notes)
-    return _begin(film, sched, notes, key, client, member, priority, auth)
+    notes = clean_notes(film, notes, fresh=voice is not None)
+    if voice is not None:
+        keep_pass(film, voice)
+    return _begin(film, sched, notes, key, client, member, priority, auth, voice=voice is not None)
 
 
 def _begin(
@@ -1155,6 +1199,7 @@ def _begin(
     k=None,
     hand=None,
     sharpen=None,
+    voice=False,
 ):
     rec = film.record()
     k = k or (rec.get("rounds") or 0) + 1
@@ -1185,6 +1230,7 @@ def _begin(
             "now": "Waiting for a free studio",
             **({"hand": hand} if hand else {}),
             **({"sharpen": sharpen} if sharpen else {}),
+            **({"voice": True} if voice else {}),
         },
     )
     _set_mark(film.id)
@@ -1242,6 +1288,7 @@ def resume(film, sched):
         k=rec.get("rounds"),
         hand=r.get("hand"),
         sharpen=r.get("sharpen"),
+        voice=bool(r.get("voice")),
     )
 
 
@@ -1334,7 +1381,8 @@ async def _run(job, film, sched):
     os.makedirs(os.path.dirname(log), exist_ok=True)
     t0, meter, clock = time.time(), agent.Meter(), Clock()
     said = {"at": 0.0, "now": None}
-    state = Round(notes, words(film.record())["can"], lambda text: tell_now(text, force=True))
+    can = words(film.record(), fresh=bool(r0.get("voice")))["can"]
+    state = Round(notes, can, lambda text: tell_now(text, force=True))
     work = None
 
     def verdicts():

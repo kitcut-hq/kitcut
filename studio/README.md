@@ -780,8 +780,17 @@ ROUND makes all of it into the film's next VERSION -- the same film, page and li
   and `guard.pin_paint`), or a changed default would record every line again in another voice;
   and what each tool spent before (the copy starts with no `spend.jsonl`, so a round's allowance
   and its cost are its own: `rounds.limits`).
-- **What it cannot do yet:** change the words of a film told in a person's own ElevenLabs voice
-  (their pass to their account was for the film's making), or change a film made in scenes.
+- **A film told in a person's own ElevenLabs voice** (2026-11-11): its making's pass to their
+  account has run out, so a round records only with a fresh one. `words` says `{can: false, why:
+  own_voice, with_pass: true}`; the site mints a pass to that same voice (as for a translation)
+  and sends it as the round's `voice`. `rounds.keep_pass` keeps it in the film's
+  `temp/round-voice.json` (never the record; another voice is refused, 409 `own_voice`),
+  `copy_of` gives it to the copy as `temp/voice.json`, and the copy speaks through the relay as
+  the round (`X-Film` is the rid, which the site binds the pass to). Without a pass the round
+  still changes the picture, the timing and the music, and answers a note on the words not done.
+- **A line taken again with the same words** (bad sound, a slip, the wrong tone): `voice` with
+  `retake_line` and vo.json left as it is (`rounds.VOICE` tells Claude so).
+- **What it cannot do yet:** change a film made in scenes.
 - **Limits.** A round takes one of its maker's films-at-once places and holds its reserve of the
   day's budget (`rounds.mine`, `rounds.reserve`), but is not one of the day's films. A film may
   have `STUDIO_ROUNDS_PER_DAY` (5) rounds in a day, a round up to 20 notes. A YouTube send and a
