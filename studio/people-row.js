@@ -34,7 +34,7 @@ const PeopleRow = (() => {
     sticker: 'Sticker', felt: 'Felt puppet', knit: 'Knitted doll', peg: 'Wooden toy', sock: 'Sock puppet',
   };
   const AUTO = { drawn: 'crayon', painted: 'watercolour', collage: 'papercut' };
-  const LOOK_NAME = { drawn: 'Hand-drawn', painted: 'Painted', collage: 'Collage' };
+  const LOOK_NAME = { drawn: 'Code-drawn', painted: 'Painted', collage: 'Collage' };
   const MAX = 4, NAME_MAX = 40;
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   const playOf = (v) => () => { if (still.matches || !v || !v.isConnected) return; if (!v.src) v.src = v.dataset.src; v.play().catch(() => {}); };
@@ -116,7 +116,7 @@ const PeopleRow = (() => {
       q('[data-add]').hidden = S.list.length >= MAX;
       q('[data-about]').textContent = about();
       q('[data-style-about]').textContent = S.style === 'auto'
-        ? `${LABEL[auto()]}, to suit the ${LOOK_NAME[S.look] || 'Hand-drawn'} look. Pick another to draw everyone that way.`
+        ? `${LABEL[auto()]}, to suit the ${LOOK_NAME[S.look] || 'Code-drawn'} look. Pick another to draw everyone that way.`
         : `Everyone in the ${S.what} is drawn as a ${LABEL[S.style].toLowerCase()} character.`;
       const radio = q(`.st input[value="${S.style}"]`);
       if (radio && !radio.checked) radio.checked = true;
