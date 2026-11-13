@@ -5642,6 +5642,12 @@ says who speaks it (`sketch-vo.py`):
        "lines": [{"who": "alex", "text": "..."}, {"who": "ada", "text": "..."}, {"text": "narrator"}]}
 ```
 
+A speaker is one of the film's people (`p1`...) or a character of its project's cast, drawn or
+painted (`studio/validate.py` `_vo`, from `_cast_of`): a series' storyteller can speak in her own
+voice while the narrator keeps his, and an approved voice line is matched in the voice of the
+line's own speaker. Only a film's heads and actors have mouths (`SK.talk`); a character's
+lines carry its `who` and move none.
+
 Every cast voice is checked before anything is spent; a speaker's voice is part of its lines'
 cache key (the narrator's lines keep theirs, so an existing film re-renders nothing); a Gemini
 refusal in a film with a cast takes the backup voice by the speaker's label (the film's takes

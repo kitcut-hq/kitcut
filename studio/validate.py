@@ -49,7 +49,8 @@ VO_KEYS = set(VO_PINNED) | {
     "say",
     "dry",
 }
-# "who": the person (film.CAPS "people") who speaks a line; "cast" gives each their voice
+# "who": who speaks a line -- one of the film's people (film.CAPS "people") or a character of its
+# project's cast (drawn or painted); "cast" gives each their voice
 VO_LINE_KEYS = {"text", "start", "who", "pause"}
 MAX_PAUSE_S = 15  # the quiet a line may ask for before it: a gag's beat, a sunset without words
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
@@ -79,8 +80,9 @@ def _num(x, lo, hi):
     return isinstance(x, (int, float)) and not isinstance(x, bool) and lo <= x <= hi
 
 
-def _vo(d, max_lines, length=60, people=()):
-    """people: the ids of the film's people (p1...), who may speak lines of their own."""
+def _vo(d, max_lines, length=60, people=(), characters=()):
+    """people: the ids of the film's people (p1...); characters: its project's cast (girl, olenka,
+    ...). Either may speak lines of their own, in a voice of their own."""
     out = []
     if not isinstance(d, dict):
         return ["vo.json must be an object"]
@@ -122,11 +124,12 @@ def _vo(d, max_lines, length=60, people=()):
             "else: remove cast and every line's who (the people are seen, not heard)"
         )
         cast = {}
+    speakers = list(people) + sorted(set(characters) - set(people))
     for who, spec in cast.items():
-        if who not in people:
+        if who not in speakers:
             out.append(
-                "vo.json: cast %s is not one of this film's people (%s)"
-                % (who, ", ".join(people) or "it has none")
+                "vo.json: cast %s is not one of this film's people or characters (%s)"
+                % (who, ", ".join(speakers) or "it has none")
             )
         elif (
             not isinstance(spec, dict)
@@ -158,9 +161,10 @@ def _vo(d, max_lines, length=60, people=()):
             out.append("vo.json: line %d may only have text (and pause, start, who)" % i)
         if "pause" in ln and not _num(ln["pause"], 0, MAX_PAUSE_S):
             out.append("vo.json: line %d pause is seconds, 0-%d" % (i, MAX_PAUSE_S))
-        if "who" in ln and not own and (ln["who"] not in people or ln["who"] not in cast):
+        if "who" in ln and not own and (ln["who"] not in speakers or ln["who"] not in cast):
             out.append(
-                "vo.json: line %d who %r must be one of this film's people with a voice in cast"
+                "vo.json: line %d who %r must be one of this film's people or characters with a "
+                "voice in cast"
                 % (i, ln["who"])
             )
         if "start" in ln and not _num(ln["start"], 0, length):
@@ -482,11 +486,13 @@ def problems(film, name):
         return [] if isinstance(d, dict) else ["content.json must be one JSON object"]
     if name == "vo.json":
         people = [p["id"] for p in film.record().get("people") or []]
+        known = _cast_of(film)
+        characters = (known["drawn"] | set(known["painted"])) if known else set()
         script = narration_script(film)
         cap = limits(film.length)["lines"]
         if script:  # the person's script sets how many lines: each may be split once, at the limit
             cap = max(cap, 2 * len(script[1]))
-        out = _vo(d, cap, film.length, people)
+        out = _vo(d, cap, film.length, people, characters)
         if script and not out:
             out = _verbatim(d, *script)
         return out

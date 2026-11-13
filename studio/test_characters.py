@@ -237,6 +237,24 @@ def checks(f):
     out = problems([{"name": "c3", "prompt": "a", "keep": True, "about": "C3, again"}], full)
     check(out == [], "a full cast takes a character's next version", out)
 
+    # vo.json: a character of the cast, painted (mom) or drawn (owl), speaks in its own voice
+    def vo_problems(cast, lines):
+        with open(f.path("vo.json"), encoding="utf-8") as fh:
+            d = json.load(fh)
+        d.update(voice="Sadachbia", style="", language="en", cast=cast, lines=lines)
+        with open(f.path("vo.json"), "w", encoding="utf-8") as fh:
+            json.dump(d, fh)
+        return validate.problems(f, "vo.json")
+
+    voices = {"mom": {"voice": "Leda"}, "owl": {"voice": "Puck"}}
+    lines = [{"text": "Hello."}, {"who": "mom", "text": "Rain!"}, {"who": "owl", "text": "Hoo."}]
+    out = vo_problems(voices, lines)
+    check(out == [], "a painted and a drawn character each speak in a voice of their own", out)
+    out = vo_problems({"bob": {"voice": "Puck"}}, [{"who": "bob", "text": "Hi."}])
+    check(
+        out and all("bob" in o for o in out), "a speaker in neither cast nor people is refused", out
+    )
+
 
 def kept():
     a = episode("Dad arrives")
