@@ -1114,7 +1114,15 @@ film it vouches is the person's. That film is an episode:
   `audio\vo\approved\`, and sketch-vo.py plays one for any line with the same key instead of
   recording it (never retaken; the voice tool refuses). What for: a series' greeting and sign-off,
   and a name the voice stresses wrongly now and then -- no check hears stress (KI-047).
-  `docs/studio-voice-lines.md` has the design.
+  `docs/studio-voice-lines.md` has the design. A line is approved and matched in the voice that
+  says it: the narrator's (`vo.voice`), or for a line a character speaks (`who`), that
+  character's in `vo.cast` (`library._voice_of`, sketch-vo's `line_vo`).
+- **Characters who speak.** A member of the project's cast, drawn or painted, may speak its own
+  lines in a voice of its own: `vo.cast` gives it the voice and its lines say `"who": "<name>"`
+  (validate.py's `_vo` takes the film's people and its cast, `_cast_of`). A storytime series can so
+  have its girl tell the story in one voice while the narrator reads the greeting and sign-off,
+  approved, in another. Until 2026-11-12 only a film's people (photos, `p1`...) could speak: the
+  first two-voice storytime episode was refused its second voice and read in one.
 - **What Claude hears.** The first message names the project and gives its brief (the person's
   words), then the pictures, the approved voice lines (to use word for word, each a line of its
   own), the cast and the earlier episodes. The first episode hears that its

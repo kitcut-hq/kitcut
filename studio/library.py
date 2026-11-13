@@ -1981,16 +1981,28 @@ def add_voice(client, project, text, src, vo, film=None, line=None):
         return {"key": key} | idx["voice"][key]
 
 
-def _vo_of(film):
-    """The voice a film's narration is in: its vo.json, with the studio's pinned TTS."""
+def _vo_json(film):
     try:
         with open(film.path("vo.json"), encoding="utf-8") as f:
-            vo = json.load(f)
+            return json.load(f)
     except (OSError, ValueError):
-        vo = {}
-    return {k: vo.get(k) for k in ("voice", "model", "language")} | {
+        return {}
+
+
+def _voice_of(vo, who=None):
+    """The voice one line is in: the narrator's (vo.json's own), or for a line a person or a
+    character speaks ("who"), that speaker's voice in vo.cast -- as sketch-vo.line_vo records it."""
+    out = {k: vo.get(k) for k in ("voice", "model", "language")} | {
         "tts": vo.get("tts") or VO_PINNED["tts"]
     }
+    spoken = ((vo.get("cast") or {}).get(who) or {}).get("voice") if who else None
+    return out | ({"voice": spoken} if spoken else {})
+
+
+def _vo_of(film, who=None):
+    """The voice a film's narration is in (or its speaker who's): its vo.json, with the studio's
+    pinned TTS."""
+    return _voice_of(_vo_json(film), who)
 
 
 def _timeline(film):
@@ -2007,10 +2019,10 @@ def film_lines(film):
     played_approved: the film played it from one."""
     lib = lib_of(film.record())
     have = load(lib)["voice"] if lib and lib[1] else {}
-    vo = _vo_of(film)
+    vo = _vo_json(film)
     out = []
     for L in _timeline(film):
-        key = _sketch.voice_line_key(L["text"], vo)
+        key = _sketch.voice_line_key(L["text"], _voice_of(vo, L.get("who")))
         out.append(
             {
                 "i": L["i"],
@@ -2059,7 +2071,7 @@ def add_voice_from_film(client, project, film_id, i):
     L, src = _line_file(f, i) if isinstance(i, int) and not isinstance(i, bool) else (None, None)
     if L is None:
         raise VoiceError(404, "That film has no such line.")
-    return add_voice(client, project, L["text"], src, _vo_of(f), film=f.id, line=i)
+    return add_voice(client, project, L["text"], src, _vo_of(f, L.get("who")), film=f.id, line=i)
 
 
 def delete_voice(client, project, key):
