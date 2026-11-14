@@ -7,15 +7,17 @@ must never reach one of our videos:
 
   * a "made with kitcut.ai" mark burned into the bottom-right corner of EVERY
     frame, and
-  * a closing card -- a cocktail glass, "Make your own film", "kitcut.ai" --
-    over the last couple of seconds.
+  * a closing card -- the logo, "Make your own film", "kitcut.ai" -- over the
+    last couple of seconds. The logo is the citrus slice (amber, with an
+    aquamarine play segment) since 2026-11-14; older exports carry a cocktail
+    glass.
 
 Neither is removed by hardcoding where it was last time. The mark is FOUND in
 each file: it is the only thing in the corner that never moves, so its box is
 the ink of the per-pixel median over the film's first half. The card is found
 twice over and the earlier wins: the moment that mark disappears (the card
 replaces the whole frame, mark included) and the first frame with the card's
-lime-green glass in it. The film is cut a quarter second before that.
+logo in it (the slice's aquamarine, or an older export's lime-green glass). The film is cut a quarter second before that.
 
 The mark is removed with ffmpeg's `delogo`, which rebuilds the box from its
 own border on every frame -- on KitCut's flat background that is the
@@ -142,15 +144,23 @@ def measure(path, fps=10, cut=None):
     dark = corner.astype(int).min(axis=3)  # (n, ch, cw), darkest channel
     n = len(dark)
 
-    # the card: first frame with the lime glass anywhere in the right half,
-    # sampled small because only its colour matters
+    # the card: first frame with the logo anywhere in the right half, sampled
+    # small because only its colour matters. The logo is the citrus slice, whose
+    # play segment is aquamarine (#66f1c2, about 104,236,191 on the card's paper);
+    # an export from before 2026-11-14 has a lime-green cocktail glass instead
     sw, sh = 240, 270
     right = sample(path, "crop=%d:%d:%d:0,scale=%d:%d" % (W // 2, H, W // 2, sw, sh), sw, sh, fps)
     g = right.astype(int)
-    lime = (
-        (g[..., 1] > 150) & (g[..., 0] < 170) & (g[..., 2] < 120) & (g[..., 1] - g[..., 2] > 60)
-    ).mean(axis=(1, 2))
-    # The glass is detected as lime APPEARING, not lime being there: a scene can
+    glass = (g[..., 1] > 150) & (g[..., 0] < 170) & (g[..., 2] < 120) & (g[..., 1] - g[..., 2] > 60)
+    slice_ = (
+        (g[..., 1] > 190)
+        & (g[..., 0] < 170)
+        & (g[..., 2] > 140)
+        & (g[..., 1] - g[..., 0] > 70)
+        & (g[..., 1] - g[..., 2] > 15)
+    )
+    lime = (glass | slice_).mean(axis=(1, 2))
+    # The logo is detected as its colour APPEARING, not being there: a scene can
     # carry its own green (film_web11's sticker is the glass's exact lime and
     # sits in the right half from frame 0, which read as "card from 0.00s").
     base = float(np.median(lime[: max(1, int(fps))]))
