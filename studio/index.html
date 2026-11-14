@@ -1541,7 +1541,7 @@ async function recent() {
     if (!list.length) return;
     $('films').innerHTML = list.map((f, i) => `
       <a class="film" href="/film/${esc(f.id)}" data-i="${i}">
-        <span class="fpic"><img src="${esc(f.poster_url)}" alt="" loading="lazy"${f.frame && f.frame !== '16:9' ? ' class="fit"' : ''}><span class="playmark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.19 12.00 L23.16 11.75 L23.06 11.53 L22.90 11.33 L22.70 11.19 L8.18 3.47 L7.74 3.37 L7.30 3.48 L7.04 3.67 L6.84 3.98 L6.31 5.40 L5.92 6.71 L5.65 7.91 L5.44 9.13 L5.25 11.45 L5.31 13.64 L5.60 15.82 L6.11 17.95 L6.87 20.09 L7.10 20.38 L7.45 20.59 L7.82 20.63 L8.18 20.53 L22.75 12.79 L23.06 12.47 L23.16 12.25Z"/></svg></span></span>
+        <span class="fpic"><img src="${esc(f.poster_url)}" alt="" loading="lazy"${f.frame && f.frame !== '16:9' ? ' class="fit"' : ''}><span class="playmark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.19 12.00 L23.15 11.73 L23.05 11.52 L22.88 11.31 L22.69 11.18 L8.15 3.45 L7.76 3.34 L7.32 3.43 L7.03 3.65 L6.86 3.91 L6.33 5.31 L5.89 6.79 L5.61 8.04 L5.43 9.18 L5.30 10.34 L5.24 11.49 L5.30 13.67 L5.59 15.84 L5.83 16.96 L6.14 18.08 L6.88 20.13 L7.10 20.42 L7.41 20.61 L7.76 20.66 L8.11 20.57 L22.73 12.80 L23.05 12.48 L23.15 12.27Z"/></svg></span></span>
         <div><p dir="auto">${esc(f.prompt || f.title || 'A film from pictures and a voice note')}</p><small>${dur(f.length || 5)} ${{ painted: 'painted', collage: 'collage' }[f.look] || 'drawn'} film · made in ${mmss(f.seconds || 0)}${f.cost_usd != null ? ' · $' + f.cost_usd.toFixed(2) : ''}</small></div>
       </a>`).join('');
     for (const b of $('films').querySelectorAll('.film')) {
