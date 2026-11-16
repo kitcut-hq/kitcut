@@ -3039,8 +3039,10 @@ in the order given, so the prompt names them by number.
 
 A film exported from kitcut.ai carries KitCut advertising that must never
 reach one of our videos: a "made with kitcut.ai" mark burned into the
-bottom-right corner of every frame, and a closing card (a cocktail glass,
-"Make your own film", "kitcut.ai") over the last ~2-3 seconds. Its soundtrack
+bottom-right corner of every frame, and a closing card (the logo, "Make your
+own film", "kitcut.ai") over the last ~2-3 seconds. The logo is the citrus
+slice (amber, with an aquamarine play segment) since 2026-11-14; older exports
+carry a cocktail glass. Its soundtrack
 is also unwanted -- our voice-over and music run across the insert.
 
 ```powershell
@@ -3057,8 +3059,8 @@ box (215x172 px instead of 132x60). A box bigger than 12 % x 9 % of the frame
 is refused as "something static merged into it".
 
 **The card is found twice and the earlier wins:** the first frame with its
-lime glass, and the moment the mark vanishes. The mark goes ~0.7 s before the
-glass shows (30.0 -> 30.75 s, 15.0 -> 15.7 s measured) because the card slides
+logo (the slice's aquamarine appearing, or an older export's lime glass), and
+the moment the mark vanishes. The mark goes ~0.7 s before the logo shows (30.0 -> 30.75 s, 15.0 -> 15.7 s measured) because the card slides
 in over the whole frame -- counting those mark-less frames as "before the card"
 is how K4's mark once fell under the 97 % bar and went undetected. The film is
 cut 0.25 s before the card.
