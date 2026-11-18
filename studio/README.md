@@ -1145,6 +1145,22 @@ with `STUDIO_ENV_FILE` naming the studio's `.env` (MONGODB_URI, the media SAS); 
 for `--vm`. The first import (2026-09-30): the Web Summit speaker promo,
 `studio-20260930-114530-nhdy7i`, in project `p-s2alo2aepx`.
 
+## A finished film cut into a Short: `shortcut.py`
+
+kitcut.ai's `film_to_short` (sketch-studio `lib/filmshort.js`). `POST /api/films {"short": {"from",
+"version", "segments"?, "headline"?, "key"}, "listed"?}` makes a new film from the original's
+finished master, with no Claude, voice or picture model: 1080x1920, the whole 16:9 frame over a
+blurred, darkened copy of itself, the headline above it, the film's own `film.vtt` large below it,
+the film's own sound. `segments` keep those seconds, in order; a result over 180 s is refused with
+`long`, before a film is made. A Short is cut in the `cpu` pool and is not an episode of a project,
+so a series' next episode never starts from it.
+
+The studio's thumbnails, share page and YouTube drafts all draw a film from its code, so the Short's
+folder holds a small `film.js` that shows sixteen of its own frames (`images/`), and its subtitles as
+a narration on its own clock (`vo.json`, `audio/vo/timeline.json`). The video is never drawn from
+that code: the site refuses notes, and translation, on a Short. `python studio/shortcut.py --plan
+<film> --segments 0-22,140-159` says what it would be; `studio/test_shortcut.py` does one real cut.
+
 ## Templates: a finished film others remake as they ask (`templates.py`)
 
 kitcut.ai's templates. A template is a finished film offered as an example, not a form: a person

@@ -171,6 +171,7 @@ import procs  # noqa: E402
 import store  # noqa: E402
 import templates  # noqa: E402
 import localize  # noqa: E402 -- a finished film in another language (kitcut.ai's Translate)
+import shortcut  # noqa: E402 -- a finished film cut into a vertical Short (film_to_short)
 import validate  # noqa: E402
 import thumbs  # noqa: E402
 import uploads  # noqa: E402
@@ -1250,6 +1251,8 @@ async def create(req):
         )
     if body.get("localize") is not None:  # a finished film in another language (localize.py)
         return await localize_create(req, body)
+    if body.get("short") is not None:  # a finished film cut into a Short (shortcut.py)
+        return await short_create(req, body)
     tpl = frame = None
     if body.get("template") is not None:  # a remake of a template, as asked (templates.py)
         tpl, frame, err = template_of(body, from_this_machine(req))
@@ -1625,6 +1628,79 @@ async def localize_create(req, body):
         },
         status=202,
     )
+
+
+async def short_create(req, body):
+    """POST /api/films {"short": {"from", "version", "segments"?, "headline"?, "key"}, "listed"?}: a
+    finished film cut into a vertical Short, as a film of its own (shortcut.py). The asker is the
+    original's own client. Asked twice with one key: the same film. 202 {"id", "status", "position",
+    "listed", "short_of"}; 409 {"reason"} for a film that cannot be; 400 for segments that cannot be
+    cut; 404 for another's film. It spends nothing and writes no code, so it is not one of the films
+    an account may have in the making at once: it waits only for the machine's cpu pool."""
+    client = client_of(req)
+    spec = body.get("short")
+    key = str((spec or {}).get("key") or "") if isinstance(spec, dict) else ""
+
+    def answer(f):
+        return web.json_response(
+            {
+                "id": f.id,
+                "status": f.record().get("state") or "queued",
+                "position": 0,
+                "listed": f.record().get("listed") is not False,
+                "short_of": f.record().get("short_of"),
+            },
+            status=202,
+        )
+
+    seen = await asyncio.to_thread(localize.recent)
+    again = shortcut.by_key(key, seen) if key else None
+    if again is not None and clients.same(again.record().get("client"), client):
+        return answer(again)
+    try:
+        src, parts, headline, key, version = await asyncio.to_thread(shortcut.check, spec, client)
+    except shortcut.Refused as e:
+        return web.json_response(e.body(), status=e.status)
+    local = "api" if body.get("auth") == "api" else os.environ.get("STUDIO_LOCAL_AUTH") or "login"
+    auth = local if from_this_machine(req) else site_auth()
+    listed = body.get("listed") is not False and src.record().get("listed") is not False
+    source = "mcp" if req.headers.get("X-Source", "").strip() == "mcp" else "web"
+    app = req.headers.get("X-App", "").strip()[:40] or None
+    prune()
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    async with ADMIT:
+        if not peers.leads() or MODE != "serving" or DRAINING:
+            return web.json_response({"error": RESTARTING}, status=503)
+        again = shortcut.by_key(key)
+        if again is not None and clients.same(again.record().get("client"), client):
+            return answer(again)
+        if len(everyone(("queued",), peers.peers())) >= MAX_QUEUE:
+            return web.json_response({"error": "the queue is full; try again later"}, status=429)
+        f = Film.create(
+            src.record().get("prompt") or "",
+            5,
+            "drawn",
+            client=client,
+            source=source,
+            auth=auth,
+            listed=listed,
+            app=app,
+            fps=30,
+            member=clients.member_of(req.headers),
+            frame="9:16",
+        )
+        try:
+            await asyncio.to_thread(shortcut.seed, f, src, parts, headline, key, version)
+        except Exception as e:  # noqa: BLE001 -- a film that could not be laid in is not started
+            f.update(state="error", error="could not start from the original: %s" % e)
+            return web.json_response(
+                {"error": "the Short could not be started from the film"}, status=500
+            )
+        await agent.save(f.id, agent.first_record(f, source, client))
+        start(f)
+    await asyncio.sleep(0)
+    return answer(f)
 
 
 # ------------------------------------------------------------------ templates (templates.py)
@@ -3041,6 +3117,8 @@ async def status(req):
         out["localized"] = {
             k: f.record()["localized"].get(k) for k in ("from", "version", "language")
         }
+    if f.record().get("short_of"):  # a Short cut from a finished film (shortcut.py)
+        out["short_of"] = {k: f.record()["short_of"].get(k) for k in ("from", "segments")}
     made_from = f.record().get("template")  # a remake of a template: its "Made from" line
     if made_from:
         out["template"] = {k: made_from.get(k) for k in ("id", "version", "title")}
