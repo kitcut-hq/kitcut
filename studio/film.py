@@ -106,19 +106,17 @@ FOR_LINE = re.compile(
 # what Claude may not change in paint.json: the painter, and how many paintings a film may cost
 # (8 under a minute, 12 from a minute, more for a longer film: limits()["images"], paint_pins)
 PAINT_PINNED = {"backend": "muse", "model": "meta/muse-image", "max_images": 8}
-# How carefully a picture is painted, where its model has the setting (OpenAI's): every film is
-# painted as a draft, and its person may have a sharper version made later (rounds.py sharpen):
-# each picture repainted at a higher quality from its own draft. The owner's call, 2026-10-29:
-# most films never need more than the draft. The page's words: Draft, Standard, High.
+# How carefully a picture is painted, where its model has the setting (OpenAI's). Each painter
+# has its one quality (CUTOUTS_PINNED, STYLE_ROUTES): the owner's call, 2026-11-17, took away
+# Draft, Standard and High (a film asked for at one, and Sharper pictures after it) and put back
+# the qualities from before them. A film made from 2026-10-29 to then may carry its own in its
+# record's paint_quality (paint_pins) and in its paint.json, which its rounds keep.
 QUALITIES = ("low", "medium", "high")
-DRAFT = "low"
 QUALITY_MODELS = {"openai/gpt-image-2.5-flare"}
-# A film may also start at Standard or High (POST /api/films "quality", the record's
-# paint_quality, paint_pins), where its painter has the setting: chooses_quality.
 # a collage film's cut-outs: a model that paints on a transparent background (sketch-paint.py)
 CUTOUTS_PINNED = {
     "model": "openai/gpt-image-2.5-flare",
-    "quality": DRAFT,
+    "quality": "medium",
     "border": 12,
     "cut": "scissor",
 }
@@ -129,14 +127,14 @@ CUTOUTS_PINNED = {
 # id stays, as projects' cards keep it). Muse paints no transparent ground, so a collage's
 # cut-outs stay GPT Image's on it ("cutouts": False). Claude may change none of it. Gemini is the
 # team's alone (the site says who: X-Team) and costs about seven times Muse a picture; GPT Image
-# about one and a half at medium quality, and its paintings start as drafts (QUALITIES: about a
-# quarter of that).
+# about one and a half at its default quality, and its paintings are made at "high" (about four
+# times that: lower it here).
 STYLE_ROUTES = {
     "gpt": {
         "backend": "openrouter",
         "model": "openai/gpt-image-2.5-flare",
         "picture": True,
-        "quality": DRAFT,
+        "quality": "high",
     },
     "words": {"backend": "muse", "model": "meta/muse-image", "picture": True, "cutouts": False},
     "gemini": {
@@ -638,8 +636,8 @@ def paint_pins(length, caps, route=None, quality=None):
     each kind's own settings, and the cap on pictures (repaints included), its kinds' caps
     added up. `route` is the film record's paint_route (its project's style, stylekit.seed):
     the painter it names, the style line, its style pictures (a path, or a list of them) on a
-    picture route, and the route's quality -- the studio's too. `quality`: the one the film was
-    asked for (its record's paint_quality), where the painter has the setting; else a draft. A
+    picture route, and the route's quality -- the studio's too. `quality`: the one a film made
+    while it could be chosen was asked for (its record's paint_quality); else the painter's. A
     tall film has the same painter as a wide one; sketch-paint.py paints in the film's frame."""
     kinds = paint_kinds(caps)
     pins = dict(PAINT_PINNED)
@@ -669,19 +667,6 @@ def paint_pins(length, caps, route=None, quality=None):
 def paints_cutouts(r):
     """Whether a style route (STYLE_ROUTES) paints a collage's cut-outs as well as its scenes."""
     return bool(r.get("picture")) and r.get("cutouts", True)
-
-
-def chooses_quality(look, route=None):
-    """Whether a film of this look -- a project's episode painted on `route` (stylekit.route_of),
-    or None -- is painted by a model with a quality to choose: a collage's cut-outs, and the
-    paintings of a style's GPT route. Muse (a painted film outside a project, a style's words
-    route) and a drawn film have none."""
-    caps = RECIPES.get(look) or ()
-    r = STYLE_ROUTES.get(route) or {}
-    if any("cutouts" in k["pins"] for k in paint_kinds(caps)):
-        # a style's picture route paints the cut-outs too (paint_pins)
-        return (r["model"] if paints_cutouts(r) else CUTOUTS_PINNED["model"]) in QUALITY_MODELS
-    return bool(paint_kinds(caps)) and bool(r.get("quality"))
 
 
 def _release():
@@ -1130,7 +1115,6 @@ class Film:
         character_style="auto",
         member=None,
         narrator=None,
-        quality=None,
         template=None,
         frame=None,
         captions=False,
@@ -1302,7 +1286,7 @@ class Film:
             m["modules"] = list(modules(caps))
         if paint_kinds(caps):
             m["paint"] = "paint.json"
-            pins = paint_pins(seconds, caps, quality=quality)
+            pins = paint_pins(seconds, caps)
             _write_json(film.path("paint.json"), pins | {"style": "", "images": []})
         if fonts(caps):
             m["fonts"] = list(m.get("fonts") or []) + fonts(caps)
@@ -1372,9 +1356,6 @@ class Film:
                 **({"app": str(app)[:40]} if app else {}),
                 # asked for with no music at all (frame_note; the manifest's audio.music)
                 **({"music": "none"} if quiet else {}),
-                # its pictures asked for above a draft (paint_pins; the caller checked the
-                # painter has the setting: chooses_quality)
-                **({"paint_quality": quality} if quality in QUALITIES else {}),
                 "release": RELEASE,
                 # the engine it started from, when it is not this release's sketch/ (engine_base)
                 **(

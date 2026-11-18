@@ -133,9 +133,8 @@ def pin_paint(film):
         )
     )
     # a style picture is the project's (stylekit.seed), never one Claude names; the quality is
-    # the route's (film.STYLE_ROUTES) or a sharper version's, and redo a sharper version's
-    # (rounds.sharpen): never Claude's
-    keep = validate.PAINT_KEYS - ({"style_ref", "quality", "redo"} - set(want))
+    # the painter's (film.STYLE_ROUTES), never Claude's
+    keep = validate.PAINT_KEYS - ({"style_ref", "quality"} - set(want))
     return _pin(film, "paint.json", want, keep=keep)
 
 
