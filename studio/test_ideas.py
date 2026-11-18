@@ -165,6 +165,7 @@ def main():
             ("Never this film told again", "and never this film again"),
             ("for a 5-second film: at most %d words" % budget, "the narration within its budget"),
             ("whole sentences that carry the whole thought", "in whole sentences"),
+            ("is written as @ and their cast name", "the cast written as @name"),
             ("narration's language (en)", "in the person's language, else the narration's"),
             ("never by their name", "a still describes the characters, never names them"),
             ("Nothing written in", "and has no words in it"),

@@ -26,7 +26,8 @@ an episode's words do not need (the music, the colours, the lettering): the pers
 wrote it, who the film was made for, its narration, its characters by their cast names, and as
 images the sheet of the film's frames and the first few of its pictures. It is asked for a new
 story for the same audience, characters and world -- never this film told again -- narrated as
-this film is, in whole sentences, within the word budget of the film's length.
+this film is, in whole sentences, within the word budget of the film's length, each character of
+its cast written as @name (the site marks them, and the person may take one out or put one in).
 
 The same answer describes one still from the episode and the film's look in a line. Once the
 proposal is kept (the site shows it at once, on a frame of the film), Muse paints the still
@@ -116,7 +117,10 @@ works. It names the characters by their cast names above, written as names (pip 
 {words} words (a little under is better than over). Spoken the way this film's narration is: the \
 same voice, the same kind of words, whole sentences that carry the whole thought, with an example \
 where it helps, never clipped lines that only name a result. Plain text, no stage directions, no \
-headings, no emoji, never in all capital letters.
+headings, no emoji, never in all capital letters. Each character of the cast above is written \
+as @ and their cast name wherever the narrator names them (the @keeper, @pip: the narrator says \
+the name without the @), so the episode draws them as the cast has them; anyone new is plain \
+words.
 - Is written in the language the person wrote their idea in; if that is unclear, in the \
 narration's language ({language}).
 
