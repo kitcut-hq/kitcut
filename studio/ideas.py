@@ -12,12 +12,15 @@ the episode is made, as for any. The site asks here as the film's own client:
                                        and answers at once, with what GET answers.
     GET  /api/library/ideas?film=      how it stands: {"state": none|writing|done|failed,
                                        "proposal": {"prompt"} when done, "error" when failed,
-                                       "cast": [{"name", "about", "painted"}],
+                                       "cast": [{"name", "about", "painted", "picture"?}],
                                        "picture": {"state": none|painting|done|failed, "url"}}.
 
 "cast" needs no Claude and is always there: the characters that would carry over into a project
 made from this film -- exactly the ones fromfilm.seed would copy: the members its code drew (with
-the description their code gives) and its painted characters, each once, drawn first.
+the description their code gives) and its painted characters, each once, drawn first. Each has
+the address of a small picture of them ("picture", FACE px, once the proposal is written: faces()
+puts them online beside the film's files), from the account's library for one drawn (its
+thumbnail) and from the film for one painted, so the site shows who comes along.
 
 The proposal is one Claude call with no tools. It reads what fromfilm reads for a brief, less what
 an episode's words do not need (the music, the colours, the lettering): the person's idea as they
@@ -90,6 +93,7 @@ STYLE_AT = (0.35, 0.7)  # where in the film its two style pictures are taken
 REFS_MAX = 2  # of its painted characters, as references
 PAINT_S = 240  # the step (one picture took ~40 s when the proof was measured)
 PAINTING_MAX_S = PAINT_S + 60  # a picture still "painting" after this was lost: failed
+FACE = 160  # px on the longer side of a character's picture, as the site shows it (small)
 
 WRITER = (
     "You write a series of short animated films: you write its next episode. You are given the "
@@ -272,6 +276,17 @@ def _standing(film, now=None):
     return {"state": "failed", "error": str(s.get("error") or FAILED)}
 
 
+def _faced(members, s):
+    """The cast, each with the address of its picture where faces() put one online."""
+    got = (s or {}).get("faces") if isinstance((s or {}).get("faces"), dict) else {}
+    return [
+        {**m, "picture": got[m["name"]]}
+        if isinstance(got.get(m["name"]), str) and got[m["name"]].startswith("https://")
+        else m
+        for m in members
+    ]
+
+
 def state(client, film_id, now=None):
     """How the proposal for the asker's finished film stands, with its cast (see the module's
     note). fromfilm.FromFilmError 404 for a film that is not theirs, 409 for one not finished."""
@@ -279,7 +294,7 @@ def state(client, film_id, now=None):
     st = _standing(f, now)
     if st["state"] != "done":
         st["picture"] = {"state": "none", "url": None}
-    return {**st, "cast": cast(f)}
+    return {**st, "cast": _faced(cast(f), fromfilm._read(state_path(f), True))}  # noqa: SLF001
 
 
 async def write(client, film_id, auth="login", model=MODEL, effort=EFFORT):
@@ -307,11 +322,59 @@ async def write(client, film_id, auth="login", model=MODEL, effort=EFFORT):
         print("ideas %s: not written: %s" % (f.id, e), file=sys.stderr, flush=True)
         films._write_json(path, {"state": "failed", "at": _now(), "error": FAILED})  # noqa: SLF001
         return
+    if media.enabled():
+        await faces(client, f)
     if painting:
         await paint(f)
 
 
 # ------------------------------------------------------------------ the pictures
+def face_files(client, film):
+    """{name: the picture of each character cast() lists}: a drawn one's thumbnail in the
+    account's library (library.thumb_of), a painted one's painting in the film."""
+    painted = {n: p for n, p, _ in fromfilm.painted_of(film)}
+    out = {}
+    for m in cast(film):
+        p = painted.get(m["name"]) if m["painted"] else library.thumb_of(client, m["name"])
+        if p and os.path.isfile(p):
+            out[m["name"]] = p
+    return out
+
+
+async def faces(client, film):
+    """Each character's picture, small (FACE px), online beside the film's files under a new name
+    (its bytes' hash); their addresses kept in the state file as "faces". Never raises: a
+    character without one is shown by name."""
+    from io import BytesIO
+
+    from PIL import Image
+
+    d = film.path(PICTURES_DIR)
+    os.makedirs(d, exist_ok=True)
+    got = {}
+    try:
+        for name, src in (await asyncio.to_thread(face_files, client, film)).items():
+            with Image.open(src) as im:
+                im = im.convert("RGBA")
+                im.thumbnail((FACE, FACE))
+                flat = Image.new("RGB", im.size, "white")
+                flat.paste(im, mask=im.split()[3])
+                buf = BytesIO()
+                flat.save(buf, "JPEG", quality=86, optimize=True)
+            file = "face-%s-%s.jpg" % (name, hashlib.sha1(buf.getvalue()).hexdigest()[:10])
+            with open(os.path.join(d, file), "wb") as fh:
+                fh.write(buf.getvalue())
+            url = await media.publish_one(film, file, "image/jpeg", out=d)
+            if url:
+                got[name] = url
+    except Exception as e:  # noqa: BLE001 -- the names stand without their pictures
+        print("ideas %s: faces not put online: %s" % (film.id, e), file=sys.stderr, flush=True)
+    path = state_path(film)
+    s = fromfilm._read(path, True) or {}  # noqa: SLF001
+    if got and s.get("state") == "done":
+        films._write_json(path, {**s, "faces": got})  # noqa: SLF001
+
+
 def style_pictures(film):
     """Two frames of the film (STYLE_AT), as JPEGs in its series folder, else its poster: what
     Muse paints the stills to look like. [paths]"""

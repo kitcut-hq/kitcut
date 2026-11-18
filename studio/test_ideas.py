@@ -435,6 +435,13 @@ def pictures(check, F):
             seen,
         )
         check(ideas.state("u:alice", F.id)["picture"]["state"] == "done", "then painted")
+        faced = {m["name"]: m.get("picture") for m in ideas.state("u:alice", F.id)["cast"]}
+        check(
+            (faced.get("mom") or "").startswith("https://media.test/%s/face-mom-" % F.id)
+            and faced.get("owl") is None,
+            "each character's picture online: a painted one's painting; one without a picture, none",
+            faced,
+        )
     finally:
         ideas.paint_step, media.publish_one, media.enabled = real
 
