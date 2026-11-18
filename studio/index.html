@@ -1,6 +1,18 @@
 <!doctype html>
 <html lang="en">
 <head>
+<!-- Google tag (Tag Manager GTM-PRR4H6VN): first in <head>, once per page; in the EEA, the UK and Switzerland its cookies wait for a yes (consent.js) -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied', region: 'AT BE BG HR CY CZ DK EE FI FR DE GR HU IE IT LV LT LU MT NL PL PT RO SK SI ES SE IS LI NO GB CH'.split(' ') });
+  gtag('consent', 'default', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' });
+  (function (c) { if (c) { var v = c[1] === 'yes' ? 'granted' : 'denied'; gtag('consent', 'update', { ad_storage: v, ad_user_data: v, ad_personalization: v, analytics_storage: v }); } })(document.cookie.match(/(?:^|; )kc_consent=(yes|no)/));
+  gtag('set', 'ads_data_redaction', true);
+  gtag('js', new Date());
+</script>
+<script async src="https://www.googletagmanager.com/gtm.js?id=GTM-PRR4H6VN"></script>
+<script defer src="/consent.js"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Video Maker: Opus 5.5 Videos from One Prompt | KitCut</title>
@@ -309,6 +321,13 @@ button.chip[aria-pressed="true"] { font-weight: 500; background: var(--accent-so
 .banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); font-size: 13.5px; }
 .banner .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }
+/* the cookie question (consent.js, in the EEA, the UK and Switzerland): a panel floating in the page's
+   bottom-left corner, above the bar, with a banner's words and Accept and Decline as two equal plain
+   buttons; a phone's 16px gutters on both sides when the screen is narrower than it */
+.consent { position: fixed; z-index: 30; left: 16px; bottom: 16px; box-sizing: border-box; width: min(420px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--lift); color: var(--ink-2); font-size: 13.5px; font-weight: 400; }
+.consent p { margin: 0; }
+.consent .acts { display: flex; gap: 8px; }
+.consent .acts .btn { flex: 1; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
 /* ---- panels and forms */
