@@ -321,6 +321,13 @@ button.chip[aria-pressed="true"] { font-weight: 500; background: var(--accent-so
 .banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: var(--accent-soft); font-size: 13.5px; }
 .banner .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .banner.bad { background: var(--bad-soft); color: var(--bad); }
+/* the cookie question (consent.js, in the EEA, the UK and Switzerland): a panel floating in the page's
+   bottom-left corner, above the bar, with a banner's words and Accept and Decline as two equal plain
+   buttons; a phone's 16px gutters on both sides when the screen is narrower than it */
+.consent { position: fixed; z-index: 30; left: 16px; bottom: 16px; box-sizing: border-box; width: min(420px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--lift); color: var(--ink-2); font-size: 13.5px; font-weight: 400; }
+.consent p { margin: 0; }
+.consent .acts { display: flex; gap: 8px; }
+.consent .acts .btn { flex: 1; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
 /* ---- panels and forms */
