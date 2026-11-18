@@ -5,9 +5,9 @@ python studio/test_ideas.py
 Covers: the cast a series would carry over (the members the film's code drew, then its painted
 characters, each name once, descriptions trimmed), someone else's film and one that does not
 exist are not found and an unfinished one is refused, what Claude is asked (the idea, the
-audience, the narration, the cast by name, a narration within the film's word budget in whole
-sentences, and never this film told again), the answer held to its shape (a title and an idea on
-one line, the narration's paragraphs, one far over its budget refused), how it stands on disk
+audience, the narration, the cast by name, a prompt as typed in the idea box with the cast as
+@name, not the narration, and never this film told again), the answer held to its shape (its
+paragraphs, a long one cut, an empty one refused), how it stands on disk
 (none, writing, done, failed, and a "writing" whose server went away), a second ask starting
 nothing while it is being written or is written, and the two routes answering the site's shapes;
 its still and the film's look in the same answer, painted by a stubbed Muse (small, 16:9),
@@ -113,10 +113,9 @@ def main():
             == {
                 "state": "none",
                 "picture": {"state": "none", "url": None},
-                "words": ideas.budget(F),
                 "cast": c,
             },
-            "none asked: none, with the narration's budget and the cast",
+            "none asked: none, with the cast",
             st,
         )
         names = {m["name"] for m in c}
@@ -154,7 +153,6 @@ def main():
         # what Claude is asked
         mat = ideas.material(F)
         text = ideas.ask_text(mat)
-        budget = ideas.budget(F)
         for want, what in [
             ("Pip learns why the sky is blue", "the person's idea"),
             ("children of 4 to 6", "who it was made for"),
@@ -163,13 +161,14 @@ def main():
             ("- mom: Mom, in a green coat", "the painted cast too"),
             ("Write the series' next episode", "one next episode, ready to make"),
             ("Never this film told again", "and never this film again"),
-            ("for a 5-second film: at most %d words" % budget, "the narration within its budget"),
-            ("whole sentences that carry the whole thought", "in whole sentences"),
-            ("is written as @ and their cast name", "the cast written as @name"),
+            ("its prompt, as the person would type it into the idea box", "a prompt, as typed"),
+            ("Not its narration word for", "not the narration"),
+            ("at most %d characters" % ideas.PROMPT_MAX, "at most its length"),
+            ("is written as @ and their cast", "the cast written as @name"),
             ("narration's language (en)", "in the person's language, else the narration's"),
             ("never by their name", "a still describes the characters, never names them"),
             ("Nothing written in", "and has no words in it"),
-            ('{"title": "...", "idea": "...", "narration": "...", "still"', "the answer's shape"),
+            ('{"prompt": "...", "still": "...", "style": "..."}', "the answer's shape"),
         ]:
             check(want in text, "the ask has %s" % what)
         seen = fromfilm.images(F, mat)
@@ -179,39 +178,25 @@ def main():
         )
 
         # the answer held to its shape
-        got = ideas.clean(
-            {
-                "title": ' "Pip and  the kite" ',
-                "idea": "Pip finds\na kite",
-                "narration": "  Pip looks up.\nThe wind pulls.  \n\n  The kite flies! ",
-            },
-            20,
-        )
+        got = ideas.clean({"prompt": '  "@pip finds\na kite.  \n\n  The wind pulls it away." '})
         check(
-            got
-            == {
-                "title": "Pip and the kite",
-                "idea": "Pip finds a kite",
-                "narration": "Pip looks up. The wind pulls.\n\nThe kite flies!",
-            },
-            "title and idea on one line, no quotes; the narration's paragraphs kept",
+            got == {"prompt": "@pip finds a kite.\n\nThe wind pulls it away."},
+            "its paragraphs kept, each on one line, no quotes around it",
             got,
         )
+        long = ideas.clean({"prompt": "Pip flies a kite " * 200})["prompt"]
         check(
-            ideas.clean({"idea": "Pip flies " + "a kite " * 40, "narration": "Go."}, 20)[
-                "title"
-            ].endswith("\u2026"),
-            "no title: the idea, cut",
+            len(long) <= ideas.PROMPT_MAX and long.split()[-1] in ("Pip", "flies", "a", "kite"),
+            "a long one cut after a whole word",
         )
         for d, what in [
-            ({"idea": "a", "narration": "word " * 26}, "a narration far over its budget: refused"),
-            ({"idea": "", "narration": "Go."}, "no idea: refused"),
-            ({"idea": "a", "narration": " "}, "no narration: refused"),
+            ({"prompt": " "}, "an empty prompt: refused"),
+            ({"prompt": 3}, "not words: refused"),
             ({}, "nothing: refused"),
             (None, "no answer: refused"),
         ]:
             try:
-                ideas.clean(d, 20)
+                ideas.clean(d)
                 check(False, what)
             except ValueError:
                 check(True, what)
@@ -254,14 +239,13 @@ def main():
                 st,
             )
             st = ideas.state("u:alice", F.id)
-            want = {k: answer_proposal()[k] for k in ("title", "idea", "narration")}
+            want = answer_proposal()
             check(
                 st
                 == {
                     "state": "done",
                     "proposal": want,
                     "picture": none,
-                    "words": budget,
                     "cast": c,
                 },
                 "written: done, with the proposal; media off: nothing painted",
@@ -296,7 +280,6 @@ def main():
                     "state": "failed",
                     "error": ideas.FAILED,
                     "picture": none,
-                    "words": budget,
                     "cast": c,
                 },
                 "still writing long after its server went away: failed",
@@ -416,7 +399,7 @@ def pictures(check, F):
         st = ideas.state("u:alice", F.id)
         check(
             st["picture"] == {"state": "done", "url": "https://media.test/%s/still-1-aa.jpg" % F.id}
-            and st["proposal"]["idea"] == answer_proposal()["idea"],
+            and st["proposal"] == answer_proposal(),
             "painted and put online: its address",
             st,
         )
@@ -458,9 +441,7 @@ def pictures(check, F):
 
 def answer_proposal():
     return {
-        "title": "Pip and the kite",
-        "idea": "Pip flies a kite and learns how wind works",
-        "narration": "Pip finds a red kite.",
+        "prompt": "@pip finds a red kite and learns how wind works, with @mom holding the string.",
     }
 
 
@@ -496,7 +477,7 @@ async def routes(check, F, U, answer):
             check(
                 r.status == 200
                 and body["state"] == "done"
-                and body["proposal"]["narration"] == answer_proposal()["narration"],
+                and body["proposal"] == answer_proposal(),
                 "GET: done, with the proposal",
                 body,
             )

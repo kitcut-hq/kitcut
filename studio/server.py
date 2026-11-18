@@ -75,8 +75,8 @@ the day's budget still holds.
                                  "Make it a series?"): written in the background unless it is
                                  being written or written already; 202 with GET's answer. GET
                                  .../ideas?film= says how it stands: {state:
-                                 none|writing|done|failed, proposal: {title, idea, narration}
-                                 (done), error (failed), words (the narration's budget), cast:
+                                 none|writing|done|failed, proposal: {prompt} (done), as
+                                 typed in the idea box, error (failed), cast:
                                  [{name, about, painted}] -- the characters a project made from
                                  the film would carry over, at once; picture: {state:
                                  none|painting|done|failed, url} -- its still, painted by Muse in

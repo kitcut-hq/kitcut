@@ -2,18 +2,16 @@
 """The next episode of a finished film, proposed: kitcut.ai's "Make it a series?".
 
 When someone's one-off film ends, the site offers to make it the start of a series with one
-proposal for its next episode, ready to make: a title, the idea in one line, the whole narration
-word for word (sized to the film's length), and a picture of it. The person may change any of it,
-and the length, look and frame, then press Make next episode. The site asks here as the film's own
-client:
+proposal for its next episode, ready to make: its prompt, as the person would type it into the
+idea box (what happens, the characters as @name), and a picture of it. The person may change it,
+and the length, look and frame, then press Make next episode; Claude writes the narration when
+the episode is made, as for any. The site asks here as the film's own client:
 
     POST /api/library/ideas {"film"}   starts writing the proposal in the background of this
                                        server (unless it is being written, or written already)
                                        and answers at once, with what GET answers.
     GET  /api/library/ideas?film=      how it stands: {"state": none|writing|done|failed,
-                                       "proposal": {"title", "idea", "narration"} when done,
-                                       "error" when failed, "words": the narration's word budget
-                                       for the film's length (agent.narration_words),
+                                       "proposal": {"prompt"} when done, "error" when failed,
                                        "cast": [{"name", "about", "painted"}],
                                        "picture": {"state": none|painting|done|failed, "url"}}.
 
@@ -25,9 +23,9 @@ The proposal is one Claude call with no tools. It reads what fromfilm reads for 
 an episode's words do not need (the music, the colours, the lettering): the person's idea as they
 wrote it, who the film was made for, its narration, its characters by their cast names, and as
 images the sheet of the film's frames and the first few of its pictures. It is asked for a new
-story for the same audience, characters and world -- never this film told again -- narrated as
-this film is, in whole sentences, within the word budget of the film's length, each character of
-its cast written as @name (the site marks them, and the person may take one out or put one in).
+story for the same audience, characters and world -- never this film told again -- as a prompt
+about as long as the person's own for this film, each character of its cast written as @name (the
+site marks them, and the person may take one out or put one in), as in a project's idea box.
 
 The same answer describes one still from the episode and the film's look in a line. Once the
 proposal is kept (the site shows it at once, on a frame of the film), Muse paints the still
@@ -70,16 +68,13 @@ import library  # noqa: E402
 import media  # noqa: E402
 import procs  # noqa: E402
 import ytdraft  # noqa: E402
-from agent import narration_words  # noqa: E402 -- the films' own word budget
 
 MODEL = fromfilm.MODEL
-# the narration is the episode's own words, read before it is made: worth more care than a line
+# the episode's whole prompt, read before it is made: worth more care than a line
 EFFORT = "medium"
 STATE = "series_ideas.json"  # in the film's own directory
 WRITING_MAX_S = 300  # a proposal still "writing" after this was lost with its server: failed
-TITLE_MAX = 80  # characters in the episode's title
-IDEA_MAX = 160  # characters in its idea, as the person would type it
-WORDS_OVER = 1.25  # a narration this much over its budget is refused (the site says how long)
+PROMPT_MAX = 1200  # characters in the episode's prompt (the idea box takes far more)
 ABOUT_MAX = 120  # characters of a cast member's description, as the site shows it
 PICTURES_MAX = 4  # of the film's pictures Claude sees (the sheet of frames says the most)
 FAILED = "The next episode was not written."
@@ -109,18 +104,12 @@ The episode:
 - Is a new, concrete story or topic of its own, for the same audience as this film, with the \
 same characters and world, in the same tone. Never this film told again, and never a sequel that \
 only makes sense to someone who has watched this one.
-- "title": its title, at most {title} characters, in the narration's language.
-- "idea": what it is about in one sentence of at most {most} characters, as the person would type \
-it into the idea box of a film maker, for example: Pip finds a red umbrella and learns how wind \
-works. It names the characters by their cast names above, written as names (pip is Pip).
-- "narration": everything its narrator says, word for word, for a {length}-second film: at most \
-{words} words (a little under is better than over). Spoken the way this film's narration is: the \
-same voice, the same kind of words, whole sentences that carry the whole thought, with an example \
-where it helps, never clipped lines that only name a result. Plain text, no stage directions, no \
-headings, no emoji, never in all capital letters. Each character of the cast above is written \
-as @ and their cast name wherever the narrator names them (the @keeper, @pip: the narrator says \
-the name without the @), so the episode draws them as the cast has them; anyone new is plain \
-words.
+- "prompt": its prompt, as the person would type it into the idea box of a film maker: what \
+happens in it, its beats in order, and anything it should show or explain; about as long as the \
+person's own idea for this film above, and at most {most} characters. Not its narration word for \
+word: the film maker writes that. Each character of the cast above is written as @ and their cast \
+name (@keeper, @pip), so the episode draws them as the cast has them; anyone new is plain words. \
+No headings, no emoji, never in all capital letters.
 - Is written in the language the person wrote their idea in; if that is unclear, in the \
 narration's language ({language}).
 
@@ -131,7 +120,7 @@ it: no words, letters, signs or numbers. And describe in one sentence in English
 looks, as its frames show it (the medium, the lines, the colours, the texture), for the painter.
 
 Answer with one JSON object and nothing else:
-{{"title": "...", "idea": "...", "narration": "...", "still": "...", "style": "..."}}"""
+{{"prompt": "...", "still": "...", "style": "..."}}"""
 
 
 def _now():
@@ -211,46 +200,20 @@ def ask_text(mat):
             if len(seen) == 1
             else "Images %s are the person's own pictures, which the film used." % ", ".join(seen)
         )
-    n = int(mat["length"] or 0) or 30
-    lines += [
-        "",
-        "# What to write",
-        ASK.format(
-            title=TITLE_MAX,
-            most=IDEA_MAX,
-            length=n,
-            words=narration_words(n),
-            language=mat["language"],
-        ),
-    ]
+    lines += ["", "# What to write", ASK.format(most=PROMPT_MAX, language=mat["language"])]
     return "\n".join(lines)
 
 
-def words_of(text):
-    return len(str(text or "").split())
-
-
-def clean(d, budget):
-    """Claude's answer held to its shape: {"title", "idea", "narration"} -- the title and the idea
-    on one line each, cut after a whole word; the narration's paragraphs kept, within WORDS_OVER
-    of its word budget -- or ValueError."""
+def clean(d):
+    """Claude's answer held to its shape: {"prompt"} -- its paragraphs kept, each on one line, at
+    most PROMPT_MAX characters (cut after a whole word) -- or ValueError."""
     d = d if isinstance(d, dict) else {}
-
-    def line(k, most):
-        v = d.get(k)
-        return _cut(" ".join(v.split()).strip(QUOTES), most) if isinstance(v, str) else ""
-
-    title, idea = line("title", TITLE_MAX), line("idea", IDEA_MAX)
-    said = d.get("narration") if isinstance(d.get("narration"), str) else ""
+    said = d.get("prompt") if isinstance(d.get("prompt"), str) else ""
     paras = [" ".join(p.split()) for p in re.split(r"\n\s*\n", said.replace("\r", ""))]
-    narration = "\n\n".join(p for p in paras if p).strip().strip(QUOTES).strip()
-    if not idea or not narration:
-        raise ValueError("no %s" % ("idea" if not idea else "narration"))
-    if words_of(narration) > budget * WORDS_OVER:
-        raise ValueError(
-            "a narration of %d words for a budget of %d" % (words_of(narration), budget)
-        )
-    return {"title": title or _cut(idea, TITLE_MAX, "\u2026"), "idea": idea, "narration": narration}
+    prompt = "\n\n".join(p for p in paras if p).strip().strip(QUOTES).strip()
+    if not prompt:
+        raise ValueError("no prompt")
+    return {"prompt": _cut(prompt, PROMPT_MAX) if len(prompt) > PROMPT_MAX else prompt}
 
 
 def plan(d):
@@ -303,32 +266,20 @@ def _standing(film, now=None):
         )
     if s["state"] == "done":
         p = s.get("proposal")
-        if isinstance(p, dict) and all(
-            isinstance(p.get(k), str) for k in ("title", "idea", "narration")
-        ):
-            proposal = {k: p[k] for k in ("title", "idea", "narration")}
+        if isinstance(p, dict) and isinstance(p.get("prompt"), str) and p["prompt"].strip():
+            proposal = {"prompt": p["prompt"]}
             return {"state": "done", "proposal": proposal, "picture": _picture(s, now)}
     return {"state": "failed", "error": str(s.get("error") or FAILED)}
 
 
-def budget(film):
-    """The narration's word budget for the film's length."""
-    try:
-        n = int(film.length or 0)
-    except (OSError, ValueError, KeyError):
-        n = 0
-    return narration_words(n or int(film.record().get("length") or 30))
-
-
 def state(client, film_id, now=None):
-    """How the proposal for the asker's finished film stands, with its cast and the narration's
-    word budget (see the module's note). fromfilm.FromFilmError 404 for a film that is not
-    theirs, 409 for one not finished."""
+    """How the proposal for the asker's finished film stands, with its cast (see the module's
+    note). fromfilm.FromFilmError 404 for a film that is not theirs, 409 for one not finished."""
     f = fromfilm.source(client, film_id)
     st = _standing(f, now)
     if st["state"] != "done":
         st["picture"] = {"state": "none", "url": None}
-    return {**st, "words": budget(f), "cast": cast(f)}
+    return {**st, "cast": cast(f)}
 
 
 async def write(client, film_id, auth="login", model=MODEL, effort=EFFORT):
@@ -346,7 +297,7 @@ async def write(client, film_id, auth="login", model=MODEL, effort=EFFORT):
         d, cost = await ytdraft.ask_json(
             ask_text(mat), seen, auth, f, model, effort, WRITER, "series-ideas-%s" % f.id
         )
-        out, todo = clean(d, budget(f)), plan(d)
+        out, todo = clean(d), plan(d)
         painting = media.enabled() and any(todo["stills"])
         done = {"state": "done", "at": _now(), "proposal": out, "cost_usd": round(cost, 4)}
         if painting:
@@ -560,9 +511,7 @@ def main():
     d, cost = asyncio.run(
         ytdraft.ask_json(text, seen, "login", f, a.model, a.effort, WRITER, "series-ideas")
     )
-    p = clean(d, budget(f))
-    print("%s\n%s\n\n%s\n" % (p["title"], p["idea"], p["narration"]))
-    print("(%d of %d words)" % (words_of(p["narration"]), budget(f)))
+    print("%s\n" % clean(d)["prompt"])
     print("still: %s\nlook: %s" % (plan(d)["stills"][0], plan(d)["style"]))
     print("\n(%.4f USD)" % cost)
 
