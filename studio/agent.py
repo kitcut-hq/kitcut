@@ -1557,6 +1557,10 @@ async def make_film(
     if film.record().get("server") != peers.SERVER_ID:
         film.update(server=peers.SERVER_ID)
     rec = film.record()
+    if rec.get("short_of"):  # a Short cut from a finished film: no Claude, no voice, no render
+        import shortcut  # noqa: PLC0415 -- it imports this module's neighbours
+
+        return await shortcut.make(film, emit, sched, control)
     # its length left to Claude: picked first, so everything below is made for the length picked
     pick_usd = 0.0
     if rec.get("auto_length") and not rec.get("length_picked") and not (finish_only or resume):
@@ -2539,6 +2543,8 @@ def first_record(film, source, client):
         **({"music": "none"} if rec.get("music") == "none" else {}),
         # a translation of a finished film (localize.py): kitcut.ai finds it by its key and its original
         **({"localized": rec["localized"]} if rec.get("localized") else {}),
+        # a Short cut from a finished film (shortcut.py): kitcut.ai finds it by its key
+        **({"short_of": rec["short_of"]} if rec.get("short_of") else {}),
         "state": "queued",
         "cost_usd": 0.0,
     }
