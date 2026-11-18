@@ -209,8 +209,7 @@ def main():
     painted = []
 
     def fake_paint(
-        prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None,
-        redo=None,
+        prompt, model, ref=None, quality=None, aspect="16:9", transparent=False, style_ref=None
     ):
         painted.append(
             {"model": model, "prompt": prompt, "style_ref": style_ref, "quality": quality}
@@ -288,10 +287,10 @@ def main():
         and [os.path.basename(x) for x in gpt["style_ref"]]
         == [card["main"] + ".jpg"] + [p["id"] + ".jpg" for p in pics if p["id"] != card["main"]]
         and gpt["prompt"].startswith(card["style"].rstrip("."))
-        and gpt["quality"] == "low"
+        and gpt["quality"] == "high"
         and "watercolour" in words["prompt"]
         and words["style_ref"] == gpt["style_ref"],
-        "GPT Image gets every picture (the main one first), the style line, as a draft; "
+        "GPT Image gets every picture (the main one first), the style line, at high; "
         "Muse gets the same pictures and the line",
         (gpt["style_ref"], gpt["prompt"][:120], words["prompt"][:120]),
     )
@@ -368,25 +367,25 @@ def main():
         "the record says how its pictures are painted: from every style picture",
         rec.get("paint_route"),
     )
-    with Image.open(ep.path("style", "style.jpg")) as im_, Image.open(
-        os.path.join(d, "pictures", card["main"] + ".jpg")
-    ) as main_:
+    with (
+        Image.open(ep.path("style", "style.jpg")) as im_,
+        Image.open(os.path.join(d, "pictures", card["main"] + ".jpg")) as main_,
+    ):
         check(im_.size == main_.size, "the main picture is style.jpg")
     paint = json.load(open(ep.path("paint.json"), encoding="utf-8"))
     check(
         paint["model"] == "openai/gpt-image-2.5-flare"
         and paint["style_ref"] == refs
         and paint["style"] == card["style"]
-        and paint["quality"] == "low",
-        "paint.json is pinned to GPT Image, every style picture, the style line, a draft",
+        and paint["quality"] == "high",
+        "paint.json is pinned to GPT Image, every style picture, the style line, high",
         paint,
     )
     paint |= {
         "model": "meta/muse-image",
         "style": "oil painting",
         "style_ref": "../x.jpg",
-        "quality": "high",
-        "redo": "drafts",
+        "quality": "low",
     }
     json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
     said = guard.pin_paint(ep)
@@ -395,8 +394,7 @@ def main():
         paint["model"] == "openai/gpt-image-2.5-flare"
         and paint["style_ref"] == refs
         and paint["style"] == card["style"]
-        and paint["quality"] == "low"
-        and "redo" not in paint
+        and paint["quality"] == "high"
         and said,
         "Claude cannot change the painter, the style, the pictures or the quality",
         paint,
@@ -405,7 +403,7 @@ def main():
     check(
         pins["paint"].get("style_ref") == refs
         and pins["paint"]["model"] == "openai/gpt-image-2.5-flare"
-        and pins["paint"]["quality"] == "low",
+        and pins["paint"]["quality"] == "high",
         "a round keeps the episode's painter and pictures",
         pins.get("paint"),
     )
@@ -424,87 +422,26 @@ def main():
     )
     json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
 
-    # ---- a sharper version (rounds.sharpen): which films may have one, and the copy made ready
-    check(
-        rounds.pictures(ep) == {"quality": "low", "can": ["medium", "high"]},
-        "a draft episode may be painted again at Standard or High",
-        rounds.pictures(ep),
-    )
-    os.makedirs(ep.path("images"), exist_ok=True)
-    paint["images"] = [{"name": "bridge", "prompt": "a bridge"}, {"name": "park", "prompt": "x"}]
-    json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
-    Image.new("RGB", (32, 18), (9, 9, 9)).save(ep.path("images", "bridge.jpg"))
-    ep.update(state="done", ok=True)
-    for bad, status in (("ultra", 400), ("low", 409)):
-        try:
-            rounds.start(ep, None, [], sharpen=bad)
-            check(False, "sharpen %s is refused" % bad)
-        except rounds.RoundError as e:
-            check(e.status == status, "sharpen %s is refused (%d)" % (bad, e.status))
-    work = Film.create("Copy", 10, "painted", client="u:alice")
-    shutil.copyfile(ep.path("paint.json"), work.path("paint.json"))
-    shutil.copytree(ep.path("images"), work.path("images"), dirs_exist_ok=True)
-    work.update(pins={"paint": dict(pins["paint"])})
-    names = rounds.sharpen(work, "high")
-    guard.pin_paint(work)
-    wp = json.load(open(work.path("paint.json"), encoding="utf-8"))
-    check(
-        names == ["bridge"]
-        and os.path.exists(work.path("drafts", "bridge.jpg"))
-        and wp["quality"] == "high"
-        and wp["redo"] == "drafts",
-        "its copy keeps each painting as a draft, and paint.json says high and redo",
-        (names, wp),
-    )
-    rounds.unsharpen(work)
-    guard.pin_paint(work)
-    wp = json.load(open(work.path("paint.json"), encoding="utf-8"))
-    check(
-        wp["quality"] == "high" and "redo" not in wp and not os.path.exists(work.path("drafts")),
-        "after the repaint, redo and the drafts go and the quality stays",
-        wp,
-    )
-    json.dump(dict(wp, quality="high"), open(ep.path("paint.json"), "w", encoding="utf-8"))
-    check(rounds.pictures(ep)["can"] == [], "a film painted at High may go no higher")
-    json.dump(paint, open(ep.path("paint.json"), "w", encoding="utf-8"))
-    # a film asked for above a draft: its record says so, and every pin follows it
-    hi = Film.create(
-        "Asked for high", 10, "painted", client="u:alice", project=PROJECT, quality="high"
-    )
-    library.seed(hi)
-    hp = json.load(open(hi.path("paint.json"), encoding="utf-8"))
-    check(
-        hi.record().get("paint_quality") == "high"
-        and hp["quality"] == "high"
-        and rounds.pictures(hi)["can"] == [],
-        "an episode asked for at High is painted at High, and offers nothing higher",
-        hp.get("quality"),
-    )
-    guard.pin_paint(hi)
-    check(
-        json.load(open(hi.path("paint.json"), encoding="utf-8"))["quality"] == "high",
-        "and the guard keeps it there",
-    )
-    col = Film.create("Collage", 10, "collage", client="u:alice", quality="medium")
+    # Draft, Standard and High were taken away (2026-11-17): every painter paints at its own,
+    # and a film made while they could be chosen keeps the quality its record says
+    col = Film.create("Collage", 10, "collage", client="u:alice")
     cp = json.load(open(col.path("paint.json"), encoding="utf-8"))
     check(
         cp["cutouts"]["quality"] == "medium" and "quality" not in cp,
-        "a collage asked for at Standard cuts its pieces at Standard (its Muse scenes have none)",
+        "a collage cuts its pieces at Standard (its Muse scenes have none)",
         cp,
     )
     check(
-        [lk for lk in films_mod.LOOKS if films_mod.chooses_quality(lk)] == ["collage"]
-        and films_mod.chooses_quality("painted", "gpt")
-        and not films_mod.chooses_quality("painted", "words")
-        and not films_mod.chooses_quality("collage", "gemini"),
-        "a quality is chosen only where the painter has one",
+        not hasattr(films_mod, "chooses_quality") and not hasattr(rounds, "sharpen"),
+        "no quality is chosen, and there are no sharper versions",
     )
-    muse = Film.create("Muse", 10, "painted", client="u:alice")
+    lo = Film.create("Made as a draft", 10, "painted", client="u:alice", project=PROJECT)
+    lo.update(paint_quality="low")
+    library.seed(lo)
+    guard.pin_paint(lo)
     check(
-        rounds.pictures(Film.create("Drawn", 10, "drawn", client="u:alice"))
-        == {"quality": None, "can": []}
-        and rounds.pictures(muse) == {"quality": None, "can": []},
-        "a drawn film, and one painted by Muse, have no picture quality",
+        json.load(open(lo.path("paint.json"), encoding="utf-8"))["quality"] == "low",
+        "an episode made as a draft keeps painting as one",
     )
     ep.update(state="claude")
     note = library.note(ep)
@@ -554,7 +491,7 @@ def main():
     check(
         collage["model"] == "meta/muse-image"
         and collage["cutouts"]["model"] == films_mod.CUTOUTS_PINNED["model"]
-        and films_mod.chooses_quality("collage", "words"),
+        and collage["cutouts"]["quality"] == "medium",
         "a collage on the words route keeps its cut-outs on GPT Image (Muse has no clear ground)",
         collage,
     )
