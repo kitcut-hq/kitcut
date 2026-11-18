@@ -70,14 +70,16 @@ the day's budget still holds.
                                  voice), and its brief is written in the background; GET
                                  .../from-film?project= says how that stands: writing, done
                                  {brief, name} or failed
-    POST /api/library/ideas      {"film"}: three one-line ideas for episode 2 of a series that
+    POST /api/library/ideas      {"film"}: three one-line ideas for the next episode of a series that
                                  starts from one of the asker's finished films (ideas.py,
                                  kitcut.ai's "Make it a series?"), written in the background
                                  unless they are being written or written already; 202 with
                                  GET's answer. GET .../ideas?film= says how they stand: {state:
                                  none|writing|done|failed, ideas (done: 3), error (failed),
                                  cast: [{name, about, painted}] -- the characters a project made
-                                 from the film would carry over, at once}
+                                 from the film would carry over, at once; pictures: {state:
+                                 none|painting|done|failed, urls} -- each idea's still, painted
+                                 by Muse in the film's look once the ideas are written}
     GET  /api/library/style      ?project=: the project's style (stylekit.py), as the Style tab
                                  shows it; PATCH (the card's fields and picks), DELETE, POST
                                  .../style/read {"project", "look", "brief"}, .../style/proof

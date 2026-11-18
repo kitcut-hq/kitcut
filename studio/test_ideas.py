@@ -8,7 +8,10 @@ exist are not found and an unfinished one is refused, what Claude is asked (the 
 audience, the narration, the cast by name, and never this film told again), the answer held to
 three different one-line ideas, how they stand on disk (none, writing, done, failed, and a
 "writing" whose server went away), a second ask starting nothing while they are writing or
-written, and the two routes answering the site's shapes. Everything in a throwaway STUDIO_HOME.
+written, and the two routes answering the site's shapes; each idea's still and the film's look
+in the same answer, the stills painted by a stubbed Muse (small, 16:9, one failing leaving the
+others), put online and kept, "painting" while it works and failed when it went away, and nothing
+painted where media copying is off. Everything in a throwaway STUDIO_HOME.
 """
 
 import os
@@ -150,7 +153,9 @@ def main():
             ("Never this film told again", "and never this film again"),
             ("at most 160 characters", "one short sentence each"),
             ("narration's language (en)", "in the person's language, else the narration's"),
-            ('{"ideas": [', "the answer's shape"),
+            ('{"style": "...", "ideas": [{"idea": "...", "still": "..."}', "the answer's shape"),
+            ("never by their name", "a still describes the characters, never names them"),
+            ("Nothing written in it", "and has no words in it"),
         ]:
             check(want in text, "the ask has %s" % what)
         seen = fromfilm.images(F, mat)
@@ -188,6 +193,28 @@ def main():
             except ValueError:
                 check(True, what)
 
+        # each idea's still, and the film's look
+        d = {
+            "style": "Soft crayon " * 40,
+            "ideas": [
+                {"idea": "Pip flies a kite", "still": "A small orange fox runs with a red kite."},
+                "Mom plants a seed",
+                {"idea": "pip flies a kite", "still": "the same again"},
+                {"idea": "Owl counts the stars", "still": 7},
+            ],
+        }
+        check(
+            ideas.clean(d) == ["Pip flies a kite", "Mom plants a seed", "Owl counts the stars"],
+            "ideas with stills, or plain: the same three ideas",
+        )
+        p = ideas.plan(d)
+        check(
+            p["stills"] == ["A small orange fox runs with a red kite.", "", ""]
+            and len(p["style"]) <= ideas.STYLE_MAX,
+            "one still for each idea kept ('' where none), the look in one line",
+            p,
+        )
+
         # written in the background, with Claude stubbed
         asked = []
 
@@ -220,8 +247,14 @@ def main():
             )
             st = ideas.state("u:alice", F.id)
             check(
-                st == {"state": "done", "ideas": answer_ideas(), "cast": c},
-                "written: done, with exactly the three ideas",
+                st
+                == {
+                    "state": "done",
+                    "ideas": answer_ideas(),
+                    "pictures": {"state": "none", "urls": [None, None, None]},
+                    "cast": c,
+                },
+                "written: done, with exactly the three ideas; media off: nothing painted",
                 st,
             )
             check(
@@ -271,6 +304,7 @@ def main():
         finally:
             ytdraft.ask_json = real
 
+        pictures(check, F)
         asyncio.run(routes(check, F, U, answer))
     finally:
         import shutil
@@ -279,6 +313,143 @@ def main():
 
     print("\n%d failed" % len(bad) if bad else "\nall passed")
     sys.exit(1 if bad else 0)
+
+
+def pictures(check, F):
+    """The stills: painted by a stubbed Muse in the step's own function, then the whole of paint()
+    with the step and the upload stubbed."""
+    import media
+    from io import BytesIO
+
+    from PIL import Image
+
+    painted = []
+
+    class Muse:
+        @staticmethod
+        def full_prompt(spec, im):
+            return "%s.\n\n%s" % (spec["style"], im["prompt"])
+
+        @staticmethod
+        def paint_openrouter(prompt, model, ref=None, style_ref=None, **k):
+            painted.append((prompt, model, ref, style_ref))
+            if "fails" in prompt:
+                raise RuntimeError("no picture")
+            buf = BytesIO()
+            Image.new("RGB", (1536, 1024), "#88aa33").save(buf, "PNG")
+            return buf.getvalue(), {"cost_usd": 0.01}
+
+    real_sp = ideas._sp
+    ideas._sp = lambda: Muse
+    try:
+        j = ideas.job(F, {"style": "Crayon on paper", "stills": ["A fox", "", "fails"]})
+        check(
+            j["refs"] == [F.path("images", "mom.jpg"), F.path("images", "pip.jpg")],
+            "its painted characters as references",
+            j["refs"],
+        )
+        got = ideas.paint_job(j, log=lambda *a: None)
+        files = got["files"]
+        check(
+            files[0] and files[0].startswith("still-1-") and files[1:] == [None, None],
+            "painted where there are words; one failing leaves the others",
+            files,
+        )
+        with Image.open(os.path.join(j["dir"], files[0])) as im:
+            check(im.size == (ideas.PICTURE_W, ideas.PICTURE_H), "small and 16:9", im.size)
+        check(
+            painted[0][1] == "meta/muse-image" and painted[0][0].startswith("Crayon on paper."),
+            "by Muse, in the film's look",
+            painted[0][:2],
+        )
+        check(got["cost_usd"] == 0.01, "its cost", got)
+    finally:
+        ideas._sp = real_sp
+
+    # paint(), with the step and the upload stubbed
+    async def step(j):
+        return {"files": ["still-1-aa.jpg", None, "still-3-cc.jpg"], "cost_usd": 0.02}
+
+    async def broken(j):
+        raise RuntimeError("the painting step failed")
+
+    async def publish_one(film, name, ctype, out=None, rev=None, timeout=300):
+        return "https://media.test/%s/%s" % (film.id, name)
+
+    real = (ideas.paint_step, media.publish_one, media.enabled)
+    try:
+        base = {"state": "done", "at": ideas._now(), "ideas": answer_ideas()}
+        films_write = ideas.films._write_json
+        films_write(
+            ideas.state_path(F),
+            {
+                **base,
+                "plan": {"style": "x", "stills": ["a", "b", "c"]},
+                "pictures": {"state": "painting", "at": ideas._now()},
+            },
+        )
+        st = ideas.state("u:alice", F.id)
+        check(st["pictures"] == {"state": "painting", "urls": [None] * 3}, "painting: said so", st)
+        old = (datetime.now() - timedelta(seconds=ideas.PAINTING_MAX_S + 5)).isoformat()
+        films_write(ideas.state_path(F), {**base, "pictures": {"state": "painting", "at": old}})
+        check(
+            ideas.state("u:alice", F.id)["pictures"]["state"] == "failed",
+            "still painting long after its server went away: failed",
+        )
+        ideas.paint_step, media.publish_one = step, publish_one
+        asyncio.run(ideas.paint(F))
+        st = ideas.state("u:alice", F.id)
+        check(
+            st["pictures"]
+            == {
+                "state": "done",
+                "urls": [
+                    "https://media.test/%s/still-1-aa.jpg" % F.id,
+                    None,
+                    "https://media.test/%s/still-3-cc.jpg" % F.id,
+                ],
+            }
+            and st["ideas"] == answer_ideas(),
+            "painted and put online: each idea's address, null for one that did not come",
+            st,
+        )
+        ideas.paint_step = broken
+        asyncio.run(ideas.paint(F))
+        check(
+            ideas.state("u:alice", F.id)["pictures"] == {"state": "failed", "urls": [None] * 3},
+            "the step failing: failed, and the ideas stand",
+        )
+
+        # written with media on: painting at once, then painted
+        async def answer(*a, **k):
+            return {
+                "style": "Crayon",
+                "ideas": [{"idea": t, "still": "still of " + t} for t in answer_ideas()],
+            }, 0.01
+
+        seen = []
+
+        async def step_seen(j):
+            seen.append(json.load(open(ideas.state_path(F), encoding="utf-8")))
+            return await step(j)
+
+        real_ask = ytdraft.ask_json
+        ytdraft.ask_json, ideas.paint_step, media.enabled = answer, step_seen, lambda: True
+        try:
+            os.remove(ideas.state_path(F))
+            asyncio.run(ideas.write("u:alice", F.id))
+        finally:
+            ytdraft.ask_json = real_ask
+        check(
+            seen
+            and seen[0]["pictures"]["state"] == "painting"
+            and seen[0]["plan"]["stills"][0] == "still of Pip flies a kite",
+            "the ideas kept first, painting, with what to paint",
+            seen,
+        )
+        check(ideas.state("u:alice", F.id)["pictures"]["state"] == "done", "then painted")
+    finally:
+        ideas.paint_step, media.publish_one, media.enabled = real
 
 
 def answer_ideas():
