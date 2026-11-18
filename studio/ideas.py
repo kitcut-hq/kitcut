@@ -1,51 +1,51 @@
 #!/usr/bin/env python
-"""Three ideas for a finished film's next episode, written from it, each with a picture painted in
-its look: kitcut.ai's "Make it a series?".
+"""The next episode of a finished film, proposed: kitcut.ai's "Make it a series?".
 
-When someone's one-off film ends, the site offers to make it the start of a series, and shows
-three one-line ideas for its next episode, so the person has something to pick instead of a blank
-idea box. The site asks here as the film's own client:
+When someone's one-off film ends, the site offers to make it the start of a series with one
+proposal for its next episode, ready to make: a title, the idea in one line, the whole narration
+word for word (sized to the film's length), and a picture of it. The person may change any of it,
+and the length, look and frame, then press Make next episode. The site asks here as the film's own
+client:
 
-    POST /api/library/ideas {"film"}   starts writing the ideas in the background of this server
-                                       (unless they are being written, or written already) and
-                                       answers at once, with what GET answers.
-    GET  /api/library/ideas?film=      how they stand: {"state": none|writing|done|failed,
-                                       "ideas": [3 strings] when done, "error" when failed,
+    POST /api/library/ideas {"film"}   starts writing the proposal in the background of this
+                                       server (unless it is being written, or written already)
+                                       and answers at once, with what GET answers.
+    GET  /api/library/ideas?film=      how it stands: {"state": none|writing|done|failed,
+                                       "proposal": {"title", "idea", "narration"} when done,
+                                       "error" when failed, "words": the narration's word budget
+                                       for the film's length (agent.narration_words),
                                        "cast": [{"name", "about", "painted"}],
-                                       "pictures": {"state": none|painting|done|failed,
-                                       "urls": [one for each idea: its address, or null]}}.
+                                       "picture": {"state": none|painting|done|failed, "url"}}.
 
 "cast" needs no Claude and is always there: the characters that would carry over into a project
 made from this film -- exactly the ones fromfilm.seed would copy: the members its code drew (with
-the description their code gives) and its painted characters, each once, drawn first. The site
-shows them beside the ideas ("Pip and Mom come along").
+the description their code gives) and its painted characters, each once, drawn first.
 
-The ideas are one Claude call with no tools, at low effort, because the person is watching the
-film's last seconds while it is written. It reads what fromfilm reads for a brief, less what an
-idea does not need (the music, the colours, the lettering): the person's idea as they wrote it,
-who the film was made for, its narration, its characters by their cast names, and as images the
-sheet of the film's frames and the first few of its pictures. It is asked for new stories for
-the same audience, characters and world -- never this film told again.
+The proposal is one Claude call with no tools. It reads what fromfilm reads for a brief, less what
+an episode's words do not need (the music, the colours, the lettering): the person's idea as they
+wrote it, who the film was made for, its narration, its characters by their cast names, and as
+images the sheet of the film's frames and the first few of its pictures. It is asked for a new
+story for the same audience, characters and world -- never this film told again -- narrated as
+this film is, in whole sentences, within the word budget of the film's length.
 
-The same answer gives each idea a picture: one still from that episode in words, and one line
-for the film's look. Once the ideas are written (the site shows them at once, on frames of the
-film), Muse paints the three stills at once (paint(), about $0.01 each, a minute or less) with
-two frames of the film as its style pictures and up to two of its painted characters as
-references, small (PICTURE_W x PICTURE_H), and they go online beside the film's other files
-(media.publish_one, under new names each time, as its files are cached for a year). Painting is a
-step of its own (python ideas.py --paint <job>), handed only the painter's key, as stylekit's
-proof is: this server's own environment carries no secret. A picture that does not come is null,
-and the site keeps the frame of the film in its place. Where media copying is off (a laptop's
-studio), nothing is painted: there is nowhere to show the pictures from.
+The same answer describes one still from the episode and the film's look in a line. Once the
+proposal is kept (the site shows it at once, on a frame of the film), Muse paints the still
+(paint(), about $0.01, well under a minute) with two frames of the film as its style pictures
+and up to two of its painted characters as references, small (PICTURE_W x PICTURE_H), and it goes
+online beside the film's other files (media.publish_one, under a new name each time, as its files
+are cached for a year). Painting is a step of its own (python ideas.py --paint <job>), handed only
+the painter's key, as stylekit's proof is: this server's own environment carries no secret. A
+picture that does not come is null, and the site keeps the frame of the film in its place. Where
+media copying is off (a laptop's studio), nothing is painted: there is nowhere to show it from.
 
 How it stands is kept in the film's own directory as series_ideas.json ({"state", "at",
-"ideas"?, "error"?, "cost_usd"?, "pictures"?: {"state", "at", "urls"?, "cost_usd"?}, "plan"?:
+"proposal"?, "error"?, "cost_usd"?, "pictures"?: {"state", "at", "urls"?, "cost_usd"?}, "plan"?:
 {"style", "stills"}}), so any server answers GET, and asking twice writes nothing twice. One left
 "writing" (or "painting") by a server that went away reads as failed, and a POST then writes the
-ideas again; pictures that failed are not painted again.
+proposal again; a picture that failed is not painted again.
 
     python studio/ideas.py --film <id> --plan     what Claude would be sent; calls nothing
-    python studio/ideas.py --film <id>            the three ideas, printed (keeps nothing)
+    python studio/ideas.py --film <id>            the proposal, printed (keeps nothing)
     python studio/ideas.py --paint <job.json>     the server's painting step (paint())
 """
 
@@ -69,65 +69,65 @@ import library  # noqa: E402
 import media  # noqa: E402
 import procs  # noqa: E402
 import ytdraft  # noqa: E402
+from agent import narration_words  # noqa: E402 -- the films' own word budget
 
 MODEL = fromfilm.MODEL
-EFFORT = "low"  # quick: the person is watching their film end while this is written
+# the narration is the episode's own words, read before it is made: worth more care than a line
+EFFORT = "medium"
 STATE = "series_ideas.json"  # in the film's own directory
-WRITING_MAX_S = 300  # ideas still "writing" after this were lost with their server: failed
-IDEAS = 3  # how many the site shows
-IDEA_MAX = 160  # characters in one idea, as the person would type it
+WRITING_MAX_S = 300  # a proposal still "writing" after this was lost with its server: failed
+TITLE_MAX = 80  # characters in the episode's title
+IDEA_MAX = 160  # characters in its idea, as the person would type it
+WORDS_OVER = 1.25  # a narration this much over its budget is refused (the site says how long)
 ABOUT_MAX = 120  # characters of a cast member's description, as the site shows it
 PICTURES_MAX = 4  # of the film's pictures Claude sees (the sheet of frames says the most)
-FAILED = "The ideas were not written."
-QUOTES = "\"'\u201c\u201d\u201e\u00ab\u00bb "  # around an idea, which it should not have
-LISTED = re.compile(r"^(?:\d{1,2}[.)]|[-*\u2022])\s+")  # a number or a bullet before one
-TASKS = set()  # the ideas being written in this server, so none is collected half way
-# the pictures (paint()): Muse, the studio's own painter, at its one quality
+FAILED = "The next episode was not written."
+QUOTES = "\"'\u201c\u201d\u201e\u00ab\u00bb "  # around an idea or a title, which it should not have
+TASKS = set()  # the proposals being written in this server, so none is collected half way
+# the picture (paint()): Muse, the studio's own painter, at its one quality
 PAINTER = films.STYLE_ROUTES["words"]["model"]
-PICTURES_DIR = "series"  # in the film's own directory: the job, the stills, the step's answer
-PICTURE_W, PICTURE_H = 640, 360  # a card's picture: small, as the site shows it
-STILL_MAX = 400  # characters of one still's description
+PICTURES_DIR = "series"  # in the film's own directory: the job, the still, the step's answer
+PICTURE_W, PICTURE_H = 640, 360  # small, as the site shows it
+STILL_MAX = 400  # characters of the still's description
 STYLE_MAX = 300  # of the line on the film's look
 STYLE_AT = (0.35, 0.7)  # where in the film its two style pictures are taken
 REFS_MAX = 2  # of its painted characters, as references
-PAINT_S = 240  # the step, all three at once (one took ~40 s when the proof was measured)
-PAINTING_MAX_S = PAINT_S + 60  # pictures still "painting" after this were lost: failed
+PAINT_S = 240  # the step (one picture took ~40 s when the proof was measured)
+PAINTING_MAX_S = PAINT_S + 60  # a picture still "painting" after this was lost: failed
 
 WRITER = (
-    "You write a series of short animated films: you think up what its next episodes are about. "
-    "You are given the finished film the series starts from. Answer only with the JSON object "
-    "asked for."
+    "You write a series of short animated films: you write its next episode. You are given the "
+    "finished film the series starts from. Answer only with the JSON object asked for."
 )
 
 ASK = """\
-The person who made this film may make it the first of a series. Think up three ideas for the \
-series' next episode, episode 2, for them to pick from.
+The person who made this film may make it the first of a series. Write the series' next episode, \
+ready to be made as it is.
 
-Each idea:
+The episode:
 - Is a new, concrete story or topic of its own, for the same audience as this film, with the \
 same characters and world, in the same tone. Never this film told again, and never a sequel that \
 only makes sense to someone who has watched this one.
-- Is one sentence of at most {most} characters, written as the person would type it into the \
-idea box of a film maker, for example: Pip finds a red umbrella and learns how wind works
-- Names the characters by their cast names above, written as names (pip is Pip), where they \
-appear. If the film has no characters, keep its world, its kind of subject and its narrator.
+- "title": its title, at most {title} characters, in the narration's language.
+- "idea": what it is about in one sentence of at most {most} characters, as the person would type \
+it into the idea box of a film maker, for example: Pip finds a red umbrella and learns how wind \
+works. It names the characters by their cast names above, written as names (pip is Pip).
+- "narration": everything its narrator says, word for word, for a {length}-second film: at most \
+{words} words (a little under is better than over). Spoken the way this film's narration is: the \
+same voice, the same kind of words, whole sentences that carry the whole thought, with an example \
+where it helps, never clipped lines that only name a result. Plain text, no stage directions, no \
+headings, no emoji, never in all capital letters.
 - Is written in the language the person wrote their idea in; if that is unclear, in the \
 narration's language ({language}).
-- Has no numbering, no quotes around it and no emoji, and is never in all capital letters.
 
-The three differ from each other: three different topics, not one idea said three ways.
-
-For each idea, also describe one still from that episode, to be painted as its thumbnail in this \
-film's own look: one or two sentences in English saying who is in it (describe each character by \
-how they look, never by their name), where they are and what is happening, as one wide shot. \
-Nothing written in it: no words, letters, signs or numbers.
-
-And describe in one sentence in English how this film looks, as its frames show it (the medium, \
-the lines, the colours, the texture), for the painter of those stills.
+Also describe one still from that episode, to be painted as its picture in this film's own look: \
+one or two sentences in English saying who is in it (describe each character by how they look, \
+never by their name), where they are and what is happening, as one wide shot. Nothing written in \
+it: no words, letters, signs or numbers. And describe in one sentence in English how this film \
+looks, as its frames show it (the medium, the lines, the colours, the texture), for the painter.
 
 Answer with one JSON object and nothing else:
-{{"style": "...", "ideas": [{{"idea": "...", "still": "..."}}, {{"idea": "...", "still": "..."}}, \
-{{"idea": "...", "still": "..."}}]}}"""
+{{"title": "...", "idea": "...", "narration": "...", "still": "...", "style": "..."}}"""
 
 
 def _now():
@@ -207,46 +207,56 @@ def ask_text(mat):
             if len(seen) == 1
             else "Images %s are the person's own pictures, which the film used." % ", ".join(seen)
         )
-    lines += ["", "# What to write", ASK.format(most=IDEA_MAX, language=mat["language"])]
+    n = int(mat["length"] or 0) or 30
+    lines += [
+        "",
+        "# What to write",
+        ASK.format(
+            title=TITLE_MAX,
+            most=IDEA_MAX,
+            length=n,
+            words=narration_words(n),
+            language=mat["language"],
+        ),
+    ]
     return "\n".join(lines)
 
 
-def _pairs(d):
-    """[(idea, still)] from Claude's answer: each idea one line of at most IDEA_MAX characters
-    (cut after a whole word), different from the others; its still ("" when it has none). An idea
-    may come as a plain string."""
-    got = (d or {}).get("ideas") if isinstance(d, dict) else None
-    out, seen = [], set()
-    for it in got if isinstance(got, list) else []:
-        idea, still = (
-            (it, "")
-            if isinstance(it, str)
-            else ((it.get("idea"), it.get("still")) if isinstance(it, dict) else (None, None))
+def words_of(text):
+    return len(str(text or "").split())
+
+
+def clean(d, budget):
+    """Claude's answer held to its shape: {"title", "idea", "narration"} -- the title and the idea
+    on one line each, cut after a whole word; the narration's paragraphs kept, within WORDS_OVER
+    of its word budget -- or ValueError."""
+    d = d if isinstance(d, dict) else {}
+
+    def line(k, most):
+        v = d.get(k)
+        return _cut(" ".join(v.split()).strip(QUOTES), most) if isinstance(v, str) else ""
+
+    title, idea = line("title", TITLE_MAX), line("idea", IDEA_MAX)
+    said = d.get("narration") if isinstance(d.get("narration"), str) else ""
+    paras = [" ".join(p.split()) for p in re.split(r"\n\s*\n", said.replace("\r", ""))]
+    narration = "\n\n".join(p for p in paras if p).strip().strip(QUOTES).strip()
+    if not idea or not narration:
+        raise ValueError("no %s" % ("idea" if not idea else "narration"))
+    if words_of(narration) > budget * WORDS_OVER:
+        raise ValueError(
+            "a narration of %d words for a budget of %d" % (words_of(narration), budget)
         )
-        if not isinstance(idea, str):
-            continue
-        s = _cut(LISTED.sub("", " ".join(idea.split())).strip(QUOTES), IDEA_MAX)
-        if s and s.casefold() not in seen:
-            out.append((s, _cut(still if isinstance(still, str) else "", STILL_MAX)))
-            seen.add(s.casefold())
-    if len(out) < IDEAS:
-        raise ValueError("%d ideas, not %d" % (len(out), IDEAS))
-    return out[:IDEAS]
-
-
-def clean(d):
-    """Claude's answer held to its shape: exactly IDEAS different one-line ideas, each at most
-    IDEA_MAX characters (cut after a whole word), or ValueError."""
-    return [i for i, _ in _pairs(d)]
+    return {"title": title or _cut(idea, TITLE_MAX, "\u2026"), "idea": idea, "narration": narration}
 
 
 def plan(d):
-    """What the stills are painted from: {"style": the film's look in a line, "stills": one for
-    each idea ("" for one Claude did not describe)}."""
-    style = (d or {}).get("style") if isinstance(d, dict) else ""
+    """What the picture is painted from: {"style": the film's look in a line, "stills": [its
+    still] ("" when Claude did not describe one)}."""
+    d = d if isinstance(d, dict) else {}
+    style, still = d.get("style"), d.get("still")
     return {
         "style": _cut(style if isinstance(style, str) else "", STYLE_MAX),
-        "stills": [s for _, s in _pairs(d)],
+        "stills": [_cut(still if isinstance(still, str) else "", STILL_MAX)],
     }
 
 
@@ -262,20 +272,20 @@ def _age(at, now=None):
         return float("inf")
 
 
-def _pictures(s, now=None):
-    """The pictures' part of the state file, as GET answers it: {"state", "urls"}."""
+def _picture(s, now=None):
+    """The picture's part of the state file, as GET answers it: {"state", "url"}."""
     p = s.get("pictures") if isinstance(s.get("pictures"), dict) else {}
     st = p.get("state") if p.get("state") in ("painting", "done", "failed") else "none"
     if st == "painting" and _age(p.get("at"), now) > PAINTING_MAX_S:
         st = "failed"
     urls = p.get("urls") if st == "done" and isinstance(p.get("urls"), list) else []
-    urls = [u if isinstance(u, str) and u.startswith("https://") else None for u in urls]
-    return {"state": st, "urls": (urls + [None] * IDEAS)[:IDEAS]}
+    url = urls[0] if urls and isinstance(urls[0], str) and urls[0].startswith("https://") else None
+    return {"state": "failed" if st == "done" and not url else st, "url": url}
 
 
 def _standing(film, now=None):
-    """The state file, read: {"state", "ideas"?, "error"?, "pictures"?}. One left "writing" by a
-    server that went away, and a "done" without its ideas, read as failed."""
+    """The state file, read: {"state", "proposal"?, "error"?, "picture"?}. One left "writing" by a
+    server that went away, and a "done" without its proposal, read as failed."""
     s = fromfilm._read(state_path(film), True)  # noqa: SLF001
     if not isinstance(s, dict) or s.get("state") not in ("writing", "done", "failed"):
         return {"state": "none"}
@@ -288,25 +298,37 @@ def _standing(film, now=None):
             {"state": "writing"} if age <= WRITING_MAX_S else {"state": "failed", "error": FAILED}
         )
     if s["state"] == "done":
-        ideas = s.get("ideas")
-        if (
-            isinstance(ideas, list)
-            and len(ideas) == IDEAS
-            and all(isinstance(i, str) for i in ideas)
+        p = s.get("proposal")
+        if isinstance(p, dict) and all(
+            isinstance(p.get(k), str) for k in ("title", "idea", "narration")
         ):
-            return {"state": "done", "ideas": ideas, "pictures": _pictures(s, now)}
+            proposal = {k: p[k] for k in ("title", "idea", "narration")}
+            return {"state": "done", "proposal": proposal, "picture": _picture(s, now)}
     return {"state": "failed", "error": str(s.get("error") or FAILED)}
 
 
+def budget(film):
+    """The narration's word budget for the film's length."""
+    try:
+        n = int(film.length or 0)
+    except (OSError, ValueError, KeyError):
+        n = 0
+    return narration_words(n or int(film.record().get("length") or 30))
+
+
 def state(client, film_id, now=None):
-    """How the ideas for the asker's finished film stand, with its cast (see the module's note).
-    fromfilm.FromFilmError 404 for a film that is not theirs, 409 for one not finished."""
+    """How the proposal for the asker's finished film stands, with its cast and the narration's
+    word budget (see the module's note). fromfilm.FromFilmError 404 for a film that is not
+    theirs, 409 for one not finished."""
     f = fromfilm.source(client, film_id)
-    return {**_standing(f, now), "cast": cast(f)}
+    st = _standing(f, now)
+    if st["state"] != "done":
+        st["picture"] = {"state": "none", "url": None}
+    return {**st, "words": budget(f), "cast": cast(f)}
 
 
 async def write(client, film_id, auth="login", model=MODEL, effort=EFFORT):
-    """Write the ideas, keeping how they stand in the film's series_ideas.json."""
+    """Write the proposal, keeping how it stands in the film's series_ideas.json."""
     try:
         f = fromfilm.source(client, film_id)
     except fromfilm.FromFilmError as e:  # gone since it was asked: nowhere to keep the ideas
@@ -320,9 +342,9 @@ async def write(client, film_id, auth="login", model=MODEL, effort=EFFORT):
         d, cost = await ytdraft.ask_json(
             ask_text(mat), seen, auth, f, model, effort, WRITER, "series-ideas-%s" % f.id
         )
-        out, todo = clean(d), plan(d)
+        out, todo = clean(d, budget(f)), plan(d)
         painting = media.enabled() and any(todo["stills"])
-        done = {"state": "done", "at": _now(), "ideas": out, "cost_usd": round(cost, 4)}
+        done = {"state": "done", "at": _now(), "proposal": out, "cost_usd": round(cost, 4)}
         if painting:
             done.update(plan=todo, pictures={"state": "painting", "at": _now()})
         films._write_json(path, done)  # noqa: SLF001
@@ -416,7 +438,7 @@ def paint_job(j, log=print):
             log("still %d: %s" % (i + 1, e))
             return None, 0
 
-    with ThreadPoolExecutor(max_workers=IDEAS) as ex:
+    with ThreadPoolExecutor(max_workers=max(1, len(j["stills"]))) as ex:
         got = list(ex.map(one, range(len(j["stills"]))))
     out = {"files": [n for n, _ in got], "cost_usd": round(sum(c for _, c in got), 4)}
     films._write_json(os.path.join(j["dir"], "paint.json"), out)  # noqa: SLF001
@@ -461,9 +483,9 @@ async def paint_step(j):
 
 
 async def paint(film):
-    """Paint the ideas' stills (paint_step) and put them online (media.publish_one); keep their
-    addresses in the state file. Never raises: pictures that did not come are said as failed, and
-    the site keeps the frames of the film."""
+    """Paint the proposal's still (paint_step) and put it online (media.publish_one); keep its
+    address in the state file. Never raises: a picture that did not come is said as failed, and
+    the site keeps a frame of the film."""
     path = state_path(film)
     t = time.time()
     try:
@@ -482,16 +504,16 @@ async def paint(film):
             "cost_usd": got.get("cost_usd"),
             "seconds": round(time.time() - t, 1),
         }
-    except Exception as e:  # noqa: BLE001 -- the ideas stand without their pictures
+    except Exception as e:  # noqa: BLE001 -- the proposal stands without its picture
         print("ideas %s: pictures not painted: %s" % (film.id, e), file=sys.stderr, flush=True)
         pictures = {"state": "failed", "at": _now()}
     s = fromfilm._read(path, True) or {}  # noqa: SLF001
-    if s.get("state") == "done":  # written again meanwhile: those ideas' pictures are their own
+    if s.get("state") == "done":  # written again meanwhile: that proposal's picture is its own
         films._write_json(path, {**s, "pictures": pictures})  # noqa: SLF001
 
 
 def start(client, film_id, auth="login"):
-    """write() in the background of this server, unless the ideas are being written or are
+    """write() in the background of this server, unless the proposal is being written or is
     written already; how they stand is on disk at once. Nothing awaits between reading the state
     and writing "writing", so two asks at once start one."""
     f = fromfilm.source(client, film_id)
@@ -534,9 +556,10 @@ def main():
     d, cost = asyncio.run(
         ytdraft.ask_json(text, seen, "login", f, a.model, a.effort, WRITER, "series-ideas")
     )
-    for i, still in _pairs(d):
-        print("- %s\n  still: %s" % (i, still))
-    print("\nlook: %s" % plan(d)["style"])
+    p = clean(d, budget(f))
+    print("%s\n%s\n\n%s\n" % (p["title"], p["idea"], p["narration"]))
+    print("(%d of %d words)" % (words_of(p["narration"]), budget(f)))
+    print("still: %s\nlook: %s" % (plan(d)["stills"][0], plan(d)["style"]))
     print("\n(%.4f USD)" % cost)
 
 

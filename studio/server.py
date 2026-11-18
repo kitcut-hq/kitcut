@@ -70,16 +70,17 @@ the day's budget still holds.
                                  voice), and its brief is written in the background; GET
                                  .../from-film?project= says how that stands: writing, done
                                  {brief, name} or failed
-    POST /api/library/ideas      {"film"}: three one-line ideas for the next episode of a series that
-                                 starts from one of the asker's finished films (ideas.py,
-                                 kitcut.ai's "Make it a series?"), written in the background
-                                 unless they are being written or written already; 202 with
-                                 GET's answer. GET .../ideas?film= says how they stand: {state:
-                                 none|writing|done|failed, ideas (done: 3), error (failed),
-                                 cast: [{name, about, painted}] -- the characters a project made
-                                 from the film would carry over, at once; pictures: {state:
-                                 none|painting|done|failed, urls} -- each idea's still, painted
-                                 by Muse in the film's look once the ideas are written}
+    POST /api/library/ideas      {"film"}: the next episode of a series that starts from one of
+                                 the asker's finished films, proposed (ideas.py, kitcut.ai's
+                                 "Make it a series?"): written in the background unless it is
+                                 being written or written already; 202 with GET's answer. GET
+                                 .../ideas?film= says how it stands: {state:
+                                 none|writing|done|failed, proposal: {title, idea, narration}
+                                 (done), error (failed), words (the narration's budget), cast:
+                                 [{name, about, painted}] -- the characters a project made from
+                                 the film would carry over, at once; picture: {state:
+                                 none|painting|done|failed, url} -- its still, painted by Muse in
+                                 the film's look once the proposal is written}
     GET  /api/library/style      ?project=: the project's style (stylekit.py), as the Style tab
                                  shows it; PATCH (the card's fields and picks), DELETE, POST
                                  .../style/read {"project", "look", "brief"}, .../style/proof
@@ -2376,9 +2377,9 @@ async def from_film_state(req):
 
 
 async def series_ideas(req):
-    """Have three ideas for episode 2 written from the asker's finished film: {"film"} (ideas.py,
-    kitcut.ai's "Make it a series?"). They are written in the background of this server unless
-    they are being written or are written already; the answer is GET's, at once, with 202."""
+    """Have the next episode of the asker's finished film proposed: {"film"} (ideas.py,
+    kitcut.ai's "Make it a series?"). It is written in the background of this server unless it is
+    being written or is written already; the answer is GET's, at once, with 202."""
     if DRAINING or MODE == "stopping":
         return web.json_response({"error": RESTARTING}, status=503)
     body = await _json(req)
@@ -2393,7 +2394,7 @@ async def series_ideas(req):
 
 
 async def series_ideas_state(req):
-    """How the ideas for episode 2 of the asker's finished film stand, with its cast: ?film=."""
+    """How the proposed next episode of the asker's finished film stands, with its cast: ?film=."""
     try:
         st = ideas.state(client_of(req), str(req.query.get("film") or ""))
     except fromfilm.FromFilmError as e:

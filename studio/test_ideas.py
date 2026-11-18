@@ -1,17 +1,18 @@
 #!/usr/bin/env python
-"""Three ideas for a finished film's episode 2 (ideas.py), without Claude:
+"""The next episode of a finished film, proposed (ideas.py), without Claude:
 python studio/test_ideas.py
 
 Covers: the cast a series would carry over (the members the film's code drew, then its painted
 characters, each name once, descriptions trimmed), someone else's film and one that does not
 exist are not found and an unfinished one is refused, what Claude is asked (the idea, the
-audience, the narration, the cast by name, and never this film told again), the answer held to
-three different one-line ideas, how they stand on disk (none, writing, done, failed, and a
-"writing" whose server went away), a second ask starting nothing while they are writing or
-written, and the two routes answering the site's shapes; each idea's still and the film's look
-in the same answer, the stills painted by a stubbed Muse (small, 16:9, one failing leaving the
-others), put online and kept, "painting" while it works and failed when it went away, and nothing
-painted where media copying is off. Everything in a throwaway STUDIO_HOME.
+audience, the narration, the cast by name, a narration within the film's word budget in whole
+sentences, and never this film told again), the answer held to its shape (a title and an idea on
+one line, the narration's paragraphs, one far over its budget refused), how it stands on disk
+(none, writing, done, failed, and a "writing" whose server went away), a second ask starting
+nothing while it is being written or is written, and the two routes answering the site's shapes;
+its still and the film's look in the same answer, painted by a stubbed Muse (small, 16:9),
+put online and kept, "painting" while it works and failed when it went away, and nothing painted
+where media copying is off. Everything in a throwaway STUDIO_HOME.
 """
 
 import os
@@ -107,7 +108,17 @@ def main():
             c[0]["about"],
         )
         check(c[2]["about"] == "Mom, in a green coat", "a painted character's description")
-        check(st == {"state": "none", "cast": c}, "none asked: none, and nothing else", st)
+        check(
+            st
+            == {
+                "state": "none",
+                "picture": {"state": "none", "url": None},
+                "words": ideas.budget(F),
+                "cast": c,
+            },
+            "none asked: none, with the narration's budget and the cast",
+            st,
+        )
         names = {m["name"] for m in c}
         got = fromfilm.seed("u:alice", "p-aaaaaaaaaa", F.id)
         check(
@@ -143,19 +154,21 @@ def main():
         # what Claude is asked
         mat = ideas.material(F)
         text = ideas.ask_text(mat)
+        budget = ideas.budget(F)
         for want, what in [
             ("Pip learns why the sky is blue", "the person's idea"),
             ("children of 4 to 6", "who it was made for"),
             ("Look up, Pip.", "the narration"),
             ("- pip: Pip, a small orange fox", "the cast by name, described"),
             ("- mom: Mom, in a green coat", "the painted cast too"),
-            ("episode 2", "for episode 2"),
+            ("Write the series' next episode", "one next episode, ready to make"),
             ("Never this film told again", "and never this film again"),
-            ("at most 160 characters", "one short sentence each"),
+            ("for a 5-second film: at most %d words" % budget, "the narration within its budget"),
+            ("whole sentences that carry the whole thought", "in whole sentences"),
             ("narration's language (en)", "in the person's language, else the narration's"),
-            ('{"style": "...", "ideas": [{"idea": "...", "still": "..."}', "the answer's shape"),
             ("never by their name", "a still describes the characters, never names them"),
-            ("Nothing written in it", "and has no words in it"),
+            ("Nothing written in", "and has no words in it"),
+            ('{"title": "...", "idea": "...", "narration": "...", "still"', "the answer's shape"),
         ]:
             check(want in text, "the ask has %s" % what)
         seen = fromfilm.images(F, mat)
@@ -165,64 +178,57 @@ def main():
         )
 
         # the answer held to its shape
-        check(
-            ideas.clean({"ideas": [' "Pip  finds\na kite" ', "1. Mom bakes bread", "- Owl sleeps"]})
-            == ["Pip finds a kite", "Mom bakes bread", "Owl sleeps"],
-            "one line each, with no quotes, numbers or bullets",
-        )
-        long = "Pip " + "and the wind " * 20
-        out = ideas.clean({"ideas": [long, "b", "c"]})
-        check(
-            len(out[0]) <= ideas.IDEA_MAX and out[0].endswith("wind"),
-            "a long idea cut after a whole word",
-            out[0],
+        got = ideas.clean(
+            {
+                "title": ' "Pip and  the kite" ',
+                "idea": "Pip finds\na kite",
+                "narration": "  Pip looks up.\nThe wind pulls.  \n\n  The kite flies! ",
+            },
+            20,
         )
         check(
-            ideas.clean({"ideas": ["a", "b", "c", "d"]}) == ["a", "b", "c"], "never more than three"
+            got
+            == {
+                "title": "Pip and the kite",
+                "idea": "Pip finds a kite",
+                "narration": "Pip looks up. The wind pulls.\n\nThe kite flies!",
+            },
+            "title and idea on one line, no quotes; the narration's paragraphs kept",
+            got,
+        )
+        check(
+            ideas.clean({"idea": "Pip flies " + "a kite " * 40, "narration": "Go."}, 20)[
+                "title"
+            ].endswith("\u2026"),
+            "no title: the idea, cut",
         )
         for d, what in [
-            ({"ideas": ["a", "A", "b"]}, "a duplicate leaves two: refused"),
-            ({"ideas": ["a", " ", "b", None]}, "empties leave two: refused"),
-            ({"ideas": "a, b, c"}, "not a list: refused"),
-            ({}, "no ideas: refused"),
+            ({"idea": "a", "narration": "word " * 26}, "a narration far over its budget: refused"),
+            ({"idea": "", "narration": "Go."}, "no idea: refused"),
+            ({"idea": "a", "narration": " "}, "no narration: refused"),
+            ({}, "nothing: refused"),
             (None, "no answer: refused"),
         ]:
             try:
-                ideas.clean(d)
+                ideas.clean(d, 20)
                 check(False, what)
             except ValueError:
                 check(True, what)
-
-        # each idea's still, and the film's look
-        d = {
-            "style": "Soft crayon " * 40,
-            "ideas": [
-                {"idea": "Pip flies a kite", "still": "A small orange fox runs with a red kite."},
-                "Mom plants a seed",
-                {"idea": "pip flies a kite", "still": "the same again"},
-                {"idea": "Owl counts the stars", "still": 7},
-            ],
-        }
+        p = ideas.plan({"still": "A small orange fox runs with a red kite.", "style": "x" * 900})
         check(
-            ideas.clean(d) == ["Pip flies a kite", "Mom plants a seed", "Owl counts the stars"],
-            "ideas with stills, or plain: the same three ideas",
-        )
-        p = ideas.plan(d)
-        check(
-            p["stills"] == ["A small orange fox runs with a red kite.", "", ""]
+            p["stills"] == ["A small orange fox runs with a red kite."]
             and len(p["style"]) <= ideas.STYLE_MAX,
-            "one still for each idea kept ('' where none), the look in one line",
+            "its still, and the look in one line",
             p,
         )
+        check(ideas.plan({})["stills"] == [""], "no still: nothing to paint")
 
         # written in the background, with Claude stubbed
         asked = []
 
         async def answer(*a, **k):
             asked.append(a)
-            return {
-                "ideas": ["Pip flies a kite", "Mom plants a seed", "Owl counts the stars"]
-            }, 0.01
+            return answer_proposal(), 0.01
 
         async def fails(*a, **k):
             raise RuntimeError("no answer")
@@ -236,30 +242,33 @@ def main():
                 await asyncio.gather(*new)
             return st, new
 
+        none = {"state": "none", "url": None}
         real = ytdraft.ask_json
         try:
             ytdraft.ask_json = answer
             st, new = asyncio.run(started(F))
             check(
-                st["state"] == "writing" and "ideas" not in st and st["cast"] == c and new,
+                st["state"] == "writing" and "proposal" not in st and st["cast"] == c and new,
                 "asked: writing at once, with the cast",
                 st,
             )
             st = ideas.state("u:alice", F.id)
+            want = {k: answer_proposal()[k] for k in ("title", "idea", "narration")}
             check(
                 st
                 == {
                     "state": "done",
-                    "ideas": answer_ideas(),
-                    "pictures": {"state": "none", "urls": [None, None, None]},
+                    "proposal": want,
+                    "picture": none,
+                    "words": budget,
                     "cast": c,
                 },
-                "written: done, with exactly the three ideas; media off: nothing painted",
+                "written: done, with the proposal; media off: nothing painted",
                 st,
             )
             check(
-                asked[0][5] == ideas.EFFORT == "low" and asked[0][6] == ideas.WRITER,
-                "one call, at low effort, as the series' writer",
+                asked[0][5] == ideas.EFFORT == "medium" and asked[0][6] == ideas.WRITER,
+                "one call, with care, as the series' writer",
             )
             on_disk = json.load(open(ideas.state_path(F), encoding="utf-8"))
             check(
@@ -281,7 +290,14 @@ def main():
                 json.dump({"state": "writing", "at": old}, f)
             st = ideas.state("u:alice", F.id)
             check(
-                st == {"state": "failed", "error": ideas.FAILED, "cast": c},
+                st
+                == {
+                    "state": "failed",
+                    "error": ideas.FAILED,
+                    "picture": none,
+                    "words": budget,
+                    "cast": c,
+                },
                 "still writing long after its server went away: failed",
                 st,
             )
@@ -291,7 +307,7 @@ def main():
             asyncio.run(started(F))
             st = ideas.state("u:alice", F.id)
             check(
-                st == {"state": "failed", "error": "The ideas were not written.", "cast": c},
+                st["state"] == "failed" and st["error"] == "The next episode was not written.",
                 "a failed ask: failed",
                 st,
             )
@@ -316,8 +332,8 @@ def main():
 
 
 def pictures(check, F):
-    """The stills: painted by a stubbed Muse in the step's own function, then the whole of paint()
-    with the step and the upload stubbed."""
+    """The picture: painted by a stubbed Muse in the step's own function, then the whole of
+    paint() with the step and the upload stubbed."""
     import media
     from io import BytesIO
 
@@ -342,7 +358,7 @@ def pictures(check, F):
     real_sp = ideas._sp
     ideas._sp = lambda: Muse
     try:
-        j = ideas.job(F, {"style": "Crayon on paper", "stills": ["A fox", "", "fails"]})
+        j = ideas.job(F, {"style": "Crayon on paper", "stills": ["A fox"]})
         check(
             j["refs"] == [F.path("images", "mom.jpg"), F.path("images", "pip.jpg")],
             "its painted characters as references",
@@ -350,11 +366,7 @@ def pictures(check, F):
         )
         got = ideas.paint_job(j, log=lambda *a: None)
         files = got["files"]
-        check(
-            files[0] and files[0].startswith("still-1-") and files[1:] == [None, None],
-            "painted where there are words; one failing leaves the others",
-            files,
-        )
+        check(files[0] and files[0].startswith("still-1-"), "painted", files)
         with Image.open(os.path.join(j["dir"], files[0])) as im:
             check(im.size == (ideas.PICTURE_W, ideas.PICTURE_H), "small and 16:9", im.size)
         check(
@@ -363,12 +375,14 @@ def pictures(check, F):
             painted[0][:2],
         )
         check(got["cost_usd"] == 0.01, "its cost", got)
+        got = ideas.paint_job({**j, "stills": ["fails"]}, log=lambda *a: None)
+        check(got["files"] == [None], "a picture that does not come: null", got)
     finally:
         ideas._sp = real_sp
 
     # paint(), with the step and the upload stubbed
     async def step(j):
-        return {"files": ["still-1-aa.jpg", None, "still-3-cc.jpg"], "cost_usd": 0.02}
+        return {"files": ["still-1-aa.jpg"], "cost_usd": 0.01}
 
     async def broken(j):
         raise RuntimeError("the painting step failed")
@@ -378,54 +392,43 @@ def pictures(check, F):
 
     real = (ideas.paint_step, media.publish_one, media.enabled)
     try:
-        base = {"state": "done", "at": ideas._now(), "ideas": answer_ideas()}
+        base = {"state": "done", "at": ideas._now(), "proposal": answer_proposal()}
         films_write = ideas.films._write_json
         films_write(
             ideas.state_path(F),
             {
                 **base,
-                "plan": {"style": "x", "stills": ["a", "b", "c"]},
+                "plan": {"style": "x", "stills": ["a"]},
                 "pictures": {"state": "painting", "at": ideas._now()},
             },
         )
         st = ideas.state("u:alice", F.id)
-        check(st["pictures"] == {"state": "painting", "urls": [None] * 3}, "painting: said so", st)
+        check(st["picture"] == {"state": "painting", "url": None}, "painting: said so", st)
         old = (datetime.now() - timedelta(seconds=ideas.PAINTING_MAX_S + 5)).isoformat()
         films_write(ideas.state_path(F), {**base, "pictures": {"state": "painting", "at": old}})
         check(
-            ideas.state("u:alice", F.id)["pictures"]["state"] == "failed",
+            ideas.state("u:alice", F.id)["picture"]["state"] == "failed",
             "still painting long after its server went away: failed",
         )
         ideas.paint_step, media.publish_one = step, publish_one
         asyncio.run(ideas.paint(F))
         st = ideas.state("u:alice", F.id)
         check(
-            st["pictures"]
-            == {
-                "state": "done",
-                "urls": [
-                    "https://media.test/%s/still-1-aa.jpg" % F.id,
-                    None,
-                    "https://media.test/%s/still-3-cc.jpg" % F.id,
-                ],
-            }
-            and st["ideas"] == answer_ideas(),
-            "painted and put online: each idea's address, null for one that did not come",
+            st["picture"] == {"state": "done", "url": "https://media.test/%s/still-1-aa.jpg" % F.id}
+            and st["proposal"]["idea"] == answer_proposal()["idea"],
+            "painted and put online: its address",
             st,
         )
         ideas.paint_step = broken
         asyncio.run(ideas.paint(F))
         check(
-            ideas.state("u:alice", F.id)["pictures"] == {"state": "failed", "urls": [None] * 3},
-            "the step failing: failed, and the ideas stand",
+            ideas.state("u:alice", F.id)["picture"] == {"state": "failed", "url": None},
+            "the step failing: failed, and the proposal stands",
         )
 
         # written with media on: painting at once, then painted
         async def answer(*a, **k):
-            return {
-                "style": "Crayon",
-                "ideas": [{"idea": t, "still": "still of " + t} for t in answer_ideas()],
-            }, 0.01
+            return {**answer_proposal(), "still": "a fox with a kite", "style": "Crayon"}, 0.01
 
         seen = []
 
@@ -443,17 +446,21 @@ def pictures(check, F):
         check(
             seen
             and seen[0]["pictures"]["state"] == "painting"
-            and seen[0]["plan"]["stills"][0] == "still of Pip flies a kite",
-            "the ideas kept first, painting, with what to paint",
+            and seen[0]["plan"]["stills"] == ["a fox with a kite"],
+            "the proposal kept first, painting, with what to paint",
             seen,
         )
-        check(ideas.state("u:alice", F.id)["pictures"]["state"] == "done", "then painted")
+        check(ideas.state("u:alice", F.id)["picture"]["state"] == "done", "then painted")
     finally:
         ideas.paint_step, media.publish_one, media.enabled = real
 
 
-def answer_ideas():
-    return ["Pip flies a kite", "Mom plants a seed", "Owl counts the stars"]
+def answer_proposal():
+    return {
+        "title": "Pip and the kite",
+        "idea": "Pip flies a kite and learns how wind works",
+        "narration": "Pip finds a red kite.",
+    }
 
 
 async def routes(check, F, U, answer):
@@ -486,8 +493,10 @@ async def routes(check, F, U, answer):
             r = await c.get("/api/library/ideas?film=" + F.id, headers=me)
             body = await r.json()
             check(
-                r.status == 200 and body["state"] == "done" and body["ideas"] == answer_ideas(),
-                "GET: done, with the three ideas",
+                r.status == 200
+                and body["state"] == "done"
+                and body["proposal"]["narration"] == answer_proposal()["narration"],
+                "GET: done, with the proposal",
                 body,
             )
             for how, call in [
