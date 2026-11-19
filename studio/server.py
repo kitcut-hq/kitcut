@@ -64,12 +64,25 @@ the day's budget still holds.
                                  next episodes play that recording for the same words and voice
                                  (docs/studio-voice-lines.md); GET .../voice/{key}.mp3 and
                                  DELETE .../voice/{key}, with ?project=
-    POST /api/library/from-film  {"project", "film"}: one of the asker's finished films starts the
-                                 project (fromfilm.py): its pictures, cast and painted characters
-                                 are copied in at once (the answer says which, with its narrator's
-                                 voice), and its brief is written in the background; GET
+    POST /api/library/from-film  {"project", "film", "name"}: one of the asker's finished films
+                                 starts the project (fromfilm.py): its pictures, cast and painted
+                                 characters are copied in at once (the answer says which, with its
+                                 narrator's voice), the film becomes the project's first episode
+                                 (named "name" in its record), and its brief is written in the
+                                 background; GET
                                  .../from-film?project= says how that stands: writing, done
                                  {brief, name} or failed
+    POST /api/library/ideas      {"film"}: the next episode of a series that starts from one of
+                                 the asker's finished films, proposed (ideas.py, kitcut.ai's
+                                 "Make it a series?"): written in the background unless it is
+                                 being written or written already; 202 with GET's answer. GET
+                                 .../ideas?film= says how it stands: {state:
+                                 none|writing|done|failed, proposal: {prompt} (done), as
+                                 typed in the idea box, error (failed), cast:
+                                 [{name, about, painted}] -- the characters a project made from
+                                 the film would carry over, at once; picture: {state:
+                                 none|painting|done|failed, url} -- its still, painted by Muse in
+                                 the film's look once the proposal is written}
     GET  /api/library/style      ?project=: the project's style (stylekit.py), as the Style tab
                                  shows it; PATCH (the card's fields and picks), DELETE, POST
                                  .../style/read {"project", "look", "brief"}, .../style/proof
@@ -178,6 +191,7 @@ import uploads  # noqa: E402
 import youtube  # noqa: E402
 import ytdraft  # noqa: E402
 import fromfilm  # noqa: E402 -- a finished film made the start of a project
+import ideas  # noqa: E402 -- three ideas for a finished film's episode 2 (Make it a series?)
 import live as nowline  # noqa: E402 -- `live` is this module's own (its films in the making)
 import rounds  # noqa: E402
 import unbrand  # noqa: E402
@@ -2420,8 +2434,9 @@ async def from_film(req):
     body = await _json(req)
     client, project = client_of(req), str(body.get("project") or "")
     film_id = str(body.get("film") or "")
+    name = str(body.get("name") or "")  # the project's, for the film's record as its first episode
     try:
-        got = await asyncio.to_thread(fromfilm.seed, client, project, film_id)
+        got = await asyncio.to_thread(fromfilm.seed, client, project, film_id, name)
     except fromfilm.FromFilmError as e:
         return web.json_response({"error": e.text}, status=e.status)
     auth = (
@@ -2435,6 +2450,32 @@ async def from_film_state(req):
     """How the brief of a project started from a film stands: ?project=."""
     try:
         st = fromfilm.state(client_of(req), str(req.query.get("project") or ""))
+    except fromfilm.FromFilmError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(st)
+
+
+async def series_ideas(req):
+    """Have the next episode of the asker's finished film proposed: {"film"} (ideas.py,
+    kitcut.ai's "Make it a series?"). It is written in the background of this server unless it is
+    being written or is written already; the answer is GET's, at once, with 202."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    body = await _json(req)
+    auth = (
+        (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if from_this_machine(req) else site_auth()
+    )
+    try:
+        st = ideas.start(client_of(req), str(body.get("film") or ""), auth)
+    except fromfilm.FromFilmError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(st, status=202)
+
+
+async def series_ideas_state(req):
+    """How the proposed next episode of the asker's finished film stands, with its cast: ?film=."""
+    try:
+        st = ideas.state(client_of(req), str(req.query.get("film") or ""))
     except fromfilm.FromFilmError as e:
         return web.json_response({"error": e.text}, status=e.status)
     return web.json_response(st)
@@ -3309,6 +3350,8 @@ def make_app(token):
             web.post("/api/library/characters", character_add),
             web.post("/api/library/from-film", from_film),
             web.get("/api/library/from-film", from_film_state),
+            web.post("/api/library/ideas", series_ideas),
+            web.get("/api/library/ideas", series_ideas_state),
             web.get("/api/library/pictures/{name}/thumb.png", picture_thumb),
             web.delete("/api/library/pictures/{name}", picture_delete),
             web.post("/api/library/pictures/{name}/role", picture_role),
