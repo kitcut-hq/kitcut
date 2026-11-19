@@ -218,8 +218,9 @@ def main():
         empty = os.path.join(tempfile.mkdtemp(prefix="ideas-key-"), "empty.env")
         open(empty, "w", encoding="utf-8").close()
         procs.load_secrets(empty)
+        gone = "OPENROUTER_API_KEY" not in os.environ
         check(
-            "OPENROUTER_API_KEY" not in os.environ and procs.secret("OPENROUTER_API_KEY") == "k-test",
+            gone and procs.secret("OPENROUTER_API_KEY") == "k-test",
             "importing agent takes the painter's key out of the environment",
         )
         check(
