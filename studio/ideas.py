@@ -463,6 +463,18 @@ def paint_job(j, log=print):
     return out
 
 
+def painter_key():
+    """The painter's key, back in this process's environment, where sketch-paint reads it: the
+    server hands it to the --paint step in env (paint_step), and importing agent took it out
+    again (procs.load_secrets keeps every secret in SECRETS, out of os.environ). Returns it.
+    Found on the first real run (2026-11-19): every proposal's picture "failed", the step saying
+    the key was not set while the server had it."""
+    key = procs.secret("OPENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY", "")
+    if key:
+        os.environ["OPENROUTER_API_KEY"] = key
+    return key
+
+
 async def paint_step(j):
     """paint_job as a step of its own (python ideas.py --paint <job>), handed only the painter's
     key; its answer, or raises."""
@@ -554,6 +566,7 @@ def main():
     ap.add_argument("--effort", default=EFFORT)
     a = ap.parse_args()
     if a.paint:  # the server's step (paint_step): the job is written, the key is in env
+        painter_key()
         with open(a.paint, encoding="utf-8") as fh:
             got = paint_job(json.load(fh))
         print("stills: %s, $%s" % (got["files"], got["cost_usd"]))
