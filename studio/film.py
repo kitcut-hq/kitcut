@@ -598,6 +598,59 @@ def _own_pins(n, frame=None):
     }
 
 
+# ElevenLabs voices the prompt itself names (owner, 2026-11-19: "support Eleven labs if mentioned in
+# prompt"). A prompt that says "ElevenLabs" and gives voice ids ("Rusty: ElevenLabs voice
+# S0ypc51SmsvcKXTWvjqJ") is read in those voices, with the studio's own ElevenLabs key: the ids are
+# the voices Claude may cast (validate._vo), one to the narrator and one to each character who
+# speaks, and the model is the newest unless the prompt names another. Why: a comic adaptation
+# (Warriors) already has a voice per cat, picked by ear; Gemini's voices are not those cats.
+EL_MODELS = (
+    "eleven_v4",
+    "eleven_v4_turbo",
+    "eleven_v3",
+    "eleven_multilingual_v2",
+    "eleven_turbo_v2_5",
+    "eleven_flash_v2_5",
+)
+EL_MODEL = EL_MODELS[0]  # the newest ElevenLabs text-to-speech model, /v1/models 2026-11-19
+EL_PROMPT_VOICES = 12  # voices one film may be given this way
+_EL_WORD = re.compile(r"eleven\s*labs", re.I)
+_EL_ID = re.compile(r"(?<![A-Za-z0-9_])[A-Za-z0-9]{20}(?![A-Za-z0-9_])")
+_EL_MODEL_WORD = re.compile(r"\beleven_[a-z0-9_]+\b")
+
+
+def prompt_voices(prompt):
+    """{"ids", "model"}: the ElevenLabs voices a prompt names, or None when it names none. An id
+    is a 20-character token with a digit or both cases in it (an ElevenLabs voice id; no English
+    word passes), and only in a prompt that says ElevenLabs."""
+    prompt = prompt or ""
+    if not _EL_WORD.search(prompt):
+        return None
+    ids = []
+    for tok in _EL_ID.findall(prompt):
+        mixed = any(c.isdigit() for c in tok) or (tok != tok.lower() and tok != tok.upper())
+        if mixed and tok not in ids:
+            ids.append(tok)
+    if not ids:
+        return None
+    named = [m for m in _EL_MODEL_WORD.findall(prompt) if m in EL_MODELS]
+    return {"ids": ids[:EL_PROMPT_VOICES], "model": named[0] if named else EL_MODEL}
+
+
+def _prompt_pins(v, frame=None):
+    """vo.json for a film read in the ElevenLabs voices its prompt names (prompt_voices): the
+    studio's key (no relay, so KitCut pays: sketch-vo.py logs it), one take a line, two at once.
+    The voices themselves are Claude's to cast among the ids (validate._vo)."""
+    return {
+        "tts": "elevenlabs",
+        "model": v.get("model") or EL_MODEL,
+        "takes": 1,
+        "jobs": 2,
+        "lead": vo_lead(frame),
+        "gap": VO_PINNED["gap"],
+    }
+
+
 _HEX = r"#[0-9a-fA-F]{3,8}"
 _HEX_CONST = re.compile(r"\b([A-Za-z_]\w*)\s*=\s*['\"](%s)['\"]" % _HEX)
 
@@ -1005,6 +1058,8 @@ class Film:
         frame = self.record().get("frame")  # a film from an idea's; a template's keeps its own
         if n.get("source") == "elevenlabs":
             return _own_pins(n, frame)
+        if self.record().get("el_voices"):  # ElevenLabs voices the prompt names (prompt_voices)
+            return _prompt_pins(self.record()["el_voices"], frame)
         pins = {**VO_PINNED, "model": tts_model(), "lead": vo_lead(frame)}
         if n.get("source") == "kitcut" and n.get("voice"):
             pins["voice"] = n["voice"]
@@ -1054,6 +1109,8 @@ class Film:
             d["voice_pinned"] = True  # the person's pick, not a choice other films should count
         if n.get("source") == "elevenlabs":
             d["voice"] = "own"  # a person's own voice: its id and name stay theirs
+        elif self.record().get("el_voices"):  # the prompt's voices: not a choice to count
+            d["voice"], d["voice_pinned"] = "elevenlabs", True
         score = load("score.json") or {}
         if isinstance(score, dict):
             ev = score.get("events") if isinstance(score.get("events"), list) else []
@@ -1304,6 +1361,10 @@ class Film:
             "style": "",
             "language": "en",
         }
+        # ElevenLabs voices the prompt names, unless the person's own ElevenLabs voice narrates
+        el = None if (narrator or {}).get("source") == "elevenlabs" else prompt_voices(prompt)
+        if el:
+            vo = {**_prompt_pins(el, tall), "voice": el["ids"][0], "style": "", "language": "en"}
         if (narrator or {}).get("source") == "elevenlabs":
             vo = {**_own_pins(narrator, tall), "language": "en"}
         if not template or template.get("narration"):  # else the music carries it
@@ -1334,6 +1395,8 @@ class Film:
                     if narrator
                     else {}
                 ),
+                # the ElevenLabs voices its prompt names (prompt_voices, vo_pins, validate._vo)
+                **({"el_voices": el} if el else {}),
                 "source": source,
                 # 1: a plan whose films go ahead of the others in every queue (sched.py)
                 "priority": 1 if priority else 0,

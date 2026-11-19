@@ -80,16 +80,25 @@ def _num(x, lo, hi):
     return isinstance(x, (int, float)) and not isinstance(x, bool) and lo <= x <= hi
 
 
-def _vo(d, max_lines, length=60, people=(), characters=()):
+def _vo(d, max_lines, length=60, people=(), characters=(), voices=None):
     """people: the ids of the film's people (p1...); characters: its project's cast (girl, olenka,
-    ...). Either may speak lines of their own, in a voice of their own."""
+    ...) and its actors. Either may speak lines of their own, in a voice of their own.
+    voices: the ElevenLabs voice ids the prompt names (film.prompt_voices), or None. With them the
+    voice and every cast voice is one of those ids, and any character the film names may be cast
+    (a name in lower case, like a cast member's), not only the ones its project keeps."""
     out = []
     if not isinstance(d, dict):
         return ["vo.json must be an object"]
     extra = sorted(set(d) - VO_KEYS)
     if extra:
         out.append("vo.json: %s not yours to set (the studio removes them)" % ", ".join(extra))
-    if d.get("tts") == "elevenlabs":
+    if voices:  # the prompt's ElevenLabs voices (film.prompt_voices): Claude casts among them
+        if d.get("voice") not in voices:
+            out.append(
+                "vo.json: voice must be one of the ElevenLabs voices the prompt names (%s)"
+                % ", ".join(voices)
+            )
+    elif d.get("tts") == "elevenlabs":
         pass  # the person's own voice, pinned by the studio (film.vo_pins): not Claude's
     elif d.get("voice") not in VOICES:
         out.append("vo.json: voice must be one of %s" % ", ".join(VOICES))
@@ -117,7 +126,7 @@ def _vo(d, max_lines, length=60, people=(), characters=()):
         cast = {}
     # a person's own ElevenLabs voice is theirs: never put in someone else's mouth, and its film's
     # grant speaks in that one voice -- so its people are seen, not heard
-    own = d.get("tts") == "elevenlabs"
+    own = d.get("tts") == "elevenlabs" and not voices
     if own and (cast or any(isinstance(ln, dict) and "who" in ln for ln in d.get("lines") or [])):
         out.append(
             "vo.json: this film is narrated in the person's own voice, which speaks for nobody "
@@ -125,15 +134,23 @@ def _vo(d, max_lines, length=60, people=(), characters=()):
         )
         cast = {}
     speakers = list(people) + sorted(set(characters) - set(people))
+    allowed = voices or VOICES
+    if len(cast) > CHARACTERS:
+        out.append("vo.json: cast has at most %d speakers" % CHARACTERS)
     for who, spec in cast.items():
-        if who not in speakers:
+        if voices and who not in speakers and not CAST_NAME.match(who):
+            out.append(
+                "vo.json: cast %s: a speaker is a name in lower case letters, digits and _ "
+                "(rusty, old_tom)" % who
+            )
+        elif not voices and who not in speakers:
             out.append(
                 "vo.json: cast %s is not one of this film's people or characters (%s)"
                 % (who, ", ".join(speakers) or "it has none")
             )
         elif (
             not isinstance(spec, dict)
-            or spec.get("voice") not in VOICES
+            or spec.get("voice") not in allowed
             or set(spec)
             - {
                 "voice",
@@ -161,10 +178,11 @@ def _vo(d, max_lines, length=60, people=(), characters=()):
             out.append("vo.json: line %d may only have text (and pause, start, who)" % i)
         if "pause" in ln and not _num(ln["pause"], 0, MAX_PAUSE_S):
             out.append("vo.json: line %d pause is seconds, 0-%d" % (i, MAX_PAUSE_S))
-        if "who" in ln and not own and (ln["who"] not in speakers or ln["who"] not in cast):
+        if "who" in ln and not own and ln["who"] not in cast:
+            out.append("vo.json: line %d who %r has no voice in cast" % (i, ln["who"]))
+        elif "who" in ln and not own and not voices and ln["who"] not in speakers:
             out.append(
-                "vo.json: line %d who %r must be one of this film's people or characters with a "
-                "voice in cast"
+                "vo.json: line %d who %r must be one of this film's people or characters"
                 % (i, ln["who"])
             )
         if "start" in ln and not _num(ln["start"], 0, length):
@@ -302,6 +320,14 @@ def _named(ims, cast):
         "paint.json: the prompt names %s: paint the paintings they are in from their pictures, "
         '"ref": %s' % (", ".join("@" + n for n in gone), ", ".join('"cast_%s"' % n for n in gone))
     ]
+
+
+def _actors_of(film):
+    """The names of the actors a film was given (library._seed_actors), who speak their own
+    lines (studio/actors.md). Until 2026-11-19 an actor's line was refused although actors.md
+    asks for it."""
+    got = film.record().get("library") or {}
+    return [a["name"] for a in got.get("actors") or [] if isinstance(a, dict) and a.get("name")]
 
 
 def _cast_of(film):
@@ -488,11 +514,13 @@ def problems(film, name):
         people = [p["id"] for p in film.record().get("people") or []]
         known = _cast_of(film)
         characters = (known["drawn"] | set(known["painted"])) if known else set()
+        characters |= set(_actors_of(film))  # an actor speaks its own lines (studio/actors.md)
+        voices = (film.record().get("el_voices") or {}).get("ids")
         script = narration_script(film)
         cap = limits(film.length)["lines"]
         if script:  # the person's script sets how many lines: each may be split once, at the limit
             cap = max(cap, 2 * len(script[1]))
-        out = _vo(d, cap, film.length, people, characters)
+        out = _vo(d, cap, film.length, people, characters, voices)
         if script and not out:
             out = _verbatim(d, *script)
         return out

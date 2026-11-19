@@ -6086,6 +6086,22 @@ project's or else the workspace's (the site's `lib/narrator.js`).
   picks, as before.
 - Tests: `test_guard.py` (the pin, the note, the tally), `test_library.py` (the workspace cases).
 
+**ElevenLabs voices named in the prompt** (2026-11-19). A prompt that says "ElevenLabs" and gives
+voice ids is read in those voices, with the studio's own key (`studio/README.md`, "ElevenLabs
+voices named in the prompt").
+- `film.prompt_voices(prompt)` finds them: 20-character ids with a digit or both cases, up to 12,
+  and the model (`EL_MODEL`, the newest, unless the prompt names one of `EL_MODELS`). `Film.create`
+  keeps them as `el_voices` and starts `vo.json` in the first; a person's own ElevenLabs narrator
+  wins.
+- `Film.vo_pins()` pins `tts: elevenlabs`, the model, one take, two at once. Claude casts the ids
+  (`voice`, `cast` by lower-case name, `who` on a character's lines; `agent.voice_note`), and
+  `validate._vo(..., voices=)` takes only those ids. How a line is said goes in an `[audio tag]` at
+  its start; `style` is not read by ElevenLabs.
+- `sketch-vo.py studio_spend` logs each take at list price (`EL_USD_PER_CHAR`; `eleven_v4` put at
+  v3's price, not checked), so the film's cost and the day's budget count it.
+- Tests: `test_people.py` (the parser and the check), `test_guard.py` (a film made from such a
+  prompt: its pins, its cast, its note; an actor's line passing).
+
 **Samples for the picker.**
 - `python scripts/voice-samples.py [--model M] [--lang en] [--plan]` records one sentence (from
   `config/sketch/voice-samples.json`) in each of the 30 voices. It uses the narration's own path,

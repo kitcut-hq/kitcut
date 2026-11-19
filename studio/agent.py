@@ -745,6 +745,27 @@ def voice_note(film):
                 else ""
             )
         )
+    el = film.record().get("el_voices") or {}
+    if el.get("ids"):  # ElevenLabs voices the prompt names (film.prompt_voices)
+        return (
+            "\n\nThe voices are ElevenLabs voices the prompt names: %s (model %s, set by the "
+            "studio). This replaces the voice section's Gemini voices: leave `tts`, `model`, "
+            "`takes`, `jobs`, `lead` and `gap` as they are. Cast them as the prompt says: "
+            "`voice` is the narrator's id (the one the prompt gives the narrator; with none, the "
+            "first, %s), and each character who speaks gets their own id in `cast`, under a name "
+            'in lower case letters, digits and _: `"cast": {"rusty": {"voice": "<id>"}}`. Every '
+            'line a character says names them, `{"who": "rusty", "text": "..."}`, and says their '
+            "words exactly as the prompt or its script has them; a line with no `who` is the "
+            "narrator's. One voice is never given to two characters unless the prompt says so. "
+            "`style` is not read by ElevenLabs: how a line is said goes at its start as an audio "
+            'tag in square brackets, `{"text": "[worried, calling after him] Please be careful!"}` '
+            "(tags are not spoken, shown or counted as words), and never a whisper, which makes "
+            "every voice sound alike. A line moves a mouth only when the speaker is drawn with "
+            "one that talks (an actor, or a person's head, by the same name); a painted character "
+            "is seen while their line plays, and the line starts on them, so it is always clear "
+            "who speaks. Every line is recorded with KitCut's ElevenLabs account: record once the "
+            "words are final." % (", ".join(el["ids"]), el.get("model"), el["ids"][0])
+        )
     if n.get("source") == "kitcut" and n.get("voice"):
         return (
             "\n\nThe narrator's voice is the person's choice: %s. Keep `voice` as it is in "
