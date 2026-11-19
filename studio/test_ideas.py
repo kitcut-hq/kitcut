@@ -208,6 +208,26 @@ def main():
             p,
         )
         check(ideas.plan({})["stills"] == [""], "no still: nothing to paint")
+        # the --paint step's key: the server hands it in env, and the step's import of agent
+        # takes it out of os.environ (procs.load_secrets); painter_key puts it back for sketch-paint
+        import procs  # noqa: PLC0415
+        import tempfile  # noqa: PLC0415
+
+        procs.SECRETS.pop("OPENROUTER_API_KEY", None)
+        os.environ["OPENROUTER_API_KEY"] = "k-test"
+        empty = os.path.join(tempfile.mkdtemp(prefix="ideas-key-"), "empty.env")
+        open(empty, "w", encoding="utf-8").close()
+        procs.load_secrets(empty)
+        check(
+            "OPENROUTER_API_KEY" not in os.environ and procs.secret("OPENROUTER_API_KEY") == "k-test",
+            "importing agent takes the painter's key out of the environment",
+        )
+        check(
+            ideas.painter_key() == "k-test" and os.environ.get("OPENROUTER_API_KEY") == "k-test",
+            "the --paint step puts it back for sketch-paint (painter_key)",
+        )
+        procs.SECRETS.pop("OPENROUTER_API_KEY", None)
+        os.environ.pop("OPENROUTER_API_KEY", None)
 
         # written in the background, with Claude stubbed
         asked = []
