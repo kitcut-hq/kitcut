@@ -1,6 +1,6 @@
 // For: whoever changes sketch/kit.js; a plain reference sheet of every piece, clean then crayon
-/* Kit gallery: ten 3-second pages, each a group of kit pieces entering on its own clock. The
-   first 30 s are the clean look on the white ground, the next 30 s the same pages in crayon on
+/* Kit gallery: eleven 3-second pages, each a group of kit pieces entering on its own clock. The
+   first 33 s are the clean look on the white ground, the next 33 s the same pages in crayon on
    paper. scripts/check-kit.py renders it and fails on any error the page reports. */
 SK.setStyle('clean');
 SK.setGround('white');
@@ -98,10 +98,44 @@ const PAGES = [
       { t: t0 + .5, t1: t0 + 2.6, at: [80, 418, 1290, 52], mark: 'underline' },
     ] });
   },
+  // 10 -- people's limbs: arms, hands, legs and shoes (front and side), every hand shape, both shoes
+  (t, t0) => {
+    const u = t - t0, skin = '#f6d2b6', S = SK.S;
+    const rect = (x, y, w, h, col) => { const p = S.rrect(x, y, w, h, 12); SK.wash(p, col, { seed: 5, dx: 0, dy: 0 }); SK.ink(p, { w: 4.5, seed: 6, dbl: false }); };
+    const head = (x, y, r) => { SK.wash(S.ellC(x, y, r, r), skin, { seed: 7, dx: 0, dy: 0 }); SK.ink(S.ell(x, y, r, r), { w: 4.5, seed: 8, dbl: false }); };
+    const kid = (x, y, o) => SK.at(x, y, 0, 1, () => { // a plain child from the front: legs first, then the body over their tops
+      const swing = o.walk ? Math.sin(u * 5) : 0;
+      SK.leg(-22, -112, -28, -12, { side: -1, col: skin, shoe: { kind: o.shoe }, z: 18 * swing, ground: -12 });
+      SK.leg(22, -112, 28, -12 - 14 * Math.max(0, swing), { side: 1, col: skin, shoe: { kind: o.shoe }, z: -18 * swing, ground: -12 });
+      rect(-58, -175, 116, 68, '#4d74b6'); rect(-62, -268, 124, 112, o.tee); head(0, -350, 78);
+      const B = SK.arm(-46, -254, ...o.B, { side: -1, skin, sleeve: o.tee, kind: o.hB, gw: 70, hand: false, body: 66 });
+      const F = SK.arm(46, -254, ...o.F, { side: 1, skin, sleeve: o.tee, kind: o.hF, gw: 70, hand: false, body: 66 });
+      if (o.ball) { SK.wash(S.ellC(0, -212, 44, 44), '#f2a03d', { seed: 9, dx: 0, dy: 0 }); SK.ink(S.ell(0, -212, 44, 44), { w: 4.5, seed: 10, dbl: false }); } // held: between the arms and the fingers
+      B.drawHand(); F.drawHand();
+    });
+    kid(-640, 260, { tee: '#f26d64', shoe: 'clog', B: [-66, -150], hB: 'relax', F: [120 + Math.sin(u * 9) * 18, -380], hF: 'open' });
+    kid(-260, 260, { tee: '#a7acb4', shoe: 'sneaker', B: [-50, -212], hB: 'grip', F: [50, -212], hF: 'grip', ball: true, walk: true });
+    SK.at(160, 260, 0, 1, () => { // from the side, mid-step: the far arm and leg first, the arms swing against the legs
+      const a = u * 5, sw = Math.sin(a);
+      SK.arm(-4, -252, -4 + Math.sin(.5 * sw) * 115, -252 + Math.cos(.5 * sw) * 115, { view: 'side', skin: '#ebc3a5', sleeve: '#f26d64' });
+      SK.leg(-4, -112, -26 * sw, -12 - 18 * Math.max(0, -Math.cos(a)), { view: 'side', col: '#ebc3a5', shoe: { kind: 'sneaker' }, ground: -12 });
+      SK.leg(4, -112, 26 * sw, -12 - 18 * Math.max(0, Math.cos(a)), { view: 'side', col: skin, shoe: { kind: 'sneaker' }, ground: -12 });
+      rect(-36, -170, 76, 64, '#4d74b6'); rect(-36, -266, 76, 118, '#f26d64'); head(6, -350, 78);
+      SK.arm(2, -252, 2 - Math.sin(.5 * sw) * 115, -252 + Math.cos(.5 * sw) * 115, { view: 'side', skin, sleeve: '#f26d64' });
+    });
+    ['relax', 'flat', 'open', 'fist', 'grip', 'point', 'cupped'].forEach((k, i) => {
+      const x = 380 + i * 82, y = -330;
+      SK.hand(x, y, -Math.PI / 2, { kind: k, skin, size: 1.2 }); SK.label(k, x, y + 58, { size: 18 });
+    });
+    ['sneaker', 'clog', 'boot', 'sandal', 'slipper', 'dress', 'heel', 'bare'].forEach((k, i) => { // every kind, front then side
+      const x = 360 + i * 76;
+      SK.shoe(x, -60, { kind: k, size: .9, skin }); SK.shoe(x - 10, 60, { kind: k, view: 'side', size: .9, skin }); SK.label(k, x, 104, { size: 17 });
+    });
+  },
 ];
 
 SK.film({
-  duration: 60,
+  duration: 66,
   camera: SK.breath(SK.camera([[0, [0, 0, 1]]]), { amp: 6, zoom: .01 }),
   fadeOut: 0,
   draw(t) {

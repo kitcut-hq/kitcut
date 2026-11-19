@@ -241,7 +241,11 @@ KIT_STEP = """ Every piece the kit has comes from the kit (see "Reference: the k
    pills, counters, checklists, callouts, charts, screens, phones, chats, cursors and buttons,
    icons, logos and end cards, arrows and marks, glows and particles, page transitions -- with
    the film's own colours and type passed in. Draw by hand only what is this film's own: its
-   people, its places, its objects."""
+   people, its places, its objects -- and a person's arms, hands, legs and shoes come from the
+   kit too (SK.arm, SK.hand, SK.leg, SK.shoe, at the person's own size and colours): a new pose
+   or a new way of holding something reuses them and held, never a hand of your own. SK.shoe
+   has eight kinds (sneakers, clogs, boots, sandals, slippers, smart shoes, heels, bare feet):
+   each person wears the kind they would wear there."""
 
 
 def system_prompt(look, caps=None):

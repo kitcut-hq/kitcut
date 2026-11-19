@@ -139,10 +139,10 @@
   /* ------------------------------------------------------------ people */
   // Hand targets relative to the seat origin; arms are 2-bone strokes from the shoulders.
   P.POSE = {
-    type: { F: [212, 22], B: [182, 26] }, typeS: { F: [204, 22], B: [172, 26] }, rest: { F: [70, 44], B: [-40, 50] },
-    shrug: { F: [118, -86], B: [-112, -86] }, cheer: { F: [178, -236], B: [-152, -228] },
-    hold: { F: [150, -48], B: [124, -36] }, wave: { F: [104, -236], B: [-40, 50] },
-    chin: { F: [58, -92], B: [-40, 50] }, wow: { F: [150, -70], B: [-136, -66] },
+    type: { F: [212, 22], B: [182, 26], h: ['flat', 'flat'] }, typeS: { F: [204, 22], B: [172, 26], h: ['flat', 'flat'] }, rest: { F: [70, 44], B: [30, 52] },
+    shrug: { F: [118, -86], B: [-112, -86], h: ['flat', 'flat'] }, cheer: { F: [178, -236], B: [-152, -228], h: ['open', 'open'] },
+    hold: { F: [150, -48], B: [124, -36], h: ['grip', 'grip'] }, wave: { F: [104, -236], B: [30, 52], h: ['open', 'relax'] },
+    chin: { F: [58, -92], B: [30, 52], h: ['fist', 'relax'] }, wow: { F: [150, -70], B: [-136, -66], h: ['flat', 'flat'] },
   };
   /** keys: [[t, poseName], ...] -> {F, B}; each change springs over .32 s */
   P.poseAt = function (t, keys) {
@@ -152,7 +152,7 @@
     const prev = keys[keys.indexOf(a) - 1];
     const from = prev ? P.POSE[prev[1]] : P.POSE[a[1]], to = P.POSE[a[1]];
     const u = E.back(clamp((t - a[0]) / .32));
-    return { F: [lerp(from.F[0], to.F[0], u), lerp(from.F[1], to.F[1], u)], B: [lerp(from.B[0], to.B[0], u), lerp(from.B[1], to.B[1], u)] };
+    return { F: [lerp(from.F[0], to.F[0], u), lerp(from.F[1], to.F[1], u)], B: [lerp(from.B[0], to.B[0], u), lerp(from.B[1], to.B[1], u)], h: u < .5 ? from.h : to.h };
   };
   function limb(sx, sy, hx, hy, bend, seed, p, w = 6.5) {
     const mx = (sx + hx) / 2, my = (sy + hy) / 2, L = Math.hypot(hx - sx, hy - sy) || 1;
@@ -162,7 +162,10 @@
   /**
    * A seated doodle person facing +x; origin = seat centre, feet at +250.
    * o: x, y, s, hair ('spiky'|'bun'), hairCol, glasses, shirt, mood, mouth, blink, arms {F,B},
-   *    p (draw-on), wave (phase; waves the front hand), headTilt, bounce, stool (true)
+   *    p (draw-on), wave (phase; waves the front hand), headTilt, bounce, stool (true); with the kit its arms,
+   *    hands, legs and shoes are the kit's (SK.arm, SK.leg, SK.shoe): hands (a shape for each, [F, B]), skin,
+   *    pants, shoe (colours), shoeKind (SK.shoe's kinds: sneaker, boot, sandal, slipper, dress, heel...);
+   *    kit: false draws the old stick limbs
    */
   P.person = function (o) {
     const p = o.p ?? 1; if (p <= 0) return;
@@ -176,13 +179,18 @@
       wash(S.ellC(0, 74, 80, 17), C().woodDk, { seed: 104, alpha: pp(.1, .3) });
       ink(S.ell(0, 74, 80, 17), { w: 4.5, seed: 105, p: pp(0, .3) });
     }
-    for (const [hx, kx, fx, i] of [[10, 118, 122, 0], [-14, 96, 92, 1]]) {
+    // the kit's legs and shoes (SK.leg, SK.shoe: the approved ones) when the film has the kit
+    const kit = !!SK.leg && o.kit !== false, skin = o.skin ?? C().skin, kinds = o.hands ?? (o.arms ?? P.POSE.rest).h ?? ['relax', 'relax'];
+    if (kit) SK.alpha(pp(.1, .4), () => { for (const [hx, fx, i] of [[-14, 92, 1], [10, 122, 0]]) SK.leg(hx, 58, fx, 226, { view: 'side', thigh: 112, shin: 176, w: 15, col: o.pants ?? '#5b6476', seed: 110 + i, shoe: { kind: o.shoeKind ?? 'sneaker', col: o.shoe ?? (o.shoeKind ? undefined : '#3b3f4a'), size: 1.25 }, ground: 226 }); });
+    else for (const [hx, kx, fx, i] of [[10, 118, 122, 0], [-14, 96, 92, 1]]) {
       ink(S.path([['M', hx, 58], ['Q', kx - 30, 50 + i * 6, kx, 66 + i * 6], ['L', fx, 238]]), { w: 6.5, seed: 110 + i, p: pp(.1, .4) });
       wash(S.ellC(fx + 16, 243, 26, 12), C().ink, { dx: 0, dy: 0, tex: false, alpha: pp(.3, .45) });
     }
     const arms = o.arms ?? P.POSE.rest;
     const shB = [-40, -34], shF = [44, -34];
-    if (p > .5) {
+    const kitArm = (sh, H, i) => SK.alpha(pp(.5, .8), () => SK.arm(sh[0], sh[1], H[0], H[1], { view: 'side', dir: 1, upper: 92, fore: 100, w: 14, skin, sleeve: o.shirt ?? C().shirtA, sleeveLen: .3, kind: kinds[i], seed: 120 + i * 2 }));
+    if (p > .5 && kit) kitArm([18, -34], arms.B, 1); // from the side the far shoulder is just behind the near one
+    else if (p > .5) {
       limb(shB[0], shB[1], arms.B[0], arms.B[1], -1, 120, pp(.5, .8));
       wash(S.ellC(arms.B[0], arms.B[1], 14, 13), C().skin, { dx: 0, dy: 0, tex: false, alpha: pp(.7, .8) });
       ink(S.ell(arms.B[0], arms.B[1], 14, 13), { w: 4.5, seed: 121, p: pp(.7, .85), dbl: false });
@@ -225,9 +233,12 @@
     if (p > .5) {
       let F = arms.F;
       if (o.wave) F = [F[0] + Math.sin(o.wave * TAU) * 26, F[1] + Math.abs(Math.cos(o.wave * TAU)) * -6];
+      if (kit) kitArm(shF, F, 0);
+      else {
       limb(shF[0], shF[1], F[0], F[1], 1, 122, pp(.5, .8));
       wash(S.ellC(F[0], F[1], 14, 13), C().skin, { dx: 0, dy: 0, tex: false, alpha: pp(.7, .8) });
       ink(S.ell(F[0], F[1], 14, 13), { w: 4.5, seed: 123, p: pp(.7, .85), dbl: false });
+      }
     }
     ctx.restore();
   };
@@ -485,14 +496,16 @@
      o: x, y, s, p (draw-on), hair ('pigtails'|'short'|'long'|'bun'), hairCol, shirt, pants,
         skin, mood, mouth, blink, walk (phase in cycles; 0 = standing), sit (0..1),
         arms {F:[x,y], B:[x,y]} hand targets (F = viewer's right), backpack (colour),
-        lookX (-1..1 eye direction), flip (mirror) */
+        lookX (-1..1 eye direction), flip (mirror), hands (a shape for each, [F, B]; each pose has its own),
+        shoe (a colour), shoeKind (SK.shoe's: sneaker, clog, boot, sandal, slipper, dress, heel, bare). With the kit its arms, hands, legs and shoes are the kit's (SK.arm, SK.leg, SK.shoe);
+        kit: false draws the old ones */
   P.KIDPOSE = {
-    rest: { F: [62, -128], B: [-62, -128] }, stop: { F: [96, -318], B: [-60, -130] },
-    hold: { F: [98, -150], B: [-62, -128] }, holdB: { F: [62, -128], B: [-98, -150] },
-    cheer: { F: [104, -350], B: [-104, -350] }, point: { F: [130, -250], B: [-62, -128] },
-    book: { F: [28, -190], B: [-28, -190] }, wave: { F: [100, -330], B: [-62, -128] },
-    phone: { F: [36, -214], B: [-58, -130] }, knees: { F: [40, -150], B: [-40, -150] },
-    ears: { F: [70, -300], B: [-70, -300] },
+    rest: { F: [62, -128], B: [-62, -128] }, stop: { F: [96, -318], B: [-60, -130], h: ['flat', 'relax'] },
+    hold: { F: [98, -150], B: [-62, -128], h: ['grip', 'relax'] }, holdB: { F: [62, -128], B: [-98, -150], h: ['relax', 'grip'] },
+    cheer: { F: [104, -350], B: [-104, -350], h: ['open', 'open'] }, point: { F: [130, -250], B: [-62, -128], h: ['point', 'relax'] },
+    book: { F: [28, -190], B: [-28, -190], h: ['grip', 'grip'] }, wave: { F: [100, -330], B: [-62, -128], h: ['open', 'relax'] },
+    phone: { F: [36, -214], B: [-58, -130], h: ['grip', 'relax'] }, knees: { F: [40, -150], B: [-40, -150], h: ['flat', 'flat'] },
+    ears: { F: [70, -300], B: [-70, -300], h: ['flat', 'flat'] },
   };
   P.kidPoseAt = function (t, keys) {
     let k = 0;
@@ -501,7 +514,7 @@
     if (t < keys[0][0] || k === 0) return to;
     const from = P.KIDPOSE[keys[k - 1][1]] || keys[k - 1][1];
     const u = E.back(clamp((t - keys[k][0]) / .32));
-    return { F: [lerp(from.F[0], to.F[0], u), lerp(from.F[1], to.F[1], u)], B: [lerp(from.B[0], to.B[0], u), lerp(from.B[1], to.B[1], u)] };
+    return { F: [lerp(from.F[0], to.F[0], u), lerp(from.F[1], to.F[1], u)], B: [lerp(from.B[0], to.B[0], u), lerp(from.B[1], to.B[1], u)], h: u < .5 ? from.h : to.h };
   };
   P.kid = function (o) {
     const p = o.p ?? 1; if (p <= 0) return;
@@ -513,8 +526,15 @@
     const bob = walking ? -Math.abs(Math.sin(ph)) * 8 : 0;
     ctx.save(); ctx.translate(o.x, o.y); ctx.scale(s * (o.flip ? -1 : 1), s);
     const hipY = lerp(-118, -44, sit) + bob, top = lerp(-236, -160, sit) + bob;
-    // legs: walking swings the feet; sitting folds the knees up and out
-    for (const [side, i] of [[-1, 0], [1, 1]]) {
+    // legs: walking swings the feet; sitting folds the knees up and out. With the kit they are its legs and
+    // shoes (SK.leg, SK.shoe: a thigh and a shin, the knee forward, a sneaker), drawn before the tunic
+    const kit = !!SK.leg && o.kit !== false;
+    if (kit) for (const [side, i] of [[-1, 0], [1, 1]]) {
+      const sw = walking ? Math.sin(ph + i * Math.PI) : 0, fx = side * lerp(26, 40, sit) + sw * 8 * (1 - sit), fy = (walking ? -Math.max(0, Math.cos(ph + i * Math.PI)) * 16 : 0) - 11;
+      SK.alpha(pp(0, .3), () => SK.leg(side * 22, hipY, fx, fy, { side, thigh: 56, shin: 56, w: 13, col: pants, z: sit * 40 + sw * 16 * (1 - sit), pole: [side * (.3 + 1.5 * sit), -.6 * sit, 1 - .5 * sit], ground: -11, size: .9, seed: sd + 700 + i,
+        shoe: { kind: o.shoeKind ?? 'sneaker', col: o.shoe ?? (o.shoeKind ? undefined : '#3b3f4a'), size: .9 } }));
+    }
+    else for (const [side, i] of [[-1, 0], [1, 1]]) {
       const hx = side * 22;
       if (sit > .01) {
         const kx = side * lerp(26, 70, sit), ky = lerp(-60, -86, sit), fx = side * lerp(26, 52, sit), fy = 0;
@@ -531,8 +551,14 @@
     const arms = o.arms ?? P.KIDPOSE.rest;
     const sh = (side) => [side * 40, top + 22];
     const hand = (hx, hy) => [hx, hy + (sit > 0 ? lerp(0, 76, sit) : 0) + bob];
+    const kinds = o.hands ?? arms.h ?? ['relax', 'relax'], got = {};
     const drawArm = (side, tgt, seed) => {
       const [sx, sy] = sh(side), [hx, hy] = hand(tgt[0], tgt[1]);
+      if (kit) { // the kit's arm and hand (SK.arm: never stretched, the elbow outside the tunic, five fingers)
+        SK.alpha(pp(.4, .7), () => { got[side] = SK.arm(sx, sy, hx, hy, { side, upper: 50, fore: 56, w: 10, skin, sleeve: shirt, sleeveLen: 1, size: .78, kind: kinds[side > 0 ? 0 : 1], seed,
+          body: (yy) => lerp(40, 60, clamp((yy - top) / (hipY - top))) + 4 }).hand; });
+        return;
+      }
       const mx = (sx + hx) / 2 + side * 16, my = (sy + hy) / 2 + 6;
       ink(S.path([['M', sx, sy], ['Q', mx, my, hx, hy]]), { w: 10, col: shirt, seed, p: pp(.4, .7), taper: false, dbl: false });
       ink(S.path([['M', sx, sy], ['Q', mx, my, hx, hy]]), { w: 3, seed: seed + 1, p: pp(.4, .7), dbl: false, alpha: .45 });
@@ -592,6 +618,7 @@
     ctx.restore();
     drawArm(1, arms.F, sd + 734);
     ctx.restore();
+    if (kit && got[1] && got[-1]) return { handF: [o.x + got[1][0] * s * (o.flip ? -1 : 1), o.y + got[1][1] * s], handB: [o.x + got[-1][0] * s * (o.flip ? -1 : 1), o.y + got[-1][1] * s] }; // where the hands really are
     return { handF: [o.x + (arms.F[0]) * s * (o.flip ? -1 : 1), o.y + (arms.F[1] + bob) * s], handB: [o.x + arms.B[0] * s * (o.flip ? -1 : 1), o.y + (arms.B[1] + bob) * s] };
   };
 

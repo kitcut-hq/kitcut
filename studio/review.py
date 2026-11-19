@@ -53,6 +53,7 @@ KINDS = (
     "stray",
     "text",
     "apart",
+    "limbs",
     "float",
     "cutoff",
     "continuity",
