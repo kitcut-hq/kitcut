@@ -22,8 +22,11 @@ A spec names the character and overrides any default (config/actors/defaults.jso
 
 `faces`, `talk` and `poses` are lists of default names, or {name: "the change"} for new ones.
 `style` replaces the look's words; `design` starts from a picture already made instead of drawing
-candidates. The first run draws `candidates` figures (design/sheet.jpg) and stops: set `pick` to
-the one to keep, and run again.
+candidates; `reference` (a picture or a list, such as a cast sheet or a crop from a comic) is what
+the candidates are drawn after, so the actor is that character and not one the model invents. `body`
+is the kind of figure, "person" (the default) or "animal" (four legs, sitting upright and facing the
+viewer; its own poses): config/actors/defaults.json "bodies". The first run draws `candidates`
+figures (design/sheet.jpg) and stops: set `pick` to the one to keep, and run again.
 
 Writes beside the spec, in <name>/: design/, raw/ (every picture as drawn, every retake),
 aligned/ (each redraw laid on the base), pack.json + atlas-<n>.webp (what a film loads),
@@ -99,7 +102,13 @@ def load_spec(path):
             sys.exit("%s: the spec needs %r" % (path, k))
     if not s["name"].replace("_", "").replace("-", "").isalnum() or not s["name"][0].isalpha():
         sys.exit("%s: name %r: letters, digits, - and _ only" % (path, s["name"]))
+    bodies = {k: v for k, v in d.get("bodies", {}).items() if k != "_"}
+    body = s.get("body", "person")
+    if body not in bodies:
+        sys.exit("%s: body %r is not one of: %s" % (path, body, ", ".join(bodies)))
+    d = {**d, **bodies[body]}  # the body's prompts, poses and head share
     a = {k: s.get(k, d[k]) for k in ("model", "quality", "aspect", "candidates", "jobs", "head")}
+    a["body"] = body
     a.update(name=s["name"], describe=s["describe"].strip(), path=path)
     a["style"] = s.get("style") or d["looks"][s.get("look", "explainer")]
     a["faces"] = pick(s.get("faces", list(d["faces"])), d["faces"], "face")
@@ -112,6 +121,11 @@ def load_spec(path):
     a["pack"] = {**d["pack"], **(s.get("pack") or {})}
     a["prompts"] = {k: d[k] for k in ("base", "edit", "pose")}
     a["pick"], a["design"] = s.get("pick"), s.get("design")
+    ref = s.get("reference") or []
+    a["reference"] = [_env.resolve(r) for r in ([ref] if isinstance(ref, str) else ref)]
+    for r in a["reference"]:
+        if not os.path.isfile(r):
+            sys.exit("%s: reference %s is not a file" % (path, r))
     a["out"] = _env.resolve(s.get("out") or os.path.join(os.path.dirname(path), s["name"]))
     a["project"] = _project.project_id(s, path)
     return a
@@ -292,7 +306,19 @@ def design(a, book, est):
         book.save()
         return True
     prompt = base_prompt(a)
-    fp = fingerprint(a, prompt, None)
+    refs = a["reference"] or None  # the character as already drawn: the candidates follow it
+    ref_fp = None
+    if refs:
+        h = hashlib.sha1(usedforsecurity=False)
+        for r in refs:
+            with open(r, "rb") as f:
+                h.update(f.read())
+        ref_fp = "ref-" + h.hexdigest()[:12]
+        prompt = (
+            "The character in the reference picture: the same design, markings, colours and "
+            "anything it wears, drawn whole in this picture's style. " + prompt
+        )
+    fp = fingerprint(a, prompt, ref_fp)
     have = book.s.get("design") or {}
     files = list(have.get("files", [])) if have.get("fp") == fp else []
     need = a["candidates"] - len(files)
@@ -306,7 +332,7 @@ def design(a, book, est):
                 a,
                 book,
                 prompt,
-                None,
+                refs,
                 os.path.join(a["out"], rel),
                 "design %d" % n,
                 transparent=True,
@@ -651,7 +677,12 @@ def main():
     n_design = 0 if a["design"] else a["candidates"]
     n_main = len(jobs(a)) - 1
     n_pose = len(J) - len(jobs(a))
-    print("[actor-pack] %s  %s  look: %s" % (a["name"], a["model"], a["style"][:60] + "..."))
+    print(
+        "[actor-pack] %s  %s  %s  look: %s"
+        % (a["name"], a["model"], a["body"], a["style"][:60] + "...")
+    )
+    if a["reference"]:
+        print("  drawn after: %s" % ", ".join(os.path.basename(r) for r in a["reference"]))
     print(
         "  %d design candidates, %d faces, %d talking faces x %d mouths%s, %d poses (+ up to %d mouths for turned ones)"
         % (

@@ -761,10 +761,12 @@ def voice_note(film):
             'tag in square brackets, `{"text": "[worried, calling after him] Please be careful!"}` '
             "(tags are not spoken, shown or counted as words), and never a whisper, which makes "
             "every voice sound alike. A line moves a mouth only when the speaker is drawn with "
-            "one that talks (an actor, or a person's head, by the same name); a painted character "
-            "is seen while their line plays, and the line starts on them, so it is always clear "
-            "who speaks. Every line is recorded with KitCut's ElevenLabs account: record once the "
-            "words are final." % (", ".join(el["ids"]), el.get("model"), el["ids"][0])
+            "one that talks: a character the film has as an actor (The actors) is cast under the "
+            "actor's own name and drawn with SK.actor while it speaks, so its mouth follows its "
+            "voice. A character with no actor is seen while their line plays and the line starts "
+            "on them, so it is always clear who speaks. Every line is recorded with KitCut's "
+            "ElevenLabs account: record once the words are final."
+            % (", ".join(el["ids"]), el.get("model"), el["ids"][0])
         )
     if n.get("source") == "kitcut" and n.get("voice"):
         return (

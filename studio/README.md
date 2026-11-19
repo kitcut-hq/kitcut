@@ -128,20 +128,23 @@ The public site is https://kitcut.ai (create.kitcut.ai redirects there), from
     The voice is pinned in `vo.json` (`Film.vo_pins`), and Claude still directs how it is read
     (`docs/reference.md`, "Workspaces, and the narrator a person picks").
   - **ElevenLabs voices named in the prompt** (2026-11-19). A prompt that says "ElevenLabs" and
-    gives voice ids ("Rusty: ElevenLabs S0ypc51SmsvcKXTWvjqJ, Smudge: mrQhZWGbb2k9qWJb5qeA") is
-    read in those voices with the studio's own ElevenLabs key, never the site's relay
-    (`film.prompt_voices`, kept in the record as `el_voices`). An id is a 20-character token
-    with a digit or both cases in it; up to 12 are taken, once each. The model is the newest
-    (`film.EL_MODEL`, `eleven_v4`) unless the prompt names another ElevenLabs model. `vo_pins`
-    pins `tts`, `model`, `takes` 1 and `jobs` 2; Claude casts the ids itself (the narrator's in
-    `voice`, each speaking character's in `cast` under a lower-case name, and `who` on their
-    lines), told so by `agent.voice_note`. `validate._vo` takes only those ids and lets any
-    character be cast by name. A painted character's mouth does not move; an actor's or a
-    person's does. The takes are KitCut's money: `sketch-vo.py studio_spend` logs each at list
-    price in `audio/vo/spend.jsonl`, counted in the film's cost and the day's budget. A person's
-    own ElevenLabs narrator (the site's voice setting) wins: such a film ignores the prompt's
-    ids. Only the idea is read, not attached documents. The same change lets a project's actors
-    speak their own lines: `validate` refused them before, although `actors.md` asks for it.
+    gives voice ids ("Rusty: ElevenLabs S0ypc51SmsvcKXTWvjqJ, Smudge: mrQhZWGbb2k9qWJb5qeA") is read
+    in those voices with the studio's own ElevenLabs key, never the site's relay
+    (`film.prompt_voices`, kept in the record as `el_voices`). An id is a 20-character token with a
+    digit or both cases in it; up to 12 are taken, once each. The model is the newest
+    (`film.EL_MODEL`, `eleven_v4`) unless the prompt names another ElevenLabs model. `vo_pins` pins
+    `tts`, `model`, `takes` 1 and `jobs` 2; Claude casts the ids itself (the narrator's in `voice`,
+    each speaking character's in `cast` under a lower-case name, and `who` on their lines), told so
+    by `agent.voice_note`. `validate._vo` takes only those ids and lets any character be cast by
+    name. A character the project has as an actor (`actor-pack.py`, an animal too: `"body":
+    "animal"`, drawn after its cast picture with `"reference"`, put in with `actor_put.py`) is cast
+    under the actor's name and its mouth follows its voice; a painted character without one is only
+    seen. The takes are KitCut's money: `sketch-vo.py studio_spend` logs each at list price in
+    `audio/vo/spend.jsonl`, counted in the film's cost and the day's budget. A person's own
+    ElevenLabs narrator (the site's voice setting) wins: such a film ignores the prompt's ids. The
+    idea and the documents attached with it (a script with its cast) are read. The same change lets
+    a project's actors speak their own lines: `validate` refused them before, although `actors.md`
+    asks for it.
   - For other calls it is the visitor's IP.
   - The sign-up wall and the credits live in the site's `api/studio.js` and `lib/credits.js`,
     not here. The site holds a film's seconds before forwarding it, and settles them from this

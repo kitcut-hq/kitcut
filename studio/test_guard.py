@@ -533,6 +533,20 @@ def main():
         expect("its pins are all keys vo.json may hold", set(V.vo_pins()) - validate.VO_KEYS, set())
         expect("the first message names the voices", R in agent.voice_note(V), True)
         expect("no relay pass: KitCut's own key", V.own_voice(), None)
+        # ... or in a script attached with the idea (make_film's documents)
+        doc = os.path.join(tempfile.mkdtemp(), "script.md")
+        with open(doc, "w", encoding="utf-8") as f:
+            f.write("Cast (ElevenLabs): Princess acCWxmzPBgXdHwA63uzP\n- L01. PRINCESS: \"Hi.\"\n")
+        D = films.Film.create(
+            "The fence scene, as the script says",
+            30,
+            attachments=[{"kind": "text", "ext": "md", "src": doc, "name": "script.md"}],
+        )
+        expect(
+            "voices in an attached script are taken",
+            (D.record().get("el_voices") or {}).get("ids"),
+            ["acCWxmzPBgXdHwA63uzP"],
+        )
         expect(
             "an own ElevenLabs narrator wins over the prompt's voices",
             "el_voices"

@@ -405,15 +405,16 @@ LOW_VOICE_HZ = 165  # a narration pitched below this takes the backup's low voic
 # what a refused line's backup is levelled to: the median speech level of a film's Gemini
 # lines (40 lines, 2026-09-27: -18.4 dBFS; ElevenLabs v3 came out at -18.1, Turbo at -22.4)
 BACKUP_LEVEL_DB = -18.4
-# ElevenLabs API list prices, USD per character (elevenlabs.io/pricing/api, 2026-09); eleven_v4
-# and its turbo are put at v3's and turbo's prices, not checked on the price page
+# ElevenLabs API list prices, USD per character (elevenlabs.io/pricing/api, read 2026-11-19: $0.08
+# per 1K characters for v4, v3 and v2 Multilingual, $0.04 for v4 Turbo and "Flash / Turbo"; they
+# were $0.10 and $0.05 in 2026-09)
 EL_USD_PER_CHAR = {
-    "eleven_v4": 0.10 / 1000,
-    "eleven_v4_turbo": 0.05 / 1000,
-    "eleven_v3": 0.10 / 1000,
-    "eleven_multilingual_v2": 0.10 / 1000,
-    "eleven_turbo_v2_5": 0.05 / 1000,
-    "eleven_flash_v2_5": 0.05 / 1000,
+    "eleven_v4": 0.08 / 1000,
+    "eleven_v4_turbo": 0.04 / 1000,
+    "eleven_v3": 0.08 / 1000,
+    "eleven_multilingual_v2": 0.08 / 1000,
+    "eleven_turbo_v2_5": 0.04 / 1000,
+    "eleven_flash_v2_5": 0.04 / 1000,
 }
 # what Gemini says when it will not read a line: a content block, not a glitch -- asking
 # again does not help, and rephrasing loses the words (a name, a wine)

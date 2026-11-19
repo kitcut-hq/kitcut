@@ -1362,7 +1362,19 @@ class Film:
             "language": "en",
         }
         # ElevenLabs voices the prompt names, unless the person's own ElevenLabs voice narrates
-        el = None if (narrator or {}).get("source") == "elevenlabs" else prompt_voices(prompt)
+        # ... in the idea or in a document attached with it (a script with its cast and voices)
+        said = [prompt]
+        for a in attached:
+            if a["kind"] == "text":
+                with open(
+                    film.path(*a["file"].split("/")), encoding="utf-8", errors="replace"
+                ) as f:
+                    said.append(f.read(200_000))
+        el = (
+            None
+            if (narrator or {}).get("source") == "elevenlabs"
+            else prompt_voices("\n\n".join(said))
+        )
         if el:
             vo = {**_prompt_pins(el, tall), "voice": el["ids"][0], "style": "", "language": "en"}
         if (narrator or {}).get("source") == "elevenlabs":
