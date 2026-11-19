@@ -2,7 +2,8 @@
 """A finished film made the start of a project: kitcut.ai's "Create project from this video".
 
 The site makes the project (named after the film, with its look, length and frame) and asks here
-as the project's workspace: POST /api/library/from-film {"project", "film"}. Two things happen:
+as the project's workspace: POST /api/library/from-film {"project", "film", "name"}. Two
+things happen:
 
     seed()   at once, no Claude. What the film used becomes the project's, as if the person had
              put it in by hand: the pictures (what was attached to the film, and an episode's own
@@ -12,7 +13,9 @@ as the project's workspace: POST /api/library/from-film {"project", "film"}. Two
              painted cast; and the film itself heads the project's earlier films, so every
              episode reads its film.js, vo.json and score.json -- its lettering, colours, music,
              the narrator's pace -- as it reads an earlier episode's. Nothing already in the
-             project is replaced, so asking twice copies nothing twice.
+             project is replaced, so asking twice copies nothing twice. The film becomes the
+             project's first episode (first()): it is listed among the project's episodes, and
+             the next one may start from its code (episode.py) as from any earlier episode's.
     write()  in the background, one Claude call with no tools: the project's brief, from what
              the film is -- the person's idea, who it was made for, its narration, its narrator,
              music, colours and lettering, its cast with their descriptions, and the film's
@@ -202,12 +205,17 @@ def voice_of(film):
 
 
 # ------------------------------------------------------------------ seed: copied at once
-def seed(client, project, film_id):
-    """Copy what the film used into the project (see the module's note). Returns what the project
-    has from the film (asked twice, the same names again): {"film", "pictures": [names], "cast":
-    [names], "painted": [names], "voice", "fonts", "skipped": [{"name", "why"}]}."""
+def seed(client, project, film_id, series=None):
+    """Copy what the film used into the project (see the module's note), and make the film the
+    project's first episode (first()). Returns what the project has from the film (asked twice,
+    the same names again): {"film", "pictures": [names], "cast": [names], "painted": [names],
+    "voice", "fonts", "skipped": [{"name", "why"}], "episode": bool}."""
     lib = project_lib(client, project)
     f = source(client, film_id)
+    rec = f.record()
+    # where its cast's thumbnails are: its own library's, the account's once first() made it ours
+    own = (rec.get("project") or {}).get("id") == project
+    src_lib = library.owner(rec.get("client")) if own else library.lib_of(rec)
     got = {"film": f.id, "pictures": [], "cast": [], "painted": [], "skipped": []}
 
     # its pictures, through the same door as an upload (the cap, the thumbnail, the role)
@@ -221,7 +229,6 @@ def seed(client, project, film_id):
         except library.PictureError as e:
             got["skipped"].append({"name": name, "why": e.text})
 
-    src_lib = library.lib_of(f.record())
     src_dir = library.dir_of(src_lib) if src_lib else None
     now = _now()
     with library._lock(lib):  # noqa: SLF001
@@ -280,7 +287,23 @@ def seed(client, project, film_id):
             library._contact(lib, idx)  # noqa: SLF001
     got["voice"] = voice_of(f)
     got["fonts"] = fonts_of(f)
+    got["episode"] = first(f, project, series)
     return got
+
+
+def first(f, project, name=None, store=None):
+    """The film the project was started from becomes its first episode: its record names the
+    project as an episode's does ({id, name}; the brief is the project's, read when an episode is
+    made), and its studio_runs row gets project_id, which is where the site lists a project's
+    episodes from. A film that is an episode of another project already stays there. True when
+    the film is this project's episode."""
+    pid = ((f.record().get("project") or {}).get("id")) or None
+    if pid:
+        return pid == project
+    name = " ".join(str(name or "").split())[:NAME_MAX] or f.record().get("title") or "Untitled"
+    f.update(project={"id": project, "name": name, "brief": "", "from_account_cast": False})
+    (store or agent.STORE).save(f.id, {"project_id": project})
+    return True
 
 
 # ------------------------------------------------------------------ write: the brief

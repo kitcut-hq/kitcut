@@ -3,7 +3,8 @@
 python studio/test_fromfilm.py
 
 Covers: what the film used becomes the project's (its attached pictures with their roles, its
-drawn cast with their descriptions, the film itself among the project's earlier films), asking
+drawn cast with their descriptions, the film itself among the project's earlier films and as its
+first episode, unless it is another project's episode already), asking
 twice copies nothing twice, someone else's film or an unfinished one is refused, what Claude is
 asked (the idea, the narrator, the music, the lettering, the cast, the pictures, and to leave the
 film's own story out), the answer held to its shape, and how the brief stands on disk (writing,
@@ -21,7 +22,9 @@ HOME = tempfile.mkdtemp(prefix="studio-fromfilm-test-")
 os.environ["STUDIO_HOME"] = HOME
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import fromfilm  # noqa: E402 -- imports _env first
+import agent  # noqa: E402
 import library  # noqa: E402
+import store  # noqa: E402
 import ytdraft  # noqa: E402
 from film import Film  # noqa: E402
 
@@ -91,8 +94,9 @@ def main():
             bad.append(what)
 
     try:
+        agent.STORE = store.MemoryStore()  # studio_runs, kept here
         F = finished()
-        got = fromfilm.seed("u:alice", P1, F.id)
+        got = fromfilm.seed("u:alice", P1, F.id, "  The Sky  Club ")
         idx = library.load(("u:alice", P1))
         check(got["pictures"] == ["picture1", "picture2"], "its attached pictures, in order")
         check(
@@ -110,6 +114,16 @@ def main():
         check(os.path.exists(os.path.join(lib_dir, "cast", "pip", "v1.js")), "its code is kept")
         check(idx["films"][0] == F.id, "the film heads the project's earlier films")
         check(got["voice"] == "Kore" and got["fonts"] == ["Anton"], "its narrator and faces")
+        check(
+            got["episode"] is True
+            and (F.record().get("project") or {}).get("id") == P1
+            and F.record()["project"]["name"] == "The Sky Club",
+            "the film is the project's first episode, under the project's name",
+        )
+        check(
+            (agent.STORE.get(F.id) or {}).get("project_id") == P1,
+            "and its studio_runs row says so, where the site lists episodes from",
+        )
 
         again = fromfilm.seed("u:alice", P1, F.id)
         idx2 = library.load(("u:alice", P1))
@@ -120,6 +134,19 @@ def main():
         check(
             idx2["cast"]["pip"]["version"] == 1 and idx2["films"].count(F.id) == 1,
             "and nothing copied twice",
+        )
+        check(
+            again["episode"] is True and F.record()["project"]["name"] == "The Sky Club",
+            "and it stays the project's episode as it was",
+        )
+        E = finished()
+        E.update(project={"id": "p-bbbbbbbbbb", "name": "Another"})
+        other = fromfilm.seed("u:alice", P1, E.id, "The Sky Club")
+        check(
+            other["episode"] is False
+            and E.record()["project"]["id"] == "p-bbbbbbbbbb"
+            and "project_id" not in (agent.STORE.get(E.id) or {}),
+            "an episode of another project stays that project's",
         )
 
         for client, film_id, status, what in [

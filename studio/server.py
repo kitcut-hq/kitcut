@@ -64,10 +64,12 @@ the day's budget still holds.
                                  next episodes play that recording for the same words and voice
                                  (docs/studio-voice-lines.md); GET .../voice/{key}.mp3 and
                                  DELETE .../voice/{key}, with ?project=
-    POST /api/library/from-film  {"project", "film"}: one of the asker's finished films starts the
-                                 project (fromfilm.py): its pictures, cast and painted characters
-                                 are copied in at once (the answer says which, with its narrator's
-                                 voice), and its brief is written in the background; GET
+    POST /api/library/from-film  {"project", "film", "name"}: one of the asker's finished films
+                                 starts the project (fromfilm.py): its pictures, cast and painted
+                                 characters are copied in at once (the answer says which, with its
+                                 narrator's voice), the film becomes the project's first episode
+                                 (named "name" in its record), and its brief is written in the
+                                 background; GET
                                  .../from-film?project= says how that stands: writing, done
                                  {brief, name} or failed
     POST /api/library/ideas      {"film"}: the next episode of a series that starts from one of
@@ -2356,8 +2358,9 @@ async def from_film(req):
     body = await _json(req)
     client, project = client_of(req), str(body.get("project") or "")
     film_id = str(body.get("film") or "")
+    name = str(body.get("name") or "")  # the project's, for the film's record as its first episode
     try:
-        got = await asyncio.to_thread(fromfilm.seed, client, project, film_id)
+        got = await asyncio.to_thread(fromfilm.seed, client, project, film_id, name)
     except fromfilm.FromFilmError as e:
         return web.json_response({"error": e.text}, status=e.status)
     auth = (
