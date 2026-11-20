@@ -585,6 +585,8 @@ dialog .dfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14p
 @keyframes pspin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 /* /app.css */
+/* the film page's trail (drawCrumbs): above its title, in the film view only */
+html:not([data-view=film]) #crumbs { display: none; }
 /* The home page and a film's page (/film/<id>), in the Studio's shell: the idea box, the film with
    Claude's notes beside it, the gallery. Only what is theirs; the rest is app.css above. */
 /* the home page is a narrower column in the middle of the main area, with air left and right: the
@@ -890,6 +892,11 @@ a.google { width: 100%; margin-top: 14px; }
 .ntver:hover { background: var(--hover); color: var(--ink); }
 .ntver.busy { background: var(--accent-soft); color: var(--ink); }
 .ntver .pulse { width: 7px; height: 7px; }
+/* changes waiting in the account's line (lib/notes.js toLine): a row of its own under the film */
+.ntline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 14px; border-top: 1px solid var(--accent); background: var(--accent-soft); color: var(--ink); font-size: 13.5px; }
+.ntline[hidden] { display: none; }
+.ntline .t { flex: 1 1 260px; min-width: 0; }
+.ntline .pulse { flex: none; width: 8px; height: 8px; }
 .posts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 0 14px 10px; font-size: 13px; color: var(--ink-2); }
 #ytOn { text-decoration: none; }
 #ytOn b { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--rule); font-weight: 600; color: var(--accent-2); }
@@ -1071,6 +1078,7 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
   <div class="page home">
   <!-- hero -->
   <section class="hero">
+    <nav class="crumbs" id="crumbs" aria-label="Where you are" hidden></nav>
     <h1>Animated series drawn in code</h1>
     <p>Type an idea. Add a reference. <span class="ep">Get a finished video.</span> <span class="again">Create a project from it, and the series keeps its look, voice and characters.</span></p>
     <p class="spend" id="spend" hidden></p>
@@ -1144,7 +1152,7 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
   <section class="work idle" id="work">
     <div class="stage">
       <div class="screen" id="screen"><div class="idle">Your film appears here.</div></div>
-      <div class="caption"><span id="status">Ready.</span><button class="ntver" type="button" id="ntVer" hidden></button><span class="right"><button class="btn sm primary aqua tip-end" type="button" id="ntOpen" hidden data-tip="Point at what should change, and Claude makes the next version"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg> Edit film</button><button class="btn sm tip-end" type="button" id="lgOpen" hidden data-tip="This film in other languages: the same pictures, voice and music, with the words translated"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg> Translate</button><a class="btn sm tip-end" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden data-tip="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm tip-end" type="button" id="ubOpen" hidden data-tip="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><a class="btn sm yt tip-end" id="ytOn" href="/studio" hidden data-tip="Its page in your Studio: its details on YouTube, its day, who can watch it, its views"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> <span id="ytOnText"></span><b>Manage</b></a><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div>
+      <div class="caption"><span id="status">Ready.</span><button class="ntver" type="button" id="ntVer" hidden></button><span class="right"><button class="btn sm primary aqua tip-end" type="button" id="ntOpen" hidden data-tip="Point at what should change, and Claude makes the next version"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></svg> Edit film</button><button class="btn sm tip-end" type="button" id="lgOpen" hidden data-tip="This film in other languages: the same pictures, voice and music, with the words translated"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3z"/></svg> Translate</button><a class="btn sm tip-end" id="dlBtn" href="#" download target="_blank" rel="noopener" hidden data-tip="Download the full-quality MP4"><svg class="dlmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> Download</a><button class="btn sm tip-end" type="button" id="ubOpen" hidden data-tip="This film again, without the KitCut mark and ending"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.2 6.3L20.5 10l-6.3 2.2L12 18.5l-2.2-6.3L3.5 10l6.3-1.7zM19 15l.9 2.6 2.6.9-2.6.9L19 22l-.9-2.6-2.6-.9 2.6-.9z"/></svg> Remove branding</button><button class="btn sm yt" type="button" id="ytOpen" hidden><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> Publish to YouTube</button><a class="btn sm yt tip-end" id="ytOn" href="/studio" hidden data-tip="Its page in your Studio: its details on YouTube, its day, who can watch it, its views"><svg class="ytmark" viewBox="0 0 28 20" aria-hidden="true"><rect width="28" height="20" rx="5" fill="#FF0000"/><path d="M11.2 5.8v8.4L18.4 10z" fill="#fff"/></svg> <span id="ytOnText"></span><b>Manage</b></a><button class="btn sm" type="button" id="stop" hidden>Stop</button><span class="fresh" id="fresh" aria-live="off" hidden></span><span class="fresh" id="views" hidden></span><span id="clock"></span></span></div><div class="ntline" id="ntLine" role="status" hidden></div>
       <section class="e2" id="e2" hidden aria-labelledby="e2Head"></section>
       <div class="sharebar" id="sharebar" hidden>
         <div class="sb">
@@ -1737,6 +1745,7 @@ $('againClose').addEventListener('click', closeForm);
 
 function home() {
   reset(); currentId = null; drawSide(); view(false); closeForm(); $('work').classList.add('idle');
+  CRUMB = null; drawCrumbs();
   if (HOME) { document.querySelector('.hero h1').textContent = HOME.h1; document.querySelector('.hero h1').title = ''; document.title = HOME.title; }
   fromTemplate(null);
   shape(null); screen('<div class="idle">Your film appears here.</div>');
@@ -1745,9 +1754,45 @@ function home() {
 // a plan that makes more than one film at a time (Pro: 2, the site's lib/plans.js) may start the
 // next while this one is being made; the studio refuses one past the plan's number
 const canAnother = () => !!(CREDITS && CREDITS.at_once > 1);
+// ---- the trail at the top of a film's page, as its page in the Studio has it (projects.html crumbs,
+// studio-publish.js svTrail): Studio, its project, the episode (its page in the Studio), and Edit film
+// while the notes are open. Shown when the page was opened from the Studio (?from=studio: Edit film
+// there) or its notes are open (#notes), to whoever the Studio shows the film to; never to a visitor,
+// and not on the studio machine's own page (no /api/projects there).
+let CRUMB = null;  // {id, film: GET /api/projects/film/<id>'s film} once read
+const CHEV = '<svg class="i" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+function crumbsWanted() {
+  return new URLSearchParams(location.search).get('from') === 'studio' || location.hash === '#notes' || !!(window.KCNotes && KCNotes.isOpen());
+}
+function drawCrumbs() {
+  const nav = $('crumbs');
+  if (!nav) return;  // a page drawn without it
+  const f = CRUMB && CRUMB.id === currentId ? CRUMB.film : null;
+  if (!f || !crumbsWanted()) { nav.hidden = true; nav.innerHTML = ''; return; }
+  const editing = location.hash === '#notes' || !!(window.KCNotes && KCNotes.isOpen());
+  const steps = [['Studio', '/studio'],
+    ...(f.project ? [[f.project.name, `/studio/${encodeURIComponent(f.project.id)}`]] : []),
+    [f.n ? `Episode ${f.n}` : 'Film', `/studio/film/${encodeURIComponent(currentId)}`],
+    ...(editing ? [['Edit film']] : [])];
+  nav.innerHTML = steps.map(([label, href], i) => (href && i < steps.length - 1
+    ? `<a href="${esc(href)}">${esc(label)}</a>` : `<span${i === steps.length - 1 ? ' aria-current="page"' : ''}>${esc(label)}</span>`)).join(CHEV);
+  nav.hidden = false;
+}
+async function loadCrumbs(id) {
+  CRUMB = null; drawCrumbs();
+  if (!crumbsWanted()) return;
+  try {
+    const r = await fetch(`/api/projects/film/${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
+    if (!r.ok || id !== currentId) return;  // a visitor, or not a film the Studio shows them
+    const b = await r.json();
+    if (b && b.film) { CRUMB = { id, film: b.film }; drawCrumbs(); }
+  } catch (e) { /* the film plays without its trail */ }
+}
+window.addEventListener('hashchange', drawCrumbs);
 function openFilm(id, push) {
   if (push && location.pathname !== '/film/' + id) history.pushState({ id }, '', '/film/' + id);
   reset(); currentId = id; drawSide(); view(true); $('work').classList.remove('idle'); $('go').disabled = !(studioUp && canAnother());
+  loadCrumbs(id);
   if (push) closeForm();
   shape(null); screen('<div class="idle">Loading the film...</div>');
   $('status').innerHTML = '<span class="pen"></span>Loading';
@@ -1916,18 +1961,29 @@ function paused(id, w, next = 0) {
 // its /api/films/<id>/notes is not found). The chip by the status tells which version the page
 // shows once there are several, or that the next one is being made. /film/<id>#notes opens them.
 let NT = null;  // {id, doc}: the film's notes as lib/notes.js last gave them
+let ntLook = null;  // the next look at changes waiting in line
 function ntReset() {
-  NT = null; $('ntOpen').hidden = true; $('ntVer').hidden = true;
+  NT = null; $('ntOpen').hidden = true; $('ntVer').hidden = true; $('ntLine').hidden = true; clearTimeout(ntLook);
   if (window.KCNotes && KCNotes.isOpen()) KCNotes.close();
 }
 function ntShow(id, doc) {
   NT = { id, doc };
-  const r = doc.round || {}, making = r.state === 'making', v = $('ntVer');
-  $('ntOpen').hidden = making;
-  v.hidden = !(making || doc.versions.length > 1);
+  const r = doc.round || {}, making = r.state === 'making', line = r.state === 'line', v = $('ntVer');
+  $('ntOpen').hidden = making || line;
+  v.hidden = line || !(making || doc.versions.length > 1);
   v.classList.toggle('busy', making);
   v.innerHTML = making ? `<span class="pulse"></span>${r.waiting ? `Version ${r.n} is waiting its turn` : `Claude is making version ${r.n}`}` : `Version ${doc.current} of ${doc.versions.length}`;
   v.title = making ? 'See how it is going' : 'See the versions, and what changed';
+  // in the account's line: said in a row of its own under the film, with the way to the changes,
+  // and looked at again now and then, so the row turns into "being made" when it starts
+  const ln = $('ntLine');
+  ln.hidden = !line;
+  clearTimeout(ntLook);
+  if (line) {
+    ln.innerHTML = `<span class="pulse"></span><span class="t"><b>Your changes are in line.</b> Version ${r.n} starts by itself as soon as one of your films is done; we email you when it is ready.</span><button class="btn sm" type="button" id="ntLineOpen">See changes</button>`;
+    $('ntLineOpen').onclick = ntOpen;
+    ntLook = setTimeout(() => { if (NT && NT.id === id && id === currentId) ntOffer(id); }, 30000);
+  }
   // what YouTube would be sent is about to be the version before: the publish dialog says to wait
   // for it, so the button never sits there dead. It is told when a version starts and when it is
   // done, so it never waits for one that is finished
@@ -1949,12 +2005,14 @@ async function ntOpen() {
   } catch (e) { return; }
   if (id !== currentId) return;
   const v = $('screen').querySelector('video');
+  if (!CRUMB || CRUMB.id !== id) loadCrumbs(id); else drawCrumbs();
   await KCNotes.open(id, NT.doc, {
     t: v ? v.currentTime : 0,
     onClose: (doc) => {
       // opened from the film's page in the Studio ("Edit film" there): back to it, on its Film tab
       if (new URLSearchParams(location.search).get('from') === 'studio') { location.href = `/studio/film/${id}#film`; return; }
       if (location.hash === '#notes') history.replaceState(history.state, '', location.pathname + location.search);
+      setTimeout(drawCrumbs, 0);  // once the panel says it is closed
       if (id !== currentId) return;
       ntShow(id, doc);
       if (doc.current !== was) follow(0);  // another version is the film now: its download, card and words
