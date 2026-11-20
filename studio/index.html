@@ -84,6 +84,7 @@
   --ring: 0 0 0 3px rgba(255, 181, 46, .45);
   --lift: 0 1px 2px rgba(17, 17, 39, .06), 0 8px 24px rgba(17, 17, 39, .08);
   --dialog: 0 24px 64px rgba(17, 17, 39, .24);
+  --invite-bg: linear-gradient(160deg, #fff6dc 0%, #ffecb3 100%); --invite-glow: rgba(209, 144, 4, .55); --invite-field: #ffffff; --invite-edge: linear-gradient(135deg, #ffffff 0%, #ffe7b0 35%, #ffb52e 65%, #ffffff 100%); --strong-bg: #111127; --strong-ink: #ffb52e;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -98,6 +99,7 @@
     --check: #d4d4d4;
     --lift: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .4);
     --dialog: 0 24px 64px rgba(0, 0, 0, .6);
+    --invite-bg: radial-gradient(120% 70% at 0% 0%, rgba(255, 181, 46, .13) 0%, rgba(255, 181, 46, 0) 60%), #15152e; --invite-glow: rgba(255, 181, 46, .35); --invite-field: var(--sunk); --strong-bg: #ffb52e; --strong-ink: #111127;
     color-scheme: dark;
   }
 }
@@ -112,6 +114,7 @@
   --check: #d4d4d4;
   --lift: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .4);
   --dialog: 0 24px 64px rgba(0, 0, 0, .6);
+  --invite-bg: radial-gradient(120% 70% at 0% 0%, rgba(255, 181, 46, .13) 0%, rgba(255, 181, 46, 0) 60%), #15152e; --invite-glow: rgba(255, 181, 46, .35); --invite-field: var(--sunk); --strong-bg: #ffb52e; --strong-ink: #111127;
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -337,6 +340,32 @@ button.chip[aria-pressed="true"] { font-weight: 500; background: var(--accent-so
 .panel.card { padding: 18px 20px; display: grid; gap: 8px; align-content: start; }
 .panel.card p { margin: 0; }
 .panel.card ul { margin: 0; padding-left: 18px; color: var(--ink-2); }
+/* a card that asks someone to make a film (a share page's Create your own film and, for the film's
+   maker, Create next episode: one style for both): the loudest thing on the page, so amber means "make your own".
+   Light: an amber card with a white-to-amber edge (--invite-edge) and an amber glow. Dark: a midnight
+   card a step above the page, the same edge and a soft amber glow in its corner (a whole amber wash goes brown on midnight).
+   Its idea box is white on the amber (dark: the sunk field) with the card's edge of light. --invite-bg is the card's
+   ground, per theme; --invite-edge the same in both. */
+.panel.invite { position: relative; background: var(--invite-bg); border-color: transparent; box-shadow: 0 18px 40px -18px var(--invite-glow); }
+/* its edge, a 2px line of light (--invite-edge): bright white at two corners running into amber, all the way round */
+.panel.invite::before { content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 2px; background: var(--invite-edge); pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+.panel.card.invite { padding: 26px 28px; gap: 14px; }
+/* its idea box: the card's own edge of light (--invite-edge) round it; the edge
+   stays while typing (the box takes the caret as the panel opens), with the focus ring round it */
+.panel.invite .nextep .narr { border: 2px solid transparent; background: linear-gradient(var(--invite-field), var(--invite-field)) padding-box, var(--invite-edge) border-box; }
+.panel.invite .nextep .narr:focus-within { border-color: transparent; box-shadow: var(--ring); }
+/* its heading and the line under it (.intro), the loudest words on the page, in ink on the amber; a
+   .chip.strong over them where the card calls ("Your turn"); its action (.go, .btn.primary: amber) on
+   a row of its own under the length, look and frame, as long as the card */
+.panel.invite > .chip.strong { justify-self: start; margin-bottom: 2px; }
+.panel.invite > .intro h2 { margin: 0; font-size: 30px; font-weight: 600; line-height: 1.1; letter-spacing: -.4px; color: var(--ink); }
+.panel.invite > .intro p { margin: 6px 0 0; font-size: 16px; color: var(--ink-2); }
+.panel.invite .nextep .opts { grid-template-columns: minmax(0, .85fr) minmax(0, 1.3fr) minmax(0, .85fr); }
+.panel.invite .nextep .go { grid-column: 1 / -1; }
+@media (max-width: 700px) { .panel.invite > .intro h2 { font-size: 26px; } }
+/* a word that calls, over the heading of a panel that invites ("Your turn"): midnight with amber words (dark: amber with midnight) */
+.chip.strong { height: 28px; padding: 0 12px; background: var(--strong-bg); color: var(--strong-ink); font-size: 13.5px; font-weight: 600; }
 /* a series' next episode, proposed and ready to make (Create next episode, series.js), compact enough
    to sit beside a film on one screen. .top: its 16:9 .pic (a painting, img.painted, or a frame of
    the film it follows, drawn in by series.js, with .dur, the episode's length, on it; 160px) beside
@@ -388,7 +417,7 @@ button.chip[aria-pressed="true"] { font-weight: 500; background: var(--accent-so
 .nextep .mention .who { display: grid; gap: 1px; min-width: 0; }
 .nextep .mention .who > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-3); font-size: 12.5px; }
 .nextep .mention button[aria-selected="true"], .nextep .mention button:hover { background: var(--hover); }
-.nextep .opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; gap: 8px; }  /* the selects share the row; the button is as long as its words */
+.nextep .opts { display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.3fr) minmax(0, .85fr) auto; align-items: end; gap: 8px; }  /* the selects share the row, the look's a little more of it (Code-drawn, whole); the button is as long as its words */
 .nextep .opts select { width: 100%; }
 /* Add References: under the box, a picture added shows as a chip in it (.named) with its own remove */
 .nextep .att { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -396,7 +425,7 @@ button.chip[aria-pressed="true"] { font-weight: 500; background: var(--accent-so
 .nextep .act { display: grid; gap: 8px; }
 .nextep .skeleton.line { height: 14px; border-radius: 6px; }
 @container (max-width: 420px) {
-  .nextep .opts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .nextep .opts { grid-template-columns: minmax(0, .85fr) minmax(0, 1.3fr) minmax(0, .85fr); }
   .nextep .go { grid-column: 1 / -1; }
 }
 @container (max-width: 300px) {
@@ -653,6 +682,10 @@ html:not([data-view=film]) .hero .invited { justify-content: center; }
 .makebar .credit { flex: 1 1 240px; }
 .makesub { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
 .makesub:not(:has(> :not([hidden]))) { display: none; }
+/* the Claude model and effort (paid plans): two short selects side by side */
+.claudepick { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.claudepick[hidden] { display: none; }
+.claudepick select { width: auto; }
 .makenote { margin: 2px 2px 0; }
 @media (max-width: 640px) { .makebar .btn.go { width: 100%; order: 1; } .makebar .lookpick, .makebar .looks { display: flex; width: 100%; } .makebar .lk { flex: 1; } .makebar .lk span { width: 100%; justify-content: center; } }
 .composer textarea { width: 100%; min-height: calc(5 * 1.5em + 28px); resize: vertical; padding: 14px 16px; border: 0; border-radius: 12px 12px 0 0; background: transparent; color: var(--ink); font: 16px/1.5 'DM Sans', system-ui, sans-serif; }
@@ -1140,6 +1173,11 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
       <button class="btn primary aqua lg go" id="go" type="submit">Make a film</button>
       <div class="makesub">
         <label class="check autolen" id="autoRow" hidden><input type="checkbox" id="autoLen"><span>Let Claude choose the length<span id="autoPlan" hidden> · on the paid plans. <a href="/pricing">See plans</a></span></span></label>
+        <span class="claudepick" id="claudeRow" hidden title="The Claude model that writes and draws the film, and how hard it thinks. Fable 5.2 uses three credits a second.">
+          <select class="input sm" id="cModel" aria-label="Claude model"><option value="claude-opus-5-5">Opus 5.5</option><option value="claude-fable-5-2">Fable 5.2 · 3× credits</option></select>
+          <select class="input sm" id="cEffort" aria-label="How hard Claude thinks"><option value="low">Low effort</option><option value="medium">Medium effort</option><option value="high">High effort</option><option value="xhigh" selected>Extra high effort</option><option value="max">Max effort</option></select>
+          <span id="claudePlan" hidden>on the paid plans. <a href="/pricing">See plans</a></span>
+        </span>
         <p class="note credit" id="credit" hidden></p>
       </div>
     </div>
@@ -2150,13 +2188,44 @@ $('emailForm').addEventListener('submit', async (e) => {
 // Where there is no /api/me (the laptop), CREDITS stays null and the slider is just a length.
 const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 // a film uses a credit a second, and at least min_credits (the site's lib/plans.js)
-const costOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0);
+// The Claude model and how hard it thinks (paid plans; the site's lib/plans.js CLAUDE_MODELS and
+// EFFORTS): the studio's own (Opus 5.5, Extra high) unless chosen, remembered in this browser. A
+// Fable film uses three credits a second.
+const CLAUDE_RATE = { 'claude-opus-5-5': 1, 'claude-fable-5-2': 3 };
+const claudeFree = () => !CREDITS || CREDITS.plan === 'free';
+const claudeModel = () => (claudeFree() || !CLAUDE_RATE[$('cModel').value] ? 'claude-opus-5-5' : $('cModel').value);
+const claudeEffort = () => (claudeFree() ? 'xhigh' : $('cEffort').value);
+const claudeRate = () => CLAUDE_RATE[claudeModel()];
+// what the film is asked for with: only what differs from the studio's own
+const claudeBody = () => ({
+  ...(claudeModel() !== 'claude-opus-5-5' ? { model: claudeModel() } : {}),
+  ...(claudeEffort() !== 'xhigh' ? { effort: claudeEffort() } : {}),
+});
+function paintClaude() {
+  $('claudeRow').hidden = !CREDITS;
+  const free = claudeFree();
+  $('cModel').disabled = $('cEffort').disabled = free;
+  $('claudePlan').hidden = !free || !$('autoRow').hidden;  // said once: the length's row says it already
+}
+(() => {
+  let kept = {};
+  try { kept = JSON.parse(localStorage.getItem('kc.claude') || '{}') || {}; } catch (e) { /* private window */ }
+  if (CLAUDE_RATE[kept.model]) $('cModel').value = kept.model;
+  if ([...$('cEffort').options].some((o) => o.value === kept.effort)) $('cEffort').value = kept.effort;
+  for (const id of ['cModel', 'cEffort']) {
+    $(id).addEventListener('change', () => {
+      try { localStorage.setItem('kc.claude', JSON.stringify({ model: $('cModel').value, effort: $('cEffort').value })); } catch (e) { /* private window */ }
+      paintLength();
+    });
+  }
+})();
+const costOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0) * claudeRate();
 const shortOf = (v) => !!(CREDITS && costOf(v) > CREDITS.balance);
 // "Let Claude choose the length" (paid plans; the AUTO_LENGTH switch): the slider rests, the longest
 // film the balance and the plan allow is held, and the film uses only the length Claude gives it
 // (the site's lib/plans.js autoCap, lib/credits.js trim). The tick is remembered in this browser.
 const autoOn = () => !$('autoRow').hidden && !$('autoLen').disabled && $('autoLen').checked;
-const capOf = () => Math.max(CREDITS.min_credits || 0, Math.floor(Math.min(CREDITS.balance, maxOf()) / 5) * 5);
+const capOf = () => Math.max(CREDITS.min_credits || 0, Math.floor(Math.min(CREDITS.balance / claudeRate(), maxOf()) / 5) * 5);
 // the longest the slider allows: the plan's longest film, and no more than a Short's 3:00 for a tall one
 const maxOf = () => Math.min((CREDITS && CREDITS.max_length) || 60, frameOf() === '9:16' ? SHORT_MAX : Infinity);
 const lengthAsked = () => (autoOn() ? capOf() : +$('length').value);
@@ -2193,6 +2262,7 @@ function paintLength() {
   const max = maxOf(), shortCap = max < ((CREDITS && CREDITS.max_length) || 60);
   if (`${max}|${shortCap}` !== drawnMax) drawTrack(max, shortCap);
   paintAuto();
+  paintClaude();
   const auto = autoOn();
   el.disabled = auto;
   el.closest('.len').classList.toggle('auto', auto);
@@ -2216,7 +2286,7 @@ function paintLength() {
     c.classList.toggle('short', short);
     // a second account of one person has no free film to renew (lib/sameperson.js): its account page says why
     c.innerHTML = (auto ? `Up to ${costOf(ask)} credits: the film uses only the length Claude gives it`
-      : `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''}`) + ` · you have ${mmss(CREDITS.balance)} left` +
+      : `${costOf(v)} credits${claudeRate() > 1 ? ` (Fable: ${claudeRate()} a second)` : costOf(v) > v ? ' (the least a film uses)' : ''}`) + ` · you have ${mmss(CREDITS.balance)} left` +
       (CREDITS.second ? ' · <a href="/account#second">no free film on a second account</a>' : CREDITS.refills === false ? '' : ` · renews ${renews()}`) +
       ' · <a href="/pricing">Get more film</a>' + (short ? ', or <a href="/account#invite">invite a friend for free film</a>' : '');
   }
@@ -3495,7 +3565,7 @@ $('form').addEventListener('submit', async (e) => {
     const ids = await attachmentIds(show);
     await PPL.ready(show);
     const send = (attachments) => api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seconds: +$('length').value, ...(autoOn() ? { auto_length: true } : {}), look: lookOf(), ...frameBody(), ...(attachments.length ? { attachments, ...pictureRoles(attachments) } : {}), ...PPL.body() }) });
+      body: JSON.stringify({ prompt, seconds: +$('length').value, ...(autoOn() ? { auto_length: true } : {}), look: lookOf(), ...frameBody(), ...claudeBody(), ...(attachments.length ? { attachments, ...pictureRoles(attachments) } : {}), ...PPL.body() }) });
     let r = await send(ids);
     if (r.status === 409) {  // an attachment the studio no longer has (a day old): send it again, once
       const why = await r.clone().json().catch(() => ({}));
