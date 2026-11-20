@@ -1603,7 +1603,10 @@ function shape(frame) {
   else { el.style.removeProperty('--ar'); el.style.removeProperty('--arn'); }
 }
 function play(video, poster) {
-  screen(`<video src="${esc(video)}" poster="${esc(poster || '')}" controls autoplay playsinline></video>`);
+  // opened to change it (#notes, Edit film): the notes open over a still film, so it never plays a
+  // moment first
+  const auto = location.hash === '#notes' ? ' preload="metadata"' : ' autoplay';
+  screen(`<video src="${esc(video)}" poster="${esc(poster || '')}" controls${auto} playsinline></video>`);
   // a film whose record names no frame (one brought in from outside the studio): its own picture says it
   const v = $('screen').querySelector('video');
   if (window.KC && KC.playDisc) { KC.playDisc(v); KC.endCard(v, { edit: ntOpen, when: ntMine }); }  // no shell.js where the studio serves this page
