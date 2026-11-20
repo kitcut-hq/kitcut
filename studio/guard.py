@@ -115,8 +115,48 @@ def _pin(film, name, want, keep=None):
 def pin_vo(film):
     """vo.json: the voice backend, model and takes are the studio's, and so is everything that
     is not the narration (a Whisper model, hotwords...) -- and the voice, when the person picked
-    it (Film.vo_pins)."""
-    return _pin(film, "vo.json", film.vo_pins(), keep=validate.VO_KEYS)
+    it (Film.vo_pins); and each of its project's characters' voices (pin_cast)."""
+    said = [_pin(film, "vo.json", film.vo_pins(), keep=validate.VO_KEYS), pin_cast(film)]
+    return "; ".join(s for s in said if s)
+
+
+def pin_cast(film):
+    """vo.json cast: a character of the film's project that has its voice (library voices, as the
+    film got them: Film.cast_voice_pins) speaks in it -- put back when Claude casts another,
+    and given it when Claude makes it speak with no cast entry. Its style stays Claude's. Not in a
+    film read in ElevenLabs voices (the person's own, or its prompt's)."""
+    held = film.cast_voice_pins()
+    p = film.path("vo.json")
+    if not held or not os.path.exists(p):
+        return ""
+    try:
+        with open(p, encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError):
+        return ""  # pin_vo's _pin has said so
+    if not isinstance(d, dict) or d.get("tts") == "elevenlabs" or film.record().get("el_voices"):
+        return ""
+    cast = d.get("cast") if isinstance(d.get("cast"), dict) else {}
+    spoke = {ln.get("who") for ln in d.get("lines") or [] if isinstance(ln, dict)}
+    fixed = []
+    for name, v in sorted(held.items()):
+        spec = cast.get(name)
+        if name not in cast and name not in spoke:
+            continue  # not in this episode: nothing to hold
+        if isinstance(spec, dict) and spec.get("voice") == v["voice"]:
+            continue
+        style = spec.get("style") if isinstance(spec, dict) and spec.get("style") else v["style"]
+        cast[name] = {"voice": v["voice"], **({"style": style} if style else {})}
+        fixed.append("%s=%s" % (name, v["voice"]))
+    if not fixed:
+        return ""
+    d["cast"] = cast
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(d, f, indent=2, ensure_ascii=False)
+    return (
+        "the project's characters keep their voices in every episode; restored in vo.json cast: "
+        "%s" % ", ".join(fixed)
+    )
 
 
 def pin_paint(film):
