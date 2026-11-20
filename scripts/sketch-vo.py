@@ -318,6 +318,23 @@ def el_take(text, voice_id, vo):
 _SPENT = threading.Lock()
 
 
+def studio_spend(vdir, vo, chars):
+    """A take recorded with KitCut's own ElevenLabs key (a film whose prompt names ElevenLabs
+    voices, studio/film.py prompt_voices): its characters at list price, kept the moment it is
+    made (audio/vo/spend.jsonl), so the film's cost and the day's budget count it."""
+    model = vo.get("model", "eleven_v3")
+    row = {
+        "provider": "elevenlabs",
+        "model": model,
+        "chars": chars,
+        "cost_usd": round(chars * EL_USD_PER_CHAR.get(model, 0.10 / 1000), 6),
+        "input": 0,
+        "output": 0,
+    }
+    with _SPENT, open(os.path.join(vdir, "spend.jsonl"), "a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
+
+
 def user_spend(vdir, vo, chars):
     """A take recorded in the person's own ElevenLabs account: its characters, kept the moment
     it is made (audio/vo/spend.jsonl, payer "user"), so a film that stops half-way still says what
@@ -388,12 +405,16 @@ LOW_VOICE_HZ = 165  # a narration pitched below this takes the backup's low voic
 # what a refused line's backup is levelled to: the median speech level of a film's Gemini
 # lines (40 lines, 2026-09-27: -18.4 dBFS; ElevenLabs v3 came out at -18.1, Turbo at -22.4)
 BACKUP_LEVEL_DB = -18.4
-# ElevenLabs API list prices, USD per character (elevenlabs.io/pricing/api, 2026-09)
+# ElevenLabs API list prices, USD per character (elevenlabs.io/pricing/api, read 2026-11-19: $0.08
+# per 1K characters for v4, v3 and v2 Multilingual, $0.04 for v4 Turbo and "Flash / Turbo"; they
+# were $0.10 and $0.05 in 2026-09)
 EL_USD_PER_CHAR = {
-    "eleven_v3": 0.10 / 1000,
-    "eleven_multilingual_v2": 0.10 / 1000,
-    "eleven_turbo_v2_5": 0.05 / 1000,
-    "eleven_flash_v2_5": 0.05 / 1000,
+    "eleven_v4": 0.08 / 1000,
+    "eleven_v4_turbo": 0.04 / 1000,
+    "eleven_v3": 0.08 / 1000,
+    "eleven_multilingual_v2": 0.08 / 1000,
+    "eleven_turbo_v2_5": 0.04 / 1000,
+    "eleven_flash_v2_5": 0.04 / 1000,
 }
 # what Gemini says when it will not read a line: a content block, not a glitch -- asking
 # again does not help, and rephrasing loses the words (a name, a wine)
@@ -1358,6 +1379,8 @@ def main():
                         f.write(mp3)
                     if os.environ.get("ELEVENLABS_RELAY"):  # the person's own characters
                         user_spend(vdir, lvo, len(sent))
+                    else:  # KitCut's own key: the studio's money, counted like Gemini's
+                        studio_spend(vdir, lvo, len(sent))
                 elif tts == "gemini":
                     say = said(ln["text"], vo)  # what the voice is given: the say map applied
                     try:

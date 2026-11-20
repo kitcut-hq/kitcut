@@ -500,6 +500,80 @@ def main():
             set(E.vo_pins()) - validate.VO_KEYS,
             set(),
         )
+        # a prompt that names ElevenLabs voices (film.prompt_voices): read in them with the
+        # studio's key, Claude casts the characters among them, and its cast passes the check
+        R, S = "S0ypc51SmsvcKXTWvjqJ", "mrQhZWGbb2k9qWJb5qeA"
+        V = films.Film.create("Rusty (ElevenLabs %s) and Smudge (%s) at the fence" % (R, S), 30)
+        with open(V.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        expect(
+            "the prompt's voices start in vo.json",
+            (vo["tts"], vo["model"], vo["voice"], V.record()["el_voices"]["ids"]),
+            ("elevenlabs", films.EL_MODEL, R, [R, S]),
+        )
+        with open(V.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "tts": "gemini",
+                    "voice": R,
+                    "language": "en",
+                    "cast": {"rusty": {"voice": R}, "smudge": {"voice": S}},
+                    "lines": [
+                        {"who": "smudge", "text": "[alarmed] Into those woods?"},
+                        {"who": "rusty", "text": "Just for a look!"},
+                    ],
+                },
+                f,
+            )
+        note = pin_after("vo.json", V)
+        with open(V.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        expect("its backend is pinned back", (vo["tts"], vo["model"]), ("elevenlabs", "eleven_v4"))
+        expect("and its cast of characters passes: %s" % note, "vo.json:" in note, False)
+        expect("its pins are all keys vo.json may hold", set(V.vo_pins()) - validate.VO_KEYS, set())
+        expect("the first message names the voices", R in agent.voice_note(V), True)
+        expect("no relay pass: KitCut's own key", V.own_voice(), None)
+        # ... or in a script attached with the idea (make_film's documents)
+        doc = os.path.join(tempfile.mkdtemp(), "script.md")
+        with open(doc, "w", encoding="utf-8") as f:
+            f.write("Cast (ElevenLabs): Princess acCWxmzPBgXdHwA63uzP\n- L01. PRINCESS: \"Hi.\"\n")
+        D = films.Film.create(
+            "The fence scene, as the script says",
+            30,
+            attachments=[{"kind": "text", "ext": "md", "src": doc, "name": "script.md"}],
+        )
+        expect(
+            "voices in an attached script are taken",
+            (D.record().get("el_voices") or {}).get("ids"),
+            ["acCWxmzPBgXdHwA63uzP"],
+        )
+        expect(
+            "an own ElevenLabs narrator wins over the prompt's voices",
+            "el_voices"
+            in films.Film.create(
+                "ElevenLabs %s" % R,
+                5,
+                narrator={"source": "elevenlabs", "voice": S, "model": "eleven_v3"},
+            ).record(),
+            False,
+        )
+
+        # an actor (studio/actors.md, library._seed_actors) speaks its own lines in its own
+        # voice: until 2026-11-19 the check refused its line, although actors.md asks for it
+        T = films.Film.create("an actor speaks", 10)
+        T.update(library={"actors": [{"name": "duchess", "faces": [], "talk": ["neutral"]}]})
+        with open(T.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "voice": "Kore",
+                    "language": "en",
+                    "cast": {"duchess": {"voice": "Leda"}},
+                    "lines": [{"who": "duchess", "text": "Good morning."}, {"text": "She bows."}],
+                },
+                f,
+            )
+        expect("an actor's line passes", validate.problems(T, "vo.json"), [])
+
         expect("the first message names it", "person's choice: Puck" in agent.voice_note(P), True)
         expect("a film without one says nothing", agent.voice_note(A), "")
         d = P.direction()

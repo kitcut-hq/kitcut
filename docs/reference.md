@@ -5795,6 +5795,17 @@ poses, the gates. `faces`, `talk` and `poses` take default names or `{name: "the
 new ones (Enrique's poses say which hand holds the paddle). `design` starts from a picture already
 made instead of drawing candidates. The pack is written beside the spec in `<name>/`.
 
+**Animals, and a character already drawn** (2026-11-19, for the Warriors cats on KitCut).
+- `"body": "animal"` takes the defaults' `bodies.animal`. The front figure sits upright and faces
+  the viewer, so its head is the top of the figure as a person's is (`head` 0.40), and the same
+  cutting, gates and face laying work. Its own prompts never mention hands, shoes or clothes, and
+  its poses stand, walk, crouch and lie on four legs. A spec can still name its own poses.
+- `"reference": "<picture>"` (or a list): the candidates are drawn after it, such as a cast
+  sheet or a crop from the comic, so the actor is that character and not one the model invents.
+  It goes into the candidates' fingerprint, so a new reference draws new candidates.
+- Rusty, with 5 faces, 2 talking faces and 3 poses, plans at about $1.08 (21 pictures), up to
+  $2.04 with retakes. No animal pack had been drawn when this was written.
+
 **What it draws** (Enrique, 2026-10-17: 45 pieces, 4 min 19 s, $1.13 with the three design
 candidates, at $0.023 a picture): the base; 8 faces; 4 mouths (small, open, round, wide) and a
 blink on each of the 4 talking faces; 10 poses; and for each pose whose head has turned, mouths
@@ -6085,6 +6096,23 @@ project's or else the workspace's (the site's `lib/narrator.js`).
   (`voice.kitcut_voices`); the site offers no other. No `voice`, or one with no voice in it: Claude
   picks, as before.
 - Tests: `test_guard.py` (the pin, the note, the tally), `test_library.py` (the workspace cases).
+
+**ElevenLabs voices named in the prompt** (2026-11-19). A prompt that says "ElevenLabs" and gives
+voice ids is read in those voices, with the studio's own key (`studio/README.md`, "ElevenLabs
+voices named in the prompt").
+- `film.prompt_voices(prompt)` finds them: 20-character ids with a digit or both cases, up to 12,
+  and the model (`EL_MODEL`, the newest, unless the prompt names one of `EL_MODELS`). `Film.create`
+  reads the idea and the text documents attached with it, keeps them as `el_voices` and starts
+  `vo.json` in the first; a person's own ElevenLabs narrator wins.
+- `Film.vo_pins()` pins `tts: elevenlabs`, the model, one take, two at once. Claude casts the ids
+  (`voice`, `cast` by lower-case name, `who` on a character's lines; `agent.voice_note`), and
+  `validate._vo(..., voices=)` takes only those ids. How a line is said goes in an `[audio tag]` at
+  its start; `style` is not read by ElevenLabs.
+- `sketch-vo.py studio_spend` logs each take at list price (`EL_USD_PER_CHAR`, from
+  elevenlabs.io/pricing/api on 2026-11-19: $0.08 per 1K characters for `eleven_v4`), so the
+  film's cost and the day's budget count it.
+- Tests: `test_people.py` (the parser and the check), `test_guard.py` (a film made from such a
+  prompt: its pins, its cast, its note; an actor's line passing).
 
 **Samples for the picker.**
 - `python scripts/voice-samples.py [--model M] [--lang en] [--plan]` records one sentence (from
