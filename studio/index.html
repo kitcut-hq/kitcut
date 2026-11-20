@@ -682,6 +682,10 @@ html:not([data-view=film]) .hero .invited { justify-content: center; }
 .makebar .credit { flex: 1 1 240px; }
 .makesub { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
 .makesub:not(:has(> :not([hidden]))) { display: none; }
+/* the Claude model and effort (paid plans): two short selects side by side */
+.claudepick { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.claudepick[hidden] { display: none; }
+.claudepick select { width: auto; }
 .makenote { margin: 2px 2px 0; }
 @media (max-width: 640px) { .makebar .btn.go { width: 100%; order: 1; } .makebar .lookpick, .makebar .looks { display: flex; width: 100%; } .makebar .lk { flex: 1; } .makebar .lk span { width: 100%; justify-content: center; } }
 .composer textarea { width: 100%; min-height: calc(5 * 1.5em + 28px); resize: vertical; padding: 14px 16px; border: 0; border-radius: 12px 12px 0 0; background: transparent; color: var(--ink); font: 16px/1.5 'DM Sans', system-ui, sans-serif; }
@@ -1169,6 +1173,11 @@ try { if (JSON.parse(localStorage.getItem('kcShell') || 'null')?.user) document.
       <button class="btn primary aqua lg go" id="go" type="submit">Make a film</button>
       <div class="makesub">
         <label class="check autolen" id="autoRow" hidden><input type="checkbox" id="autoLen"><span>Let Claude choose the length<span id="autoPlan" hidden> · on the paid plans. <a href="/pricing">See plans</a></span></span></label>
+        <span class="claudepick" id="claudeRow" hidden title="The Claude model that writes and draws the film, and how hard it thinks. Fable 5.2 uses three credits a second.">
+          <select class="input sm" id="cModel" aria-label="Claude model"><option value="claude-opus-5-5">Opus 5.5</option><option value="claude-fable-5-2">Fable 5.2 · 3× credits</option></select>
+          <select class="input sm" id="cEffort" aria-label="How hard Claude thinks"><option value="low">Low effort</option><option value="medium">Medium effort</option><option value="high">High effort</option><option value="xhigh" selected>Extra high effort</option><option value="max">Max effort</option></select>
+          <span id="claudePlan" hidden>on the paid plans. <a href="/pricing">See plans</a></span>
+        </span>
         <p class="note credit" id="credit" hidden></p>
       </div>
     </div>
@@ -2179,13 +2188,44 @@ $('emailForm').addEventListener('submit', async (e) => {
 // Where there is no /api/me (the laptop), CREDITS stays null and the slider is just a length.
 const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 // a film uses a credit a second, and at least min_credits (the site's lib/plans.js)
-const costOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0);
+// The Claude model and how hard it thinks (paid plans; the site's lib/plans.js CLAUDE_MODELS and
+// EFFORTS): the studio's own (Opus 5.5, Extra high) unless chosen, remembered in this browser. A
+// Fable film uses three credits a second.
+const CLAUDE_RATE = { 'claude-opus-5-5': 1, 'claude-fable-5-2': 3 };
+const claudeFree = () => !CREDITS || CREDITS.plan === 'free';
+const claudeModel = () => (claudeFree() || !CLAUDE_RATE[$('cModel').value] ? 'claude-opus-5-5' : $('cModel').value);
+const claudeEffort = () => (claudeFree() ? 'xhigh' : $('cEffort').value);
+const claudeRate = () => CLAUDE_RATE[claudeModel()];
+// what the film is asked for with: only what differs from the studio's own
+const claudeBody = () => ({
+  ...(claudeModel() !== 'claude-opus-5-5' ? { model: claudeModel() } : {}),
+  ...(claudeEffort() !== 'xhigh' ? { effort: claudeEffort() } : {}),
+});
+function paintClaude() {
+  $('claudeRow').hidden = !CREDITS;
+  const free = claudeFree();
+  $('cModel').disabled = $('cEffort').disabled = free;
+  $('claudePlan').hidden = !free || !$('autoRow').hidden;  // said once: the length's row says it already
+}
+(() => {
+  let kept = {};
+  try { kept = JSON.parse(localStorage.getItem('kc.claude') || '{}') || {}; } catch (e) { /* private window */ }
+  if (CLAUDE_RATE[kept.model]) $('cModel').value = kept.model;
+  if ([...$('cEffort').options].some((o) => o.value === kept.effort)) $('cEffort').value = kept.effort;
+  for (const id of ['cModel', 'cEffort']) {
+    $(id).addEventListener('change', () => {
+      try { localStorage.setItem('kc.claude', JSON.stringify({ model: $('cModel').value, effort: $('cEffort').value })); } catch (e) { /* private window */ }
+      paintLength();
+    });
+  }
+})();
+const costOf = (v) => Math.max(v, (CREDITS && CREDITS.min_credits) || 0) * claudeRate();
 const shortOf = (v) => !!(CREDITS && costOf(v) > CREDITS.balance);
 // "Let Claude choose the length" (paid plans; the AUTO_LENGTH switch): the slider rests, the longest
 // film the balance and the plan allow is held, and the film uses only the length Claude gives it
 // (the site's lib/plans.js autoCap, lib/credits.js trim). The tick is remembered in this browser.
 const autoOn = () => !$('autoRow').hidden && !$('autoLen').disabled && $('autoLen').checked;
-const capOf = () => Math.max(CREDITS.min_credits || 0, Math.floor(Math.min(CREDITS.balance, maxOf()) / 5) * 5);
+const capOf = () => Math.max(CREDITS.min_credits || 0, Math.floor(Math.min(CREDITS.balance / claudeRate(), maxOf()) / 5) * 5);
 // the longest the slider allows: the plan's longest film, and no more than a Short's 3:00 for a tall one
 const maxOf = () => Math.min((CREDITS && CREDITS.max_length) || 60, frameOf() === '9:16' ? SHORT_MAX : Infinity);
 const lengthAsked = () => (autoOn() ? capOf() : +$('length').value);
@@ -2222,6 +2262,7 @@ function paintLength() {
   const max = maxOf(), shortCap = max < ((CREDITS && CREDITS.max_length) || 60);
   if (`${max}|${shortCap}` !== drawnMax) drawTrack(max, shortCap);
   paintAuto();
+  paintClaude();
   const auto = autoOn();
   el.disabled = auto;
   el.closest('.len').classList.toggle('auto', auto);
@@ -2245,7 +2286,7 @@ function paintLength() {
     c.classList.toggle('short', short);
     // a second account of one person has no free film to renew (lib/sameperson.js): its account page says why
     c.innerHTML = (auto ? `Up to ${costOf(ask)} credits: the film uses only the length Claude gives it`
-      : `${costOf(v)} credits${costOf(v) > v ? ' (the least a film uses)' : ''}`) + ` · you have ${mmss(CREDITS.balance)} left` +
+      : `${costOf(v)} credits${claudeRate() > 1 ? ` (Fable: ${claudeRate()} a second)` : costOf(v) > v ? ' (the least a film uses)' : ''}`) + ` · you have ${mmss(CREDITS.balance)} left` +
       (CREDITS.second ? ' · <a href="/account#second">no free film on a second account</a>' : CREDITS.refills === false ? '' : ` · renews ${renews()}`) +
       ' · <a href="/pricing">Get more film</a>' + (short ? ', or <a href="/account#invite">invite a friend for free film</a>' : '');
   }
@@ -3524,7 +3565,7 @@ $('form').addEventListener('submit', async (e) => {
     const ids = await attachmentIds(show);
     await PPL.ready(show);
     const send = (attachments) => api('/api/films', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, seconds: +$('length').value, ...(autoOn() ? { auto_length: true } : {}), look: lookOf(), ...frameBody(), ...(attachments.length ? { attachments, ...pictureRoles(attachments) } : {}), ...PPL.body() }) });
+      body: JSON.stringify({ prompt, seconds: +$('length').value, ...(autoOn() ? { auto_length: true } : {}), look: lookOf(), ...frameBody(), ...claudeBody(), ...(attachments.length ? { attachments, ...pictureRoles(attachments) } : {}), ...PPL.body() }) });
     let r = await send(ids);
     if (r.status === 409) {  // an attachment the studio no longer has (a day old): send it again, once
       const why = await r.clone().json().catch(() => ({}));

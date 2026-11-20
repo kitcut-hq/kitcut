@@ -745,6 +745,29 @@ def voice_note(film):
                 else ""
             )
         )
+    el = film.record().get("el_voices") or {}
+    if el.get("ids"):  # ElevenLabs voices the prompt names (film.prompt_voices)
+        return (
+            "\n\nThe voices are ElevenLabs voices the prompt names: %s (model %s, set by the "
+            "studio). This replaces the voice section's Gemini voices: leave `tts`, `model`, "
+            "`takes`, `jobs`, `lead` and `gap` as they are. Cast them as the prompt says: "
+            "`voice` is the narrator's id (the one the prompt gives the narrator; with none, the "
+            "first, %s), and each character who speaks gets their own id in `cast`, under a name "
+            'in lower case letters, digits and _: `"cast": {"rusty": {"voice": "<id>"}}`. Every '
+            'line a character says names them, `{"who": "rusty", "text": "..."}`, and says their '
+            "words exactly as the prompt or its script has them; a line with no `who` is the "
+            "narrator's. One voice is never given to two characters unless the prompt says so. "
+            "`style` is not read by ElevenLabs: how a line is said goes at its start as an audio "
+            'tag in square brackets, `{"text": "[worried, calling after him] Please be careful!"}` '
+            "(tags are not spoken, shown or counted as words), and never a whisper, which makes "
+            "every voice sound alike. A line moves a mouth only when the speaker is drawn with "
+            "one that talks: a character the film has as an actor (The actors) is cast under the "
+            "actor's own name and drawn with SK.actor while it speaks, so its mouth follows its "
+            "voice. A character with no actor is seen while their line plays and the line starts "
+            "on them, so it is always clear who speaks. Every line is recorded with KitCut's "
+            "ElevenLabs account: record once the words are final."
+            % (", ".join(el["ids"]), el.get("model"), el["ids"][0])
+        )
     if n.get("source") == "kitcut" and n.get("voice"):
         return (
             "\n\nThe narrator's voice is the person's choice: %s. Keep `voice` as it is in "
@@ -1071,6 +1094,8 @@ def _result_text(block):
 # bundles). Sonnet is here only to price a run already on record; the studio runs MODEL.
 PRICES = {
     "claude-opus-5-5": {"in": 4, "out": 20, "w5m": 5, "w1h": 8, "read": 0.2},
+    # a film the person asked to be made with Fable (film.CLAUDE_MODELS)
+    "claude-fable-5-2": {"in": 8, "out": 40, "w5m": 10, "w1h": 16, "read": 0.2},
     "claude-sonnet-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
 }
 # every run's record lives in kitcut's MongoDB (store.py); the outbox holds what could not be sent
@@ -1307,8 +1332,9 @@ async def run_claude(
         except RuntimeError as e:  # no Claude Code on this machine: the login cannot be used
             raise SignInError(str(e)) from None
     opts = ClaudeAgentOptions(
-        model=MODEL,
-        effort=effort or EFFORT,  # a pass of a film made in scenes thinks less (scenes.EFFORT)
+        model=film.claude_model or MODEL,  # the person's choice (kitcut.ai, paid plans)
+        # a pass of a film made in scenes thinks less (scenes.EFFORT), unless the person chose
+        effort=film.claude_effort or effort or EFFORT,
         cwd=film.dir,
         system_prompt={"type": "file", "path": sp},
         # the web: facts, and the real logos, pages and fonts of what a film is about (the
@@ -1326,7 +1352,7 @@ async def run_claude(
         },
         can_use_tool=can_use,
         max_turns=limits(film.length)["turns"],
-        max_budget_usd=budget_usd or limits(film.length)["budget_usd"],
+        max_budget_usd=budget_usd or limits(film.length, film.claude_model)["budget_usd"],
         # a review sheet of painted frames is a PNG of several MB, and it comes back to the SDK
         # as one message (the default limit, 1 MB, failed a painted film)
         max_buffer_size=64 * 1024 * 1024,
@@ -1598,8 +1624,8 @@ async def make_film(
     billed = auth == "api"  # on the login, Claude's tokens are covered by the plan
     summary = {
         "prompt": prompt,
-        "model": MODEL,
-        "effort": scenes.EFFORT if film.mode == "scenes" else EFFORT,
+        "model": film.claude_model or MODEL,
+        "effort": film.claude_effort or (scenes.EFFORT if film.mode == "scenes" else EFFORT),
         "length": length,
         "look": look,
         "release": RELEASE,
@@ -1612,7 +1638,15 @@ async def make_film(
             if k in carry
         }
     )
-    emit({"type": "job", "id": film.id, "model": MODEL, "length": length, "look": look})
+    emit(
+        {
+            "type": "job",
+            "id": film.id,
+            "model": film.claude_model or MODEL,
+            "length": length,
+            "look": look,
+        }
+    )
 
     def price():
         # the SDK's own figure when the run reached its end; the meter's when it did not. Not
@@ -1697,7 +1731,7 @@ async def make_film(
     def on_wait(pool, ahead):
         emit({"type": "wait", "pool": pool, "ahead": ahead, "text": waiting_text(pool, ahead)})
 
-    lim, talk = limits(length), {}
+    lim, talk = limits(length, film.claude_model), {}
     if film.mode == "scenes":  # every pass's allowance (scenes.film_claude_s), waits on top
         need = scenes.film_claude_s(film)
         if need > lim["claude_s"]:
@@ -1734,7 +1768,8 @@ async def make_film(
         within = lim if within is None else within
         m0 = meter.usd()
         budget0 = say.get("budget_usd") or max(
-            1.0, limits(length)["budget_usd"] - (carry.get("claude_cost_usd") or 0)
+            1.0,
+            limits(length, film.claude_model)["budget_usd"] - (carry.get("claude_cost_usd") or 0),
         )
         attempt = 0  # stalls so far (a plan limit is picked up once, and does not count)
         credit_retried = False  # the credit key's month ran out (apikey.CreditOut): once
@@ -2489,8 +2524,8 @@ def first_record(film, source, client):
         **({"member": rec["member"]} if rec.get("member") else {}),
         "host": store.HOST,
         "prompt": rec.get("prompt"),
-        "model": MODEL,
-        "effort": EFFORT,
+        "model": film.claude_model or MODEL,
+        "effort": film.claude_effort or EFFORT,
         "job": film.id,
         "length": rec.get("length"),
         # its length is Claude's to choose (pick_length): `length` is the longest until it has

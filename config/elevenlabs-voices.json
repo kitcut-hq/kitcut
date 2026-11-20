@@ -23,6 +23,13 @@
       "recommended": false,
       "note": "Only use if you need multilingual support or premium quality. 2x the cost."
     },
+    "eleven_v4": {
+      "cost_credits_per_character": 1.0,
+      "quality": "newest",
+      "latency": "slow",
+      "recommended": false,
+      "note": "the newest model on /v1/models (2026-11-19); supports [audio tags]. The studio reads a prompt's own ElevenLabs voices in it (studio/film.py prompt_voices). API list price $0.08 per 1K characters (elevenlabs.io/pricing/api, 2026-11-19), as v3; credits per character are not published for it."
+    },
     "eleven_v3": {
       "cost_credits_per_character": 1.0,
       "quality": "most expressive",

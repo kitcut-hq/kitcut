@@ -45,6 +45,35 @@
     "turn_left": "turned in a three-quarter view towards the left of the picture, arms relaxed"
   },
   "pose_mouths": ["open", "round"],
+  "bodies": {
+    "_": "What kind of figure an actor is (a spec's \"body\", default \"person\"): each body replaces the base, edit and pose prompts, the poses and the head's share of the figure. \"animal\" (2026-11-19, the Warriors cats on KitCut): a four-legged animal sitting upright and facing the viewer, whose head is the top of the figure like a person's, so the same cutting works; its poses stand, walk and lie on four legs and never use hands.",
+    "person": {},
+    "animal": {
+      "head": 0.4,
+      "base": "{describe} Full body, sitting upright on its haunches, front view, facing the viewer, the front legs straight and together, the tail curled round the front paws, a calm neutral expression with the mouth closed and the eyes open. The whole animal in frame from the tips of the ears to the paws, with a margin all round. One animal alone on a plain background: no ground, no cast shadow, no text, no logos.",
+      "edit": "This exact picture, identical in every way: the same animal, design, markings, proportions, outline, pose, framing, size, position and colours, on the same plain white background. One change only: {change}. Nothing else moves or changes: the ears, the fur and its markings, anything worn round the neck, the body, the legs, the paws and the tail stay exactly as they are, line for line.",
+      "pose": "The same animal as in this picture: identical design, markings, colours, anything it wears, proportions and size, drawn at the same scale with the paws at the same place, now {change}. A calm neutral face with the mouth closed. It stands and moves like a real animal, on four legs. One animal alone on a plain white background: no ground, no cast shadow, no text.",
+      "poses": {
+        "stand_right": "standing on all four legs in side view, facing the right of the picture, the tail held up",
+        "stand_left": "standing on all four legs in side view, facing the left of the picture, the tail held up",
+        "walk_right": "walking towards the right of the picture in side view, one front paw lifted mid-step",
+        "crouch": "crouched low on all four legs, ready to pounce, the tail stretched out behind, facing the viewer",
+        "lie": "lying down with the front paws stretched out in front, the head up, facing the viewer",
+        "turn_right": "sitting upright in a three-quarter view towards the right of the picture",
+        "turn_left": "sitting upright in a three-quarter view towards the left of the picture"
+      },
+      "pose_mouths": [
+        "open",
+        "round"
+      ],
+      "mouths": {
+        "small": "the mouth slightly open under the muzzle, a little of the pink inside showing, as in the middle of a soft 'eh'",
+        "open": "the jaw dropped and the mouth open wide under the muzzle, the pink inside and the tongue showing, as in the middle of a loud 'ah'",
+        "round": "the mouth a small open round 'o' under the muzzle, as in the middle of saying 'oo'",
+        "wide": "the mouth stretched wide in a flat open shape, two small pointed fangs showing at its corners and no flat front teeth, as in the middle of saying 'ee'"
+      }
+    }
+  },
   "gate": {
     "_": "the most a redraw may change outside the head, as a share of the figure; over it the redraw is drawn again (up to `retakes` times) and the best kept",
     "face": 0.025,

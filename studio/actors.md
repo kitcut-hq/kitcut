@@ -24,6 +24,9 @@ characters: bring them in where the episode has a part for them, and let them sp
 - Its voice: in `vo.json`, `cast` gives it a voice, `{"<name>": {"voice": "Puck", "style": "..."}}`,
   and a line it says names it: `{"who": "<name>", "text": "..."}`. Only its own lines move its
   mouth; a narrator's line (no `who`) does not, so the narrator and the actor can share a film.
+- An animal actor (its sheet shows it sitting upright, facing out) has poses on four legs (stand,
+  walk, crouch, lie): put its paws on the ground it sits on, and turn it with a pose, not `flip`
+  alone, when it has one facing that way.
 - `SK.actorBox(name, x, y, h, o)` is `{box, head}` without drawing it (to place a speech bubble,
   a label, the camera); `SK.actorHas(name)` is `{faces, poses, talk}`.
 - The pieces were drawn about 1400 px tall: keep the figure no taller than that on screen (camera

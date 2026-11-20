@@ -224,6 +224,54 @@ async def main():
         ):
             check(validate._vo(d, 6, 10, ppl) != [], "refused: " + what)
         check("cast" in validate.VO_KEYS, "the guard keeps cast when it pins vo.json")
+        # ElevenLabs voices the prompt names (film.prompt_voices): characters by name, those ids
+        R, S = "S0ypc51SmsvcKXTWvjqJ", "mrQhZWGbb2k9qWJb5qeA"
+        got = films.prompt_voices(
+            "Warriors fence scene. Voices on ElevenLabs: Rusty %s, Smudge %s, and Rusty again %s."
+            " Characterisations everywhere." % (R, S, R)
+        )
+        check(
+            got == {"ids": [R, S], "model": films.EL_MODEL},
+            "the prompt's voice ids, once each, in the newest model: %r" % got,
+        )
+        check(films.prompt_voices("Rusty %s" % R) is None, "no ElevenLabs in the prompt: none")
+        check(
+            films.prompt_voices("ElevenLabs, but characterisationsxx only") is None,
+            "a long word is not a voice id",
+        )
+        check(
+            films.prompt_voices("ElevenLabs %s in eleven_v3" % R)["model"] == "eleven_v3",
+            "a model the prompt names",
+        )
+        check(
+            films.prompt_voices("ElevenLabs %s in eleven_v9" % R)["model"] == films.EL_MODEL,
+            "a model ElevenLabs does not have is not taken",
+        )
+        el = {**films._prompt_pins({"model": films.EL_MODEL}), "voice": R, "language": "en"}
+        cats = {
+            **el,
+            "cast": {"rusty": {"voice": R}, "smudge": {"voice": S}},
+            "lines": [
+                {"who": "smudge", "text": "[alarmed] You're not going into those woods?"},
+                {"who": "rusty", "text": "Just for a look!"},
+                {"text": "He went anyway."},
+            ],
+        }
+        check(validate._vo(cats, 6, 10, [], voices=[R, S]) == [], "painted characters cast by name")
+        for what, d in (
+            ("a narrator voice the prompt did not name", {**cats, "voice": "Kore"}),
+            ("a cast voice it did not name", {**cats, "cast": {"rusty": {"voice": "Kore"}}}),
+            ("a speaker name that is not one", {**cats, "cast": {"Rusty!": {"voice": R}}}),
+            (
+                "a line whose speaker has no voice",
+                {**cats, "lines": [{"who": "princess", "text": "x"}]},
+            ),
+        ):
+            check(validate._vo(d, 6, 10, [], voices=[R, S]) != [], "refused: " + what)
+        check(
+            validate._vo({**cats, "voice": "Kore", "tts": "gemini"}, 6, 10, []) != [],
+            "without the prompt's voices a character is not cast by name",
+        )
         # a person's own ElevenLabs voice speaks for nobody else: in its film the people are seen,
         # not heard (its grant speaks in that one voice, and a voice is never put in another's mouth)
         own = {**ok, "tts": "elevenlabs", "voice": "a1B2c3D4e5F6g7H8i9J0", "model": "eleven_v3"}

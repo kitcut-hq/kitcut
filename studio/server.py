@@ -31,6 +31,9 @@ the day's budget still holds.
                                  queue. X-At-Once: N (from the site, for a plan that allows it):
                                  the account may have N films in the making instead of one.
                                  "listed": false keeps it out of the gallery (link-only).
+                                 "model": "claude-opus-5-5" | "claude-fable-5-2" and "effort":
+                                 low | medium | high | xhigh | max (from the site, paid plans):
+                                 the film's own Claude model and effort (film.CLAUDE_MODELS).
                                  "auto_length": true (from the site, paid plans): Claude picks
                                  the length, "seconds" the longest it may be; the record's
                                  "length" is the length picked once it is (agent.pick_length).
@@ -55,6 +58,10 @@ the day's budget still holds.
                                  style (library.PICTURE_ROLES). GET .../pictures/{name}/thumb.png
                                  and DELETE .../pictures/{name}, with ?project=; POST
                                  .../pictures/{name}/role {"project", "role"} changes its role
+    POST /api/library/characters/{name}/voice {"project", "voice", "style"}: the character
+                                 speaks in that voice in every episode from the next on (null:
+                                 the next episode chooses again); GET /api/library lists each
+                                 character's voice as "voices" (library.set_cast_voice)
     POST /api/library/characters {"project", "upload", "name", "about"}: an upload becomes a
                                  painted character of the project's cast (library.add_character):
                                  every future episode paints it from that picture. Its thumbnail
@@ -434,10 +441,11 @@ def site_auth():
     return "api" if os.environ.get("STUDIO_SITE_AUTH", "").strip() == "api" else "login"
 
 
-def reserve(seconds, auth="api"):
+def reserve(seconds, auth="api", model=None):
     """What a film being made may still spend, held against the day's budget: all of it on the
-    key; on this machine's login only the voice and the paintings are paid for."""
-    return films.limits(seconds)["reserve_usd"] if auth == "api" else 0.01 * seconds
+    key; on this machine's login only the voice and the paintings are paid for. model: the
+    film's own Claude model (a Fable film may spend twice the dollars)."""
+    return films.limits(seconds, model)["reserve_usd"] if auth == "api" else 0.01 * seconds
 
 
 def live(status=("queued", "running")):
@@ -594,7 +602,7 @@ def start(film, finish_only=False, resume=None):
         "t0": time.time() - (before[-1]["t"] if before else 0),
         "client": film.record().get("client", "local"),
         "auth": film.record().get("auth", "api"),
-        "reserve": reserve(film.length, film.record().get("auth", "api")),
+        "reserve": reserve(film.length, film.record().get("auth", "api"), film.claude_model),
         "control": {},
         "ended": None,
     }
@@ -620,7 +628,7 @@ def start(film, finish_only=False, resume=None):
         elif ev["type"] == "fallback":
             # the login failed and the film is being made on the key (agent.make_film): from here
             # it is held against the day's budget as a film on the key
-            J["auth"], J["reserve"] = "api", reserve(film.length, "api")
+            J["auth"], J["reserve"] = "api", reserve(film.length, "api", film.claude_model)
         told.event(ev)
 
     async def run():
@@ -1345,6 +1353,18 @@ async def create(req):
     # Claude picks the length, `seconds` the longest it may be (kitcut.ai: paid plans; agent.
     # pick_length). Never a template's: it keeps its own
     auto_length = body.get("auto_length") is True and not tpl
+    # the Claude model and effort the person chose (kitcut.ai: paid plans; the site charges a Fable
+    # film three times the credits): one this studio does not make films with is refused, never
+    # quietly made with another
+    model, effort = body.get("model"), body.get("effort")
+    if model is not None and model not in films.CLAUDE_MODELS:
+        return web.json_response(
+            {"error": "model must be one of: %s" % ", ".join(films.CLAUDE_MODELS)}, status=400
+        )
+    if effort is not None and effort not in films.EFFORTS:
+        return web.json_response(
+            {"error": "effort must be one of: %s" % ", ".join(films.EFFORTS)}, status=400
+        )
     # the site's project the film is an episode of: {id, name, brief, from_account_cast}. The
     # site checks it is the person's (trusted like X-Client-Ip); its library is theirs anyway
     project = body.get("project")
@@ -1455,7 +1475,9 @@ async def create(req):
         others = peers.peers()  # the films the other live servers are making count too
         if len(everyone(("queued",), others)) >= MAX_QUEUE:
             return web.json_response({"error": "the queue is full; try again later"}, status=429)
-        refused = await over_limit(client, seconds, auth, at_once, others)
+        refused = await over_limit(
+            client, seconds, auth, at_once, others, need=reserve(seconds, auth, model)
+        )
         if refused:
             return web.json_response({"error": refused}, status=429)
         # an account that may make two at once can send the same upload twice: the film admitted
@@ -1489,6 +1511,8 @@ async def create(req):
             captions=captions,
             music=music,
             auto_length=auto_length,
+            model=model,
+            effort=effort,
         )
         if preview:
             f.update(preview=True)
@@ -2546,6 +2570,33 @@ async def character_add(req):
     return web.json_response(entry, status=201)
 
 
+async def character_voice(req):
+    """A project character's voice, held in every episode from the next one on: {"project": id,
+    "voice": one of the studio's voices, or null to let the next episode choose again, "style":
+    how it speaks (one line; left out: the one it had)}. Answers {"voice": the entry or null}."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict) or "voice" not in body:
+        return web.json_response({"error": 'send {"project", "voice", "style"}'}, status=400)
+    client, project = client_of(req), str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project) or not library.owner(client, project):
+        return web.json_response({"error": "No such project."}, status=404)
+    try:
+        entry = await asyncio.to_thread(
+            library.set_cast_voice,
+            client,
+            project,
+            req.match_info["name"],
+            body.get("voice"),
+            body.get("style"),
+        )
+    except library.PictureError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response({"voice": entry})
+
+
 async def picture_delete(req):
     """Take a picture out of the asker's project: ?project=<id>."""
     name, project = req.match_info["name"], project_of(req)
@@ -2867,6 +2918,17 @@ async def versions_make(req):
             return web.json_response({"error": bad}, status=400)
         if (voice or {}).get("source") != "elevenlabs":
             voice = None  # KitCut's own voices need no pass
+    # the round's own Claude model and effort (kitcut.ai's Edit film menus, paid plans): one this
+    # studio does not make films with is refused, never swapped
+    claude = {k: body.get(k) for k in ("model", "effort") if body.get(k) is not None}
+    if claude.get("model") is not None and claude["model"] not in films.CLAUDE_MODELS:
+        return web.json_response(
+            {"error": "model must be one of: %s" % ", ".join(films.CLAUDE_MODELS)}, status=400
+        )
+    if claude.get("effort") is not None and claude["effort"] not in films.EFFORTS:
+        return web.json_response(
+            {"error": "effort must be one of: %s" % ", ".join(films.EFFORTS)}, status=400
+        )
     try:
         notes = (
             []
@@ -2889,7 +2951,7 @@ async def versions_make(req):
             auth,
             at_once_of(req),
             peers.peers(),
-            need=rounds.reserve(f, len(notes), auth),
+            need=rounds.reserve(f, len(notes), auth, claude.get("model")),
             films_day=False,
         )
         if refused:
@@ -2913,6 +2975,7 @@ async def versions_make(req):
                 src=body.get("from"),
                 hand=hand,
                 voice=voice,
+                claude=claude if hand is None else None,
             )
         except rounds.RoundError as e:
             return _round_error(e)
@@ -3348,6 +3411,7 @@ def make_app(token):
             web.get("/api/library", library_list),
             web.post("/api/library/pictures", picture_add),
             web.post("/api/library/characters", character_add),
+            web.post("/api/library/characters/{name}/voice", character_voice),
             web.post("/api/library/from-film", from_film),
             web.get("/api/library/from-film", from_film_state),
             web.post("/api/library/ideas", series_ideas),

@@ -477,6 +477,11 @@ def seed(film):
         got["pictures"] = _seed_pictures(film, lib, idx)
         got["painted"] = _seed_painted(film, lib, idx)
         got["voice"] = _seed_voice(film, lib, idx)
+        # its characters' voices as they are now: what guard.pin_cast holds the film to
+        got["voices"] = {
+            n: {"voice": e["voice"], "style": e.get("style") or ""}
+            for n, e in cast_voices(lib, idx).items()
+        }
         try:  # the project's brand (brandkit.py): its faces, logos and brand.js
             got["brand"] = brandkit.seed(film, lib)
         except Exception as e:  # noqa: BLE001 -- an episode is made without it rather than not
@@ -827,6 +832,9 @@ def note(film):
         out += ["" if out else None, told]
     if got.get("actors"):
         out += ["" if out else None, actors_note(got["actors"])]
+    told = voices_note(got.get("voices"))
+    if told:
+        out += ["" if out else None, told]
     if voice:
         out += [
             "" if out else None,
@@ -1389,6 +1397,7 @@ def _keep(film, lib, items, pictures):
         if n in told:  # this film was given the clashed copies to fold in, and saved its own
             shutil.rmtree(os.path.join(d, CLASHED, n), ignore_errors=True)
     painted, refused = _keep_painted(film, lib, idx, now) if lib[1] else ([], [])
+    voiced = _keep_voices(film, idx, now) if lib[1] else []
     names = used(film) + painted_used(film)
     for n in names:
         e = idx["cast"].get(n)
@@ -1404,6 +1413,8 @@ def _keep(film, lib, items, pictures):
     out = {"saved": saved, "used": [n for n in names if n in idx["cast"]]}
     if painted:
         out["painted"] = painted
+    if voiced:
+        out["voices"] = voiced
     if refused or taken:
         out["painted_refused"] = refused + taken
     if merged:
@@ -1442,6 +1453,8 @@ def listing(client, project=None):
             for n, e in sorted(idx["actors"].items())
         ]
         out["clashed"] = [{"name": c["name"], "film": c["film"]} for c in clashed_of(lib, idx)]
+        # each character's voice, held in every episode (set_cast_voice, _keep_voices)
+        out["voices"] = [{"name": n} | e for n, e in sorted(cast_voices(lib, idx).items())]
     return out
 
 
@@ -1780,7 +1793,9 @@ def mentioned(client, project, prompt):
     named, typos = [], {}
     for w in MENTION.findall(prompt or ""):
         n = w.lower()
-        if PICTURE_MENTION.fullmatch("@" + n):  # the film's own picture (picture_places), no character
+        if PICTURE_MENTION.fullmatch(
+            "@" + n
+        ):  # the film's own picture (picture_places), no character
             continue
         if n in live:
             if n not in named:
@@ -2118,6 +2133,113 @@ def _seed_voice(film, lib, idx):
     if index:
         _write_json(os.path.join(d, "index.json"), index)
     return out
+
+
+# ---------------------------------------------------------------- a project's character voices
+# Each character of a project speaks in one voice, episode after episode (owner, 2026-11-20: "it is
+# a must"). The first finished episode in which a character speaks records the voice it was given
+# (_keep_voices); from then on that voice is the character's: a later episode is told it (note),
+# and its vo.json is put back to it whenever Claude writes another (guard.pin_cast). The person
+# changes it, or unlocks it so the next episode chooses again, on the project's Cast tab
+# (set_cast_voice). Gemini's voices only (validate.VOICES): a film read in ElevenLabs voices -- the
+# person's own narrator, or the voices its prompt names -- neither records nor is held to any.
+CAST_VOICES = "voices"  # the index's {name: {voice, style, by: film | person, film, updated}}
+PERSON_ID = re.compile(r"^p\d+$")  # a film's people (p1...) are its own, never the project's
+
+
+def _gemini_voices():
+    import validate  # noqa: PLC0415 -- it loads the narration modules; only a voice needs them
+
+    return validate.VOICES
+
+
+def _own_voices(vo, rec):
+    """Whether a film is read in ElevenLabs voices: then no character voice is recorded or held."""
+    return vo.get("tts") == "elevenlabs" or bool(rec.get("el_voices"))
+
+
+def _keep_voices(film, idx, now):
+    """The voice each character who spoke in this finished episode was given, for the ones the
+    project has none for yet. Returns their names."""
+    try:
+        with open(film.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+    except (OSError, ValueError):
+        return []
+    if not isinstance(vo, dict) or _own_voices(vo, film.record()):
+        return []
+    cast = vo.get("cast") if isinstance(vo.get("cast"), dict) else {}
+    spoke = {
+        ln["who"]
+        for ln in vo.get("lines") or []
+        if isinstance(ln, dict) and isinstance(ln.get("who"), str)
+    }
+    have, got = idx.setdefault(CAST_VOICES, {}), []
+    for name in sorted(spoke):
+        spec = cast.get(name)
+        if name in have or not NAME.match(name) or PERSON_ID.match(name):
+            continue
+        if not isinstance(spec, dict) or spec.get("voice") not in _gemini_voices():
+            continue
+        style = spec.get("style") if isinstance(spec.get("style"), str) else ""
+        have[name] = {"voice": spec["voice"], "style": style[:300], "by": "film", "film": film.id}
+        have[name]["updated"] = now
+        got.append(name)
+    return got
+
+
+def cast_voices(lib, idx=None):
+    """A project's characters' voices: {name: {voice, style, by, film, updated}}."""
+    return dict((idx or load(lib)).get(CAST_VOICES) or {})
+
+
+def set_cast_voice(client, project, name, voice, style=None):
+    """The person's choice on the Cast tab: `name` speaks in `voice` from the next episode on
+    (style: how, one line; None keeps the one it had), or voice None unlocks it. Returns the entry,
+    or None when unlocked; raises PictureError(status, words)."""
+    lib = owner(client, project)
+    if not lib or not lib[1]:
+        raise PictureError(404, "No such project.")
+    if not isinstance(name, str) or not NAME.match(name) or PERSON_ID.match(name):
+        raise PictureError(400, "A character's name is lower case letters, digits and _.")
+    if voice is not None and voice not in _gemini_voices():
+        raise PictureError(400, "The voice is one of: %s." % ", ".join(_gemini_voices()))
+    if style is not None and (not isinstance(style, str) or len(style) > 300):
+        raise PictureError(400, "How it speaks is one line of text (at most 300 characters).")
+    with _lock(lib):
+        idx = load(lib)
+        have = idx.setdefault(CAST_VOICES, {})
+        if voice is None:
+            have.pop(name, None)
+            _save(lib, idx)
+            return None
+        was = have.get(name) or {}
+        have[name] = {
+            "voice": voice,
+            "style": (was.get("style") or "") if style is None else style.strip(),
+            "by": "person",
+            "updated": datetime.now().isoformat(timespec="seconds"),
+        }
+        _save(lib, idx)
+        return {"name": name} | have[name]
+
+
+def voices_note(voices):
+    """What an episode is told about its characters' voices ("" for none)."""
+    if not voices:
+        return ""
+    lines = [
+        "The voices of this project's characters: each speaks in the same voice in every "
+        "episode. When one of them speaks, give it this voice in vo.json cast (the studio puts it "
+        "back if another is written); you may write its style for this episode's scene. A "
+        "character who speaks for the first time gets the voice you choose, and keeps it in the "
+        "next episodes:"
+    ]
+    for n, v in sorted(voices.items()):
+        lines.append(
+            "- %s: %s%s" % (n, v["voice"], ' ("%s")' % v["style"] if v.get("style") else "")
+        )
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------- a project's actors
