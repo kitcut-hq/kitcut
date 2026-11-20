@@ -1836,7 +1836,7 @@ async function loadCrumbs(id) {
     const r = await fetch(`/api/projects/film/${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
     if (!r.ok || id !== currentId) return;  // a visitor, or not a film the Studio shows them
     const b = await r.json();
-    if (b && b.film) { CRUMB = { id, film: b.film }; drawCrumbs(); }
+    if (b && b.film) { CRUMB = { id, film: b.film }; drawCrumbs(); drawSide(); }
   } catch (e) { /* the film plays without its trail */ } finally { if (CRUMB_LOADING === id) CRUMB_LOADING = null; }
 }
 window.addEventListener('hashchange', drawCrumbs);
@@ -2129,7 +2129,9 @@ $('lgOpen').addEventListener('click', lgOpen);
 // ---- the sign-up wall, on the public site only. /api/me exists where the site has accounts
 // (Vercel, api/auth.js); on the laptop and through the bare tunnel it is not found, AUTH stays
 // false, and the page works as it always has. Watching films needs no account; making one does.
-let AUTH = false, USER = null, GOOGLE = false, CREDITS = null, GATES = {};
+let AUTH = false, USER = null, GOOGLE = false, CREDITS = null, GATES = {}, ORGS = null;
+// the bar as the Studio draws it: the account, its credits and, where workspaces are open, the switcher
+const barMe = () => ({ user: USER, credits: USER ? CREDITS : null, ...(GATES.orgs && ORGS ? { orgs: ORGS, gates: GATES } : {}) });
 const SIGNIN_ERRORS = {
   link: 'That sign-in link is invalid or has expired. Request a fresh one.',
   google: "Google sign-in didn't complete. Try again, or use the email link.",
@@ -2159,11 +2161,15 @@ if (!KC) $('app').classList.add('solo');
 let PROJECTS = null;  // the account's projects, for the sidebar (null: a visitor)
 function drawSide() {
   $('barPage').textContent = currentId ? 'Film' : 'Make a film';
-  if (KC && AUTH) KC.side(USER ? PROJECTS || [] : null, { here: currentId ? 'films' : 'make', soon: !PROJECTS });
+  // a film of theirs opened from the Studio (Edit film) sits under its project there, as its Studio page does;
+  // any other film under Video examples
+  const proj = currentId && crumbsWanted() ? ((CRUMB && CRUMB.id === currentId && CRUMB.film.project) || (crumbSeed(currentId) || {}).project || null) : null;
+  const studio = currentId && crumbsWanted();
+  if (KC && AUTH) KC.side(USER ? PROJECTS || [] : null, { here: studio ? 'studio' : currentId ? 'films' : 'make', pid: proj ? proj.id : null, soon: !PROJECTS });
 }
 function renderAccount() {
   if (!KC) return;
-  KC.bar({ user: USER, credits: USER ? CREDITS : null }, { onSignIn: () => askSignIn() });
+  KC.bar(barMe(), { onSignIn: () => askSignIn() });
   drawSide();
   if (USER && !PROJECTS) {
     fetch('/api/projects', { headers: { Accept: 'application/json' } }).then((r) => (r.ok ? r.json() : null)).then((b) => {
@@ -2321,7 +2327,7 @@ async function refreshCredits() {
   try {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
-    if (me && me.credits) { CREDITS = me.credits; paintLength(); if (KC) KC.bar({ user: USER, credits: CREDITS }, { onSignIn: () => askSignIn() }); }
+    if (me && me.credits) { CREDITS = me.credits; paintLength(); if (KC) KC.bar(barMe(), { onSignIn: () => askSignIn() }); }
   } catch (e) { /* the balance on screen stays as it was */ }
 }
 
@@ -2330,7 +2336,7 @@ async function whoami() {
     const r = await fetch('/api/me', { headers: { Accept: 'application/json' } });
     const me = r.ok ? await r.json() : null;
     if (!me || !me.auth) return;  // no accounts here, or not answered: the remembered bar stays
-    AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube; GATES = me.gates || {};
+    AUTH = true; USER = me.user; GOOGLE = !!me.google; CREDITS = me.credits || null; YT = !!me.youtube; GATES = me.gates || {}; ORGS = me.orgs || null;
     if (USER) document.documentElement.dataset.member = '1'; else delete document.documentElement.dataset.member;
   } catch (e) { return; }
   try { $('autoLen').checked = localStorage.getItem('autoLength') === '1'; } catch (e) { /* private window */ }
