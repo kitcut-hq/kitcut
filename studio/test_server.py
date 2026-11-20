@@ -846,6 +846,35 @@ async def main():
             r.status == 400 and said.get("reason") == "prompt" and "Shorten" in said["error"],
             "a prompt longer than the studio reads is refused, not cut (it was cut at 12,000)",
         )
+        # the person's own Claude model and effort (kitcut.ai's picker, paid plans)
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "x" * 10, "seconds": 15, "model": "claude-haiku-5-5"},
+            headers=auth,
+        )
+        check(
+            r.status == 400 and "model" in (await r.json())["error"],
+            "a model the studio does not make films with is refused, never swapped",
+        )
+        r = await c.post(
+            "/api/films", json={"prompt": "x" * 10, "seconds": 15, "effort": "huge"}, headers=auth
+        )
+        check(r.status == 400 and "effort" in (await r.json())["error"], "an unknown effort too")
+        check(
+            films.limits(30, "claude-fable-5-2")["budget_usd"] == 2 * films.limits(30)["budget_usd"]
+            and films.limits(30, "claude-fable-5-2")["reserve_usd"]
+            == 2 * films.limits(30)["reserve_usd"],
+            "a Fable film may spend twice the dollars: its tokens cost twice Opus's",
+        )
+        fab = films.Film.create(
+            "a fable", 15, "drawn", client="u:fab", model="claude-fable-5-2", effort="max"
+        )
+        plain = films.Film.create("a plain one", 15, "drawn", client="u:fab", model="gpt-9")
+        check(
+            (fab.claude_model, fab.claude_effort) == ("claude-fable-5-2", "max")
+            and (plain.claude_model, plain.claude_effort) == (None, None),
+            "a film keeps the model and effort chosen for it, and nothing else",
+        )
 
         # ------------------------------------------------ three films at once, three clients
         ids = []
@@ -1238,7 +1267,9 @@ async def main():
 
         # ------------------------------------------------ Claude past its time
         real_limits = agent.limits
-        agent.limits = lambda n: real_limits(n) | ({"claude_s": 3} if n in (20, 25, 30) else {})
+        agent.limits = lambda n, model=None: (
+            real_limits(n, model) | ({"claude_s": 3} if n in (20, 25, 30) else {})
+        )
         r1 = await c.post(
             "/api/films",
             json={"prompt": "overtime, the film written", "seconds": 20},

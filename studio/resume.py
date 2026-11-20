@@ -59,7 +59,7 @@ def session_file(film):
 def plan(film, minutes=None):
     """What resuming would do, from the files alone: nothing is spent."""
     rec = film.record()
-    lim = limits(film.length)
+    lim = limits(film.length, film.claude_model)
     used = (rec.get("stages") or {}).get("claude") or rec.get("seconds") or 0
     work = minutes * 60 if minutes else max(agent.RESUME_MIN_S, lim["claude_s"] - used)
     missing = [f for f in MADE if not os.path.exists(film.path(f))]
