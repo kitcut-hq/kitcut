@@ -31,6 +31,9 @@ the day's budget still holds.
                                  queue. X-At-Once: N (from the site, for a plan that allows it):
                                  the account may have N films in the making instead of one.
                                  "listed": false keeps it out of the gallery (link-only).
+                                 "model": "claude-opus-5-5" | "claude-fable-5-2" and "effort":
+                                 low | medium | high | xhigh | max (from the site, paid plans):
+                                 the film's own Claude model and effort (film.CLAUDE_MODELS).
                                  "auto_length": true (from the site, paid plans): Claude picks
                                  the length, "seconds" the longest it may be; the record's
                                  "length" is the length picked once it is (agent.pick_length).
@@ -434,10 +437,11 @@ def site_auth():
     return "api" if os.environ.get("STUDIO_SITE_AUTH", "").strip() == "api" else "login"
 
 
-def reserve(seconds, auth="api"):
+def reserve(seconds, auth="api", model=None):
     """What a film being made may still spend, held against the day's budget: all of it on the
-    key; on this machine's login only the voice and the paintings are paid for."""
-    return films.limits(seconds)["reserve_usd"] if auth == "api" else 0.01 * seconds
+    key; on this machine's login only the voice and the paintings are paid for. model: the
+    film's own Claude model (a Fable film may spend twice the dollars)."""
+    return films.limits(seconds, model)["reserve_usd"] if auth == "api" else 0.01 * seconds
 
 
 def live(status=("queued", "running")):
@@ -594,7 +598,7 @@ def start(film, finish_only=False, resume=None):
         "t0": time.time() - (before[-1]["t"] if before else 0),
         "client": film.record().get("client", "local"),
         "auth": film.record().get("auth", "api"),
-        "reserve": reserve(film.length, film.record().get("auth", "api")),
+        "reserve": reserve(film.length, film.record().get("auth", "api"), film.claude_model),
         "control": {},
         "ended": None,
     }
@@ -620,7 +624,7 @@ def start(film, finish_only=False, resume=None):
         elif ev["type"] == "fallback":
             # the login failed and the film is being made on the key (agent.make_film): from here
             # it is held against the day's budget as a film on the key
-            J["auth"], J["reserve"] = "api", reserve(film.length, "api")
+            J["auth"], J["reserve"] = "api", reserve(film.length, "api", film.claude_model)
         told.event(ev)
 
     async def run():
@@ -1345,6 +1349,18 @@ async def create(req):
     # Claude picks the length, `seconds` the longest it may be (kitcut.ai: paid plans; agent.
     # pick_length). Never a template's: it keeps its own
     auto_length = body.get("auto_length") is True and not tpl
+    # the Claude model and effort the person chose (kitcut.ai: paid plans; the site charges a Fable
+    # film three times the credits): one this studio does not make films with is refused, never
+    # quietly made with another
+    model, effort = body.get("model"), body.get("effort")
+    if model is not None and model not in films.CLAUDE_MODELS:
+        return web.json_response(
+            {"error": "model must be one of: %s" % ", ".join(films.CLAUDE_MODELS)}, status=400
+        )
+    if effort is not None and effort not in films.EFFORTS:
+        return web.json_response(
+            {"error": "effort must be one of: %s" % ", ".join(films.EFFORTS)}, status=400
+        )
     # the site's project the film is an episode of: {id, name, brief, from_account_cast}. The
     # site checks it is the person's (trusted like X-Client-Ip); its library is theirs anyway
     project = body.get("project")
@@ -1455,7 +1471,9 @@ async def create(req):
         others = peers.peers()  # the films the other live servers are making count too
         if len(everyone(("queued",), others)) >= MAX_QUEUE:
             return web.json_response({"error": "the queue is full; try again later"}, status=429)
-        refused = await over_limit(client, seconds, auth, at_once, others)
+        refused = await over_limit(
+            client, seconds, auth, at_once, others, need=reserve(seconds, auth, model)
+        )
         if refused:
             return web.json_response({"error": refused}, status=429)
         # an account that may make two at once can send the same upload twice: the film admitted
@@ -1489,6 +1507,8 @@ async def create(req):
             captions=captions,
             music=music,
             auto_length=auto_length,
+            model=model,
+            effort=effort,
         )
         if preview:
             f.update(preview=True)

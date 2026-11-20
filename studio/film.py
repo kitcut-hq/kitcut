@@ -360,12 +360,22 @@ def may_run_to(asked, frame=None):
     return max(int(asked), top)
 
 
-def limits(length):
+# The Claude models a film may be made with (kitcut.ai's model picker, paid plans; the site charges
+# a Fable film three times the credits), each with what a token costs against the studio's own,
+# Opus 5.5: a film's dollar budget grows by it, so a Fable film gets the same work, not half of it.
+CLAUDE_MODELS = {"claude-opus-5-5": 1.0, "claude-fable-5-2": 2.0}
+# how hard Claude thinks (the CLI's --effort), when the person chose it
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+
+def limits(length, model=None):
     """What one film may take, by its length in seconds. The 5-15 s figures are measured; past
     that they grow with the length (a minute of film is more work, not four times the thinking).
-    STUDIO_MAX_USD caps Claude's spend on any one film when set."""
+    STUDIO_MAX_USD caps Claude's spend on any one film when set. model: the film's own Claude
+    model (Film.claude_model), whose price scales the dollar figures."""
     extra = max(0, length - 15)
     cap = os.environ.get("STUDIO_MAX_USD")
+    rate = CLAUDE_MODELS.get(model) or 1.0
     # the machine steps' timeouts were measured on the laptop; a slower machine (a CPU-only VM)
     # scales them rather than failing films that are only taking longer (docs/studio-speed.md)
     slow = float(os.environ.get("STUDIO_MACHINE_SLOWDOWN") or 1)
@@ -374,12 +384,11 @@ def limits(length):
         # took 4.6-12 min and a 30 s one 14.5 (2026-09-26); a 60 s one ran past 22.5
         "claude_s": 20 * 60 + extra * 15,
         "wall_s": 60 * 60 + extra * 25,  # its phase, waits included
-        "budget_usd": float(cap) if cap else max(5.0, 0.12 * length),
+        "budget_usd": (float(cap) if cap else max(5.0, 0.12 * length)) * rate,
         # what a film being made may still spend, held against the day's budget: from the films
         # so far, about $0.33 + $0.05 a second, with room
-        "reserve_usd": max(
-            float(os.environ.get("STUDIO_RESERVE_USD") or 1.5), 0.35 + 0.06 * length
-        ),
+        "reserve_usd": max(float(os.environ.get("STUDIO_RESERVE_USD") or 1.5), 0.35 + 0.06 * length)
+        * rate,
         "render_s": int(slow * (300 + 15 * length)),
         "sound_s": int(slow * max(300, 120 + 5 * length)),
         "voice_s": int(slow * max(300, 180 + 5 * length)),
@@ -861,6 +870,19 @@ class Film:
         return "painted" if os.path.exists(self.path("paint.json")) else "drawn"
 
     @property
+    def claude_model(self):
+        """The Claude model the person chose for it (kitcut.ai, paid plans), or None: the
+        studio's own (agent.MODEL)."""
+        m = self.record().get("model")
+        return m if m in CLAUDE_MODELS else None
+
+    @property
+    def claude_effort(self):
+        """The effort the person chose for it, or None: the studio's own for each pass."""
+        e = self.record().get("effort")
+        return e if e in EFFORTS else None
+
+    @property
     def caps(self):
         """What it may be made of (CAPS): fixed in its record when it was made, so a later change
         to its look's recipe never reaches a film already made, or one picked up after a ship.
@@ -1177,6 +1199,8 @@ class Film:
         captions=False,
         music=True,
         auto_length=False,
+        model=None,
+        effort=None,
     ):
         """A new film's folder: the manifest (its length set), the engine copy, an empty
         narration, an empty list of paintings for a painted film, and its record.
@@ -1402,6 +1426,9 @@ class Film:
                 "length": seconds,  # the film's; "seconds" is later how long making it took
                 # Claude picks the length, up to length_max (agent.pick_length, relength)
                 **({"auto_length": True, "length_max": seconds} if auto else {}),
+                # the Claude model and effort the person chose (kitcut.ai, paid plans)
+                **({"model": model} if model in CLAUDE_MODELS else {}),
+                **({"effort": effort} if effort in EFFORTS else {}),
                 "client": client,
                 # who asked: a member of the client's workspace (clients.py; the site's X-Member)
                 **({"member": member} if member else {}),
