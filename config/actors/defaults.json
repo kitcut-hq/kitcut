@@ -65,7 +65,13 @@
       "pose_mouths": [
         "open",
         "round"
-      ]
+      ],
+      "mouths": {
+        "small": "the mouth slightly open under the muzzle, a little of the pink inside showing, as in the middle of a soft 'eh'",
+        "open": "the jaw dropped and the mouth open wide under the muzzle, the pink inside and the tongue showing, as in the middle of a loud 'ah'",
+        "round": "the mouth a small open round 'o' under the muzzle, as in the middle of saying 'oo'",
+        "wide": "the mouth stretched wide in a flat open shape, two small pointed fangs showing at its corners and no flat front teeth, as in the middle of saying 'ee'"
+      }
     }
   },
   "gate": {

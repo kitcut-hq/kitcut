@@ -40,6 +40,12 @@ Invoke as:
     python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --cap 3 --jobs 6
     python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --retake face:angry
     python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --pack-only
+    python scripts/actor-pack.py --spec projects/<id>/actors/enrique.json --external <dir>
+
+--external <dir> draws nothing itself: each picture still missing is listed in <dir>/jobs.json
+(its prompt, and the picture it is redrawn from in <dir>/refs/), for a model's web app in a
+signed-in browser (tools/actor-web); pictures saved as <dir>/out/<key>.png are taken on the next
+run and gated like any other. Run it again after each batch: a mouth waits for its face.
 """
 
 import sys
@@ -207,11 +213,65 @@ def fingerprint(a, prompt, ref_fp):
     return h.hexdigest()[:12]
 
 
+class Waiting(Exception):
+    """An --external picture nobody has drawn yet: listed in jobs.json, taken on the next run."""
+
+
+_JOBS = threading.Lock()
+
+
+def draw_external(a, prompt, ref_path, out_path, what):
+    """--external DIR: the picture is drawn somewhere else (a model's own web app in a signed-in
+    browser: tools/actor-web). DIR/out/<key>.png (or .jpg/.webp) is taken when it is there, where
+    <key> is the raw picture's name (face__happy, mouth__neutral__open.r1); otherwise the job --
+    its prompt and the picture it is redrawn from, copied to DIR/refs/<key>.png -- is listed in
+    DIR/jobs.json and Waiting raised. It is then gated like any redraw."""
+    d = a["external"]
+    key = os.path.splitext(os.path.basename(out_path))[0]
+    try:
+        with open(os.path.join(d, "jobs.json"), encoding="utf-8") as f:
+            listed = {j.get("key"): j.get("prompt") for j in json.load(f)}
+    except (OSError, ValueError):
+        listed = {}
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        got = os.path.join(d, "out", key + ext)
+        if os.path.exists(got) and listed.get(key, prompt) != prompt:
+            # drawn for a prompt since changed (a reworded face or mouth): set aside, listed again
+            os.replace(got, os.path.join(d, "out", key + "_stale" + ext))
+        elif os.path.exists(got):
+            arr = cv2.imread(got, cv2.IMREAD_UNCHANGED)
+            if arr is None:
+                raise RuntimeError("%s is not a picture" % got)
+            cv2.imwrite(out_path, arr)
+            return
+    with _JOBS:
+        os.makedirs(os.path.join(d, "refs"), exist_ok=True)
+        os.makedirs(os.path.join(d, "out"), exist_ok=True)
+        ref_rel = None
+        if ref_path:
+            ref_rel = "refs/%s.png" % key
+            shutil.copyfile(ref_path, os.path.join(d, ref_rel))
+        p = os.path.join(d, "jobs.json")
+        try:
+            with open(p, encoding="utf-8") as f:
+                jobs_ = json.load(f)
+        except (OSError, ValueError):
+            jobs_ = []
+        jobs_ = [j for j in jobs_ if j.get("key") != key]
+        jobs_.append({"key": key, "what": what, "prompt": prompt, "ref": ref_rel})
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(jobs_, f, indent=1, ensure_ascii=False)
+    raise Waiting(key)
+
+
 def draw_one(a, book, prompt, ref_path, out_path, what, transparent=False):
     """One picture from the model, saved as PNG. Only the base is asked for on a transparent
     background (where the model has one): measured 2026-10-17, gpt-image-2.5-sunburst's
     transparent redraws came back with a cloudy half-transparent halo round the figure in half of
     them (drift 40-160 %), while the same redraws on white keyed cleanly (drift ~1 %)."""
+    if a.get("external"):
+        draw_external(a, prompt, ref_path, out_path, what)
+        return 0.0
     caps = SP.model_caps(a["model"])
     alpha = transparent and SP.gives_alpha(caps)
     data, meta = SP.paint_openrouter(
@@ -256,10 +316,15 @@ def run_job(a, book, est, job, fig, aligned, retake):
         t0 = time.time()
         try:
             cost = draw_one(a, book, prompt, ref_path, os.path.join(a["out"], rel), i)
+        except Waiting:
+            print("  %-26s waiting: listed in %s" % (i, os.path.join(a["external"], "jobs.json")))
+            break
         except Exception as ex:  # noqa: BLE001 -- one refused picture must not stop the pack
             print("  %-26s FAILED: %s" % (i, str(ex)[:160]))
             break
         row = {"file": rel, "usd": cost, "s": round(time.time() - t0, 1)}
+        if a.get("external"):
+            row["by"] = "external"  # drawn outside (--external): not the spec's model
         if gate:
             _, _, info = measure(aligned[ref], os.path.join(a["out"], rel), fig)
             row.update(drift=info["drift"], fit=info["fit"], scale=info["scale"])
@@ -668,8 +733,16 @@ def main():
     ap.add_argument(
         "--pack-only", action="store_true", help="re-cut and re-pack what is drawn: free"
     )
+    ap.add_argument(
+        "--external",
+        default=None,
+        help="a folder: every picture still to draw is listed in its jobs.json (prompt + the "
+        "picture it is redrawn from), and pictures put in its out/ are taken and gated like any "
+        "other; the base must be drawn already",
+    )
     args = ap.parse_args()
     a = load_spec(args.spec)
+    a["external"] = os.path.abspath(args.external) if args.external else None
     if args.jobs:
         a["jobs"] = args.jobs
     first, est = price(a)
@@ -714,6 +787,8 @@ def main():
     retake = {x.strip() for x in args.retake.split(",") if x.strip()}
     t0 = time.time()
     if not args.pack_only:
+        if a["external"] and book.s.get("base") is None:
+            sys.exit("--external draws redraws only: draw the base first (candidates, pick)")
         if (book.s.get("base") is None or a["design"] or a["pick"]) and not design(a, book, est):
             return
         base = _actor.load_rgba(os.path.join(a["out"], book.s["base"]["file"]))
