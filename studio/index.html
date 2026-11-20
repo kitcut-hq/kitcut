@@ -974,7 +974,8 @@ a.google { width: 100%; margin-top: 14px; }
    rest. The idea box stays folded away until Make it again or Try again opens it under the film. */
 html[data-view=film] .page > .hero { order: -2; }
 html[data-view=film] .page > .work { order: -1; }
-html[data-view=film] .hero h1 { font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
+/* the film's title as its page in the Studio shows it (studio-publish.css .sv-title): one line, the Studio's heading */
+html[data-view=film] .hero h1 { font-size: 24px; line-height: 1.3; font-weight: 600; letter-spacing: -.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-wrap: nowrap; }
 html[data-view=film] .hero > p:first-of-type { display: none; }
 html[data-view=film] #form:not(.open) { display: none; }
 html[data-view=film] #form { padding-top: 8px; border-top: 1px solid var(--line); scroll-margin-top: 72px; }  /* clear of the sticky bar */
@@ -1005,7 +1006,7 @@ html[data-view=film][data-member] .page > .about, html[data-view=film][data-memb
 /* and their home page is the idea box and films to take ideas from, without the pitch */
 html[data-member]:not([data-view=film]) .page > .about { display: none; }
 @media (max-width: 860px) {
-  html[data-view=film] .hero h1 { font-size: 18px; white-space: normal; text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  html[data-view=film] .hero h1 { font-size: 20px; white-space: normal; text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 }
 .screen .idle .btn { margin-top: 14px; }
 .okmark { color: var(--good); font-weight: 700; }
