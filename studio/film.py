@@ -1362,8 +1362,13 @@ class Film:
             "language": "en",
         }
         # ElevenLabs voices the prompt names, unless the person's own ElevenLabs voice narrates
-        # ... in the idea or in a document attached with it (a script with its cast and voices)
+        # ... in the idea, in a document attached with it (a script with its cast and voices), or
+        # in the brief of the project it is an episode of: a series casts its voices once there,
+        # and every episode is read in them (Warrior Cats, 2026-11-20: the brief named each cat's
+        # ElevenLabs voice and the episode came out in Gemini voices, the cats sounding alike)
         said = [prompt]
+        if (project or {}).get("brief"):
+            said.append(str(project["brief"]))
         for a in attached:
             if a["kind"] == "text":
                 with open(
