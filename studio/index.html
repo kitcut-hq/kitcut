@@ -3624,11 +3624,13 @@ $('form').addEventListener('submit', async (e) => {
 
 paintLength();
 whoami().finally(() => { known = true; sync(); PPL.sync(); });
+// a film opens at once, never waiting for the studio's health: the site has its record (a finished
+// film plays from its copy online; one being made says what it last said it was doing), and its trail
+// comes from what the Studio left (crumbSeed). Only Make another waits for the studio's answer.
+const BOOT_FILM = location.pathname.match(FILM_PATH);
+if (BOOT_FILM) openFilm(BOOT_FILM[1], false);
 online().then((up) => {
-  const m = location.pathname.match(FILM_PATH);
-  // a film opens whether or not the studio answers: the site has its record (a finished film
-  // plays from its copy online; one being made says what it last said it was doing)
-  if (m) openFilm(m[1], false);
+  if (BOOT_FILM && currentId === BOOT_FILM[1] && !timer) $('go').disabled = !(studioUp && canAnother());
   if (up) recent();  // a 401 from recent() asks for the token
 });
 </script>
