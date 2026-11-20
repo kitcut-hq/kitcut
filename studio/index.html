@@ -1819,15 +1819,24 @@ function drawCrumbs() {
     ? `<a href="${esc(href)}">${esc(label)}</a>` : `<span${i === steps.length - 1 ? ' aria-current="page"' : ''}>${esc(label)}</span>`)).join(CHEV);
   nav.hidden = false;
 }
+// what the Studio page left for the trail as it sent the person here (studio-publish.js svDraw,
+// projects.html: sessionStorage kc.crumb {id, film: {n, project}}), so the trail is drawn at once;
+// the site's answer, which takes a while (it reads the film's views too), replaces it
+function crumbSeed(id) {
+  try { const x = JSON.parse(sessionStorage.getItem('kc.crumb') || 'null'); return x && x.id === id && x.film ? x.film : null; } catch (e) { return null; }
+}
+let CRUMB_LOADING = null;  // the film whose trail is being read: asked once, never twice at a time
 async function loadCrumbs(id) {
-  CRUMB = null; drawCrumbs();
-  if (!crumbsWanted()) return;
+  const seed = crumbSeed(id);
+  CRUMB = seed ? { id, film: seed } : null; drawCrumbs();
+  if (!crumbsWanted() || CRUMB_LOADING === id) return;
+  CRUMB_LOADING = id;
   try {
     const r = await fetch(`/api/projects/film/${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
     if (!r.ok || id !== currentId) return;  // a visitor, or not a film the Studio shows them
     const b = await r.json();
     if (b && b.film) { CRUMB = { id, film: b.film }; drawCrumbs(); }
-  } catch (e) { /* the film plays without its trail */ }
+  } catch (e) { /* the film plays without its trail */ } finally { if (CRUMB_LOADING === id) CRUMB_LOADING = null; }
 }
 window.addEventListener('hashchange', drawCrumbs);
 function openFilm(id, push) {
@@ -2046,7 +2055,7 @@ async function ntOpen() {
   } catch (e) { return; }
   if (id !== currentId) return;
   const v = $('screen').querySelector('video');
-  if (!CRUMB || CRUMB.id !== id) loadCrumbs(id); else drawCrumbs();
+  if ((!CRUMB || CRUMB.id !== id) && CRUMB_LOADING !== id) loadCrumbs(id); else drawCrumbs();
   await KCNotes.open(id, NT.doc, {
     t: v ? v.currentTime : 0,
     onClose: (doc) => {
