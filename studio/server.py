@@ -2887,6 +2887,17 @@ async def versions_make(req):
             return web.json_response({"error": bad}, status=400)
         if (voice or {}).get("source") != "elevenlabs":
             voice = None  # KitCut's own voices need no pass
+    # the round's own Claude model and effort (kitcut.ai's Edit film menus, paid plans): one this
+    # studio does not make films with is refused, never swapped
+    claude = {k: body.get(k) for k in ("model", "effort") if body.get(k) is not None}
+    if claude.get("model") is not None and claude["model"] not in films.CLAUDE_MODELS:
+        return web.json_response(
+            {"error": "model must be one of: %s" % ", ".join(films.CLAUDE_MODELS)}, status=400
+        )
+    if claude.get("effort") is not None and claude["effort"] not in films.EFFORTS:
+        return web.json_response(
+            {"error": "effort must be one of: %s" % ", ".join(films.EFFORTS)}, status=400
+        )
     try:
         notes = (
             []
@@ -2909,7 +2920,7 @@ async def versions_make(req):
             auth,
             at_once_of(req),
             peers.peers(),
-            need=rounds.reserve(f, len(notes), auth),
+            need=rounds.reserve(f, len(notes), auth, claude.get("model")),
             films_day=False,
         )
         if refused:
@@ -2933,6 +2944,7 @@ async def versions_make(req):
                 src=body.get("from"),
                 hand=hand,
                 voice=voice,
+                claude=claude if hand is None else None,
             )
         except rounds.RoundError as e:
             return _round_error(e)

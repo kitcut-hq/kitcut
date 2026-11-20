@@ -300,6 +300,18 @@ async def main():
         lim["claude_s"] == 11 * 60 and lim["budget_usd"] < films.limits(30)["budget_usd"],
         "a round's allowance: minutes by its notes, less than a film's budget",
     )
+    fab = rounds.limits(30, 3, model="claude-fable-5-2")
+    check(
+        fab["budget_usd"] == 2 * lim["budget_usd"] and fab["claude_s"] == lim["claude_s"],
+        "a Fable round may spend twice the dollars, in the same minutes",
+    )
+    check(
+        rounds.claude_of({"round": {"claude": {"model": "claude-fable-5-2", "effort": "max"}}})
+        == {"model": "claude-fable-5-2", "effort": "max"}
+        and rounds.claude_of({"round": {"claude": {"model": "gpt-9", "effort": "huge"}}}) == {}
+        and rounds.claude_of({"model": "claude-fable-5-2"}) == {},
+        "a round's model and effort are its own: never the film's, never one the studio lacks",
+    )
     whole = [{"kind": "film"}, {"kind": "line"}, {"kind": "line"}, {"kind": "moment"}]
     check(
         rounds.wide(whole) == 1
