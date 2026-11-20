@@ -173,13 +173,13 @@ def wide(notes):
     return sum(1 for n in notes if n.get("kind") == "film")
 
 
-def limits(length, notes, whole=0):
+def limits(length, notes, whole=0, model=None):
     """A round's allowance: Claude's working time by its notes, half the film's budget. A note on
     the whole film (`whole` of them) is not one change but one in every shot: 12 minutes for four
     notes, one of them "keep Dad out of the wide views and do not jump between close and far",
     reframed a 210-second film and stopped before the last shots were looked at; the version
     went out with a character blinking out of one of them (fhkoaw.r1, 2026-10-09)."""
-    lim = films.limits(length)
+    lim = films.limits(length, model)  # the round's own model: a Fable round may spend twice
     work = min((25 + (10 if whole else 0)) * 60, 8 * 60 + 60 * notes + WHOLE_S * whole)
     return lim | {
         "claude_s": work,
@@ -189,9 +189,19 @@ def limits(length, notes, whole=0):
     }
 
 
-def reserve(film, notes, auth):
+def claude_of(rec):
+    """The Claude model and effort a round was asked with (kitcut.ai's Edit film menus, paid
+    plans): {"model"?, "effort"?}, only what is valid; {} for the studio's own."""
+    c = (rec.get("round") or {}).get("claude") or {}
+    return {
+        **({"model": c["model"]} if c.get("model") in films.CLAUDE_MODELS else {}),
+        **({"effort": c["effort"]} if c.get("effort") in films.EFFORTS else {}),
+    }
+
+
+def reserve(film, notes, auth, model=None):
     """What a round may still spend, held against the day's budget (server.reserve, halved)."""
-    lim = limits(film.length, notes)
+    lim = limits(film.length, notes, model=model)
     return lim["reserve_usd"] if auth == "api" else 0.005 * film.length
 
 
@@ -576,8 +586,12 @@ def copy_of(film, rid, notes):
             os.remove(os.path.join(d, *parts))
     work = films.Film(d)
     rec = dict(film.record())
+    chosen = claude_of(rec)  # the round's own model and effort, never the film's
     for k in ("server", "media", "media_rev", "share", "unbrand", "round", "versions", "version"):
         rec.pop(k, None)
+    for k in ("model", "effort"):  # the film's own (made with Fable): not the round's to inherit
+        rec.pop(k, None)
+    rec.update(chosen)
     for k in ("claude_session", "session", "waiting", "resume", "listed", "hidden"):
         rec.pop(k, None)
     rec.update(
@@ -1044,6 +1058,7 @@ def start(
     src=None,
     hand=None,
     voice=None,
+    claude=None,
 ):
     """Make this finished film's next version from these notes; the round's job. Asked again
     with the same key, the round already asked for. Raises RoundError for what cannot be one.
@@ -1084,7 +1099,18 @@ def start(
     notes = clean_notes(film, notes, fresh=voice is not None)
     if voice is not None:
         keep_pass(film, voice)
-    return _begin(film, sched, notes, key, client, member, priority, auth, voice=voice is not None)
+    return _begin(
+        film,
+        sched,
+        notes,
+        key,
+        client,
+        member,
+        priority,
+        auth,
+        voice=voice is not None,
+        claude=claude,
+    )
 
 
 def _begin(
@@ -1101,9 +1127,16 @@ def _begin(
     k=None,
     hand=None,
     voice=False,
+    claude=None,
 ):
     rec = film.record()
     k = k or (rec.get("rounds") or 0) + 1
+    # the round's own Claude model and effort ({"model"?, "effort"?}; claude_of reads them back)
+    claude = {
+        k2: v
+        for k2, v in (claude or {}).items()
+        if (k2 == "model" and v in films.CLAUDE_MODELS) or (k2 == "effort" and v in films.EFFORTS)
+    }
     rid, n = (
         "%s.r%d" % (film.id, k),
         max([version_of(rec)] + [v.get("n", 0) for v in rec.get("versions") or []]) + 1,
@@ -1131,6 +1164,7 @@ def _begin(
             "now": "Waiting for a free studio",
             **({"hand": hand} if hand else {}),
             **({"voice": True} if voice else {}),
+            **({"claude": claude} if claude else {}),
         },
     )
     _set_mark(film.id)
@@ -1140,7 +1174,7 @@ def _begin(
         "n": n,
         "state": "queued",
         "client": client,
-        "reserve": reserve(film, len(notes), auth),
+        "reserve": reserve(film, len(notes), auth, claude.get("model")),
         "cost_usd": 0,
         "stopped": False,
         "task": None,
@@ -1188,6 +1222,7 @@ def resume(film, sched):
         k=rec.get("rounds"),
         hand=r.get("hand"),
         voice=bool(r.get("voice")),
+        claude=r.get("claude"),
     )
 
 
@@ -1268,7 +1303,7 @@ async def _run(job, film, sched):
     r0 = film.record().get("round") or {}
     notes, auth, hand = r0.get("notes") or [], r0.get("auth") or "api", r0.get("hand")
     first = "Taking the changed files" if hand else "Reading your notes"
-    lim = limits(film.length, len(notes), wide(notes))
+    lim = limits(film.length, len(notes), wide(notes), model=claude_of(film.record()).get("model"))
     log = film.path(KEPT, "r%s.events.jsonl" % rid.rsplit(".r", 1)[-1])
     os.makedirs(os.path.dirname(log), exist_ok=True)
     t0, meter, clock = time.time(), agent.Meter(), Clock()
@@ -1379,8 +1414,8 @@ async def _run(job, film, sched):
             "key": r0.get("key"),
             **({"by": "hand"} if hand else {}),
             "host": store.HOST,
-            "model": agent.MODEL,
-            "effort": EFFORT,
+            "model": claude_of(rec0).get("model") or agent.MODEL,
+            "effort": claude_of(rec0).get("effort") or EFFORT,
             "length": rec0.get("length"),
             "look": rec0.get("look"),
             "release": films.RELEASE,
@@ -1463,7 +1498,9 @@ async def _run(job, film, sched):
                         if auth != "login" or attempt == 2:
                             raise RuntimeError("Claude could not be reached: %s" % e) from None
                         auth = "api"
-                        job["reserve"] = reserve(film, len(notes), auth)
+                        job["reserve"] = reserve(
+                            film, len(notes), auth, claude_of(film.record()).get("model")
+                        )
                         emit({"type": "fallback", "from": "login", "to": "api", "why": str(e)})
                     except agent.apikey.CreditOut as e:
                         # the credit key's month ran out: the round starts over on the paid key
@@ -1888,7 +1925,7 @@ async def _by_hand(args):
     for i, n in enumerate(notes, 1):
         n.setdefault("id", "n%d" % i)
     rec = film.record()
-    lim = limits(film.length, len(notes), wide(notes))
+    lim = limits(film.length, len(notes), wide(notes), model=claude_of(film.record()).get("model"))
     plan = {
         "film": film.id,
         "version": version_of(rec),
