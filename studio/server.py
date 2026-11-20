@@ -58,6 +58,10 @@ the day's budget still holds.
                                  style (library.PICTURE_ROLES). GET .../pictures/{name}/thumb.png
                                  and DELETE .../pictures/{name}, with ?project=; POST
                                  .../pictures/{name}/role {"project", "role"} changes its role
+    POST /api/library/characters/{name}/voice {"project", "voice", "style"}: the character
+                                 speaks in that voice in every episode from the next on (null:
+                                 the next episode chooses again); GET /api/library lists each
+                                 character's voice as "voices" (library.set_cast_voice)
     POST /api/library/characters {"project", "upload", "name", "about"}: an upload becomes a
                                  painted character of the project's cast (library.add_character):
                                  every future episode paints it from that picture. Its thumbnail
@@ -2566,6 +2570,33 @@ async def character_add(req):
     return web.json_response(entry, status=201)
 
 
+async def character_voice(req):
+    """A project character's voice, held in every episode from the next one on: {"project": id,
+    "voice": one of the studio's voices, or null to let the next episode choose again, "style":
+    how it speaks (one line; left out: the one it had)}. Answers {"voice": the entry or null}."""
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict) or "voice" not in body:
+        return web.json_response({"error": 'send {"project", "voice", "style"}'}, status=400)
+    client, project = client_of(req), str(body.get("project") or "")
+    if not films.PROJECT_ID.match(project) or not library.owner(client, project):
+        return web.json_response({"error": "No such project."}, status=404)
+    try:
+        entry = await asyncio.to_thread(
+            library.set_cast_voice,
+            client,
+            project,
+            req.match_info["name"],
+            body.get("voice"),
+            body.get("style"),
+        )
+    except library.PictureError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response({"voice": entry})
+
+
 async def picture_delete(req):
     """Take a picture out of the asker's project: ?project=<id>."""
     name, project = req.match_info["name"], project_of(req)
@@ -3368,6 +3399,7 @@ def make_app(token):
             web.get("/api/library", library_list),
             web.post("/api/library/pictures", picture_add),
             web.post("/api/library/characters", character_add),
+            web.post("/api/library/characters/{name}/voice", character_voice),
             web.post("/api/library/from-film", from_film),
             web.get("/api/library/from-film", from_film_state),
             web.post("/api/library/ideas", series_ideas),

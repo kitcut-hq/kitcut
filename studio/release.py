@@ -42,6 +42,7 @@ TESTS = (
     "test_isolation.py",
     "test_direction.py",
     "test_library.py",
+    "test_castvoices.py",  # a project's characters keep their voices in every episode
     "test_variety.py",  # a series hears what it always did; a collection's films are told to differ
     "test_youtube.py",
     "test_ytdraft.py",

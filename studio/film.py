@@ -1087,6 +1087,16 @@ class Film:
             pins["voice"] = n["voice"]
         return pins
 
+    def cast_voice_pins(self):
+        """Its project's characters' voices, as the film got them (library.seed: {name: {voice,
+        style}}): guard.pin_cast holds vo.json cast to them. {} outside a project."""
+        got = (self.record().get("library") or {}).get("voices")
+        return {
+            n: {"voice": v["voice"], "style": v.get("style") or ""}
+            for n, v in (got or {}).items()
+            if isinstance(v, dict) and isinstance(v.get("voice"), str)
+        }
+
     def own_voice(self):
         """The person's own ElevenLabs narrator's pass to the site's relay ({"grant"}), for the
         voice step (procs.step_env); None for a film whose voice is KitCut's."""
