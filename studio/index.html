@@ -2211,7 +2211,7 @@ const renews = () => new Date(CREDITS.renews_at).toLocaleDateString(undefined, {
 // EFFORTS): the studio's own (Opus 5.5, Extra high) unless chosen, remembered in this browser. A
 // Fable film uses three credits a second.
 const CLAUDE_RATE = { 'claude-opus-5-5': 1, 'claude-fable-5-2': 3 };
-const claudeFree = () => !CREDITS || CREDITS.plan === 'free';
+const claudeFree = () => !CREDITS || (CREDITS.plan === 'free' && !CREDITS.team);  // the KitCut team chooses on any plan
 const claudeModel = () => (claudeFree() || !CLAUDE_RATE[$('cModel').value] ? 'claude-opus-5-5' : $('cModel').value);
 const claudeEffort = () => (claudeFree() ? 'xhigh' : $('cEffort').value);
 const claudeRate = () => CLAUDE_RATE[claudeModel()];
