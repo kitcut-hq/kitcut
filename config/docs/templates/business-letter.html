@@ -1,0 +1,138 @@
+<!doctype html>
+<!--
+  business-letter -- a one-page letter on somebody's letterhead: a request, a
+  notice, a cover letter. It exists because a letter is a different object from
+  a report. It has a date, an addressee, a "Re:" line, prose, and a signature
+  with a name under it. letterhead-report cannot carry those without the
+  template branching.
+
+  Spec keys: date, to (list of lines), re (list of lines), salutation, blocks,
+  closing, signer {name, title, phone, email}, cc (list), footer.
+  Each block carries one of `p` (a paragraph), `items` (a bulleted list) or
+  `table` (cols/rows, the same shape as letterhead-report's). `lead` is an
+  optional bold run-in in front of a paragraph.
+
+  This page is made to be PRINTED AND PHOTOGRAPHED. That is why the type is a
+  size larger than the report template and the ink is darker: a phone photo of
+  it has to stay readable for a person and for OCR.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{doc_title}}</title>
+<style>
+  @page { size: Letter; margin: 0.55in 0.75in 0.5in; }
+
+  :root {
+    --ink:    {{issuer.ink}};
+    --muted:  {{issuer.muted}};
+    --accent: {{issuer.accent}};
+    --rule:   {{issuer.rule}};
+    --band:   {{issuer.band}};
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: {{{issuer.font_body}}};
+    color: var(--ink);
+    background: {{issuer.paper}};
+    font-size: 10.2pt;
+    line-height: 1.36;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .head { display: flex; align-items: center; gap: 12px; padding-bottom: 10px;
+          border-bottom: 3px solid var(--accent); }
+  .mark { width: 40px; height: 40px; flex: 0 0 40px; background: var(--ink);
+          color: #fff; font-family: {{{issuer.font_head}}}; font-weight: 800;
+          font-size: 18pt; display: flex; align-items: center; justify-content: center;
+          border-bottom: 5px solid var(--accent); }
+  .who { flex: 1 1 auto; }
+  .who .name { font-family: {{{issuer.font_head}}}; font-size: 15pt; font-weight: 700;
+               letter-spacing: .2px; line-height: 1.1; }
+  .who .tag { color: var(--muted); font-size: 8.4pt; margin-top: 3px;
+              letter-spacing: .4px; text-transform: uppercase; }
+  .where { text-align: right; color: var(--muted); font-size: 8.4pt; line-height: 1.5; white-space: nowrap; }
+
+  .date { margin: 16px 0 10px; }
+  .to { margin-bottom: 10px; }
+  .re { margin-bottom: 10px; font-weight: 700; }
+  .re .lbl { display: inline-block; width: 34px; }
+  .re .line { padding-left: 34px; text-indent: -34px; }
+
+  p { margin: 0 0 7px; }
+  .lead { font-weight: 700; }
+  ul { margin: 0 0 10px; padding-left: 20px; }
+  li { margin-bottom: 3px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 2px 0 12px; }
+  th { background: var(--band); text-align: left; font-size: 8.2pt; letter-spacing: .5px;
+       text-transform: uppercase; color: var(--muted); font-weight: 700;
+       padding: 5px 7px; border: 1px solid var(--rule); }
+  td { padding: 5px 7px; border: 1px solid var(--rule); vertical-align: top; }
+  th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .close { margin-top: 10px; break-inside: avoid; }
+  .sigscript { font-family: 'Segoe Script', 'Brush Script MT', cursive; font-size: 19pt;
+               color: #1f3a73; margin: 6px 0 0; line-height: 1.1; }
+  .signer .name { font-weight: 700; }
+  .signer div { line-height: 1.38; }
+  .cc { margin-top: 14px; font-size: 9pt; color: var(--muted); }
+
+  .foot { margin-top: 22px; padding-top: 6px; border-top: 1px solid var(--rule);
+          color: var(--muted); font-size: 7.6pt; }
+</style>
+</head>
+<body>
+
+  <div class="head">
+    <div class="mark">{{issuer.mark}}</div>
+    <div class="who">
+      <div class="name">{{issuer.name}}</div>
+      <div class="tag">{{issuer.tagline}}</div>
+    </div>
+    <div class="where">
+      {{issuer.address}}<br>
+      {{issuer.phone}} &nbsp;&middot;&nbsp; {{issuer.web}}
+    </div>
+  </div>
+
+  <div class="date">{{date}}</div>
+
+  <div class="to">{{#to}}<div>{{.}}</div>{{/to}}</div>
+
+  <div class="re">{{#re}}<div class="line">{{.}}</div>{{/re}}</div>
+
+  {{#salutation}}<p>{{salutation}}</p>{{/salutation}}
+
+  {{#blocks}}
+    {{#p}}<p>{{#lead}}<span class="lead">{{lead}} </span>{{/lead}}{{p}}</p>{{/p}}
+    {{#has_items}}<ul>{{#items}}<li>{{.}}</li>{{/items}}</ul>{{/has_items}}
+    {{#table}}
+    <table>
+      <thead><tr>{{#cols}}<th class="{{#num}}num{{/num}}">{{h}}</th>{{/cols}}</tr></thead>
+      <tbody>{{#rows}}<tr>{{#cells}}<td class="{{#num}}num{{/num}}">{{v}}</td>{{/cells}}</tr>{{/rows}}</tbody>
+    </table>
+    {{/table}}
+  {{/blocks}}
+
+  <div class="close">
+    <div>{{closing}}</div>
+    {{#signer}}
+    <div class="sigscript">{{signer.name}}</div>
+    <div class="signer">
+      <div class="name">{{signer.name}}</div>
+      <div>{{signer.title}}</div>
+      <div>{{signer.phone}} &nbsp;&middot;&nbsp; {{signer.email}}</div>
+    </div>
+    {{/signer}}
+  </div>
+
+  {{#cc}}<div class="cc">cc: {{cc}}</div>{{/cc}}
+
+  {{#footer}}<div class="foot">{{footer}}</div>{{/footer}}
+
+</body>
+</html>

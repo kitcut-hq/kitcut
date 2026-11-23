@@ -2922,6 +2922,28 @@ written in a spec -- the tiny mustache cannot wrap a repeated section in a
 conditional of the same name, because its section regex backreferences the key,
 and a spec that carried the flag by hand would eventually disagree with itself.
 
+**A letter is its own template.** `business-letter` is a date, an addressee
+(`to`, lines), a bold `re`, a `salutation`, `blocks` (each a `p` with an
+optional bold run-in `lead`, a bulleted `items` list, or a `table`), a
+`closing` and a `signer` (name, title, phone, email; the name is also set in a
+script face as the signature). It is set a size larger and darker than the
+report because it is made to be **printed and photographed**: in the Product
+Hunt demo (`projects/instafill-ph-launch/`) a general contractor's
+certificate-of-insurance request is the paper the agent reads off a phone
+photo. It must stay **one page**: the page count is printed, and a second page
+means the photo shows half a letter.
+
+**`{{.}}` was blank until 2026-11-23.** The mustache's lookup split `"."` into
+two empty keys, so every list of plain strings (`to`, `re`, `text`,
+`signature`) rendered empty and gave no error. The first letter came out with
+no address block. `_lookup` now returns the current item for `.`.
+
+**Make fictional data look real, not staged.** Do not use John Doe or
+example.com. Use invented names that sound ordinary, phone numbers in the
+fictional 555-01xx range, and web domains that were checked and do not resolve
+(`nslookup`). Policy dates must cover the day the film is shot: an expired
+period is the first thing an insurance viewer notices.
+
 **Keep one file the source of truth for the numbers.** In
 `projects/acord-commercial/` that is `case.md`: every figure in the seven source
 documents traces to it, which is what lets the video put a number from a source

@@ -107,6 +107,10 @@ def flags(ctx):
     for sec in ctx.get("sections") or []:
         if isinstance(sec, dict):
             sec["has_kv"] = bool(sec.get("kv"))
+    # business-letter's blocks: a bulleted list needs its <ul> only when it has items.
+    for blk in ctx.get("blocks") or []:
+        if isinstance(blk, dict):
+            blk["has_items"] = bool(blk.get("items"))
     return ctx
 
 
