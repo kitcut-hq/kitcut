@@ -479,6 +479,12 @@ async def main():
         "must not have to leave again" in library.RULES and "one at a time" in library.RULES,
         "a new episode is told to follow its project's standing rules, and to check each",
     )
+    shown = await rounds.proofs(kept, Stills(), ns, frames)
+    check(
+        shown == {"b": "proof-1.jpg", "a": "proof-2.jpg", "c": "proof-3.jpg", "d": "proof-4.jpg"}
+        and all(os.path.isfile(kept.path("notes", "after", v)) for v in shown.values()),
+        "every timed note has its before and after as one picture, the ones not made too",
+    )
     again = rounds.again_text(ns, [1], seen)
     only = await rounds.looked(kept, Stills(), ns, verdicts, frames, eyes, {"c"})
     check(

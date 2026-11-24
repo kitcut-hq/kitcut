@@ -1208,6 +1208,7 @@ class Round:
         self.notes, self.on_change = notes, on_change
         self.verdicts, self.summary = {}, None  # note id -> {"state", "reply"}
         self.checks = {}  # note id -> {"ok", "sure", "why"}: the second look (looked)
+        self.proofs = {}  # note id -> the address of its before and after (proofs)
         self.without = ("name_film",) + (() if can_voice else ("voice",))
 
     def missing(self):
@@ -1488,31 +1489,22 @@ def project_now(work):
 
 
 # ------------------------------------------------------------------ the second look
-async def looked(work, t, notes, verdicts, frames, ask, only=None, rules=None):
-    """Whether the film now shows what each note answered done asked for, as somebody who did
-    not make the change sees it: each note's frames as they were (pack kept them) beside the
-    same moments drawn now, read by a Claude call with no tools that knows only the note.
-    Claude judged its own change from its own stills, and answered done for a paw that still
-    read as a grey pole with a knob (ch7tno.r1): its maker found out by watching, and sent the
-    note again. ask: async (text, [jpeg bytes]) -> (dict, cost). only: these note ids.
-    -> {note id: {"ok", "sure", "why"}} for the notes it could look at (a note on the words, or
-    on the whole film, has no frames to compare)."""
-    from PIL import Image, ImageDraw
-
-    import review
-
+def _picked(notes, frames, want):
+    """[(number, note, its own moment, the moments shown)] of the notes `want` takes that have
+    frames: each note's own moment, and the first and last of the others."""
     todo = []
     for i, n in enumerate(notes, 1):
         got = [x for x in _frames_of(frames.get(n["id"])) if x[0] is not None]
-        if (verdicts.get(n["id"]) or {}).get("state") != "done" or not got or n["kind"] == "line":
-            continue
-        if only is not None and n["id"] not in only:
+        if not got or not want(n):
             continue
         rest = sorted(got[1:])
         pick = [got[0]] + rest[:1] + (rest[-1:] if len(rest) > 1 else [])
         todo.append((i, n, got[0][0], sorted(x[0] for x in pick[:CHECK_ROWS])))
-    if not todo:
-        return {}
+    return todo
+
+
+async def _draw_now(work, t, todo):
+    """notes/after/<t>.png: the moments of `todo` (_picked) as the copy draws them now."""
     os.makedirs(work.path("notes", "after"), exist_ok=True)
     every = sorted({ts for _, _, _, times in todo for ts in times})
     for k in range(0, len(every), toolbox.MAX_STILLS):
@@ -1522,27 +1514,83 @@ async def looked(work, t, notes, verdicts, frames, ask, only=None, rules=None):
             if os.path.isfile(src):
                 shutil.copyfile(src, work.path("notes", "after", "%06.2f.png" % ts))
 
+
+def _sheet(work, i, n, main, times):
+    """notes/after/<i>.jpg: note i's moments as they were (left) beside as they are now, a row
+    each, a spot's place ringed on both. Its path, or None when no moment has both."""
+    from PIL import Image, ImageDraw
+
+    import review
+
+    pairs = []
+    for ts in times:
+        a = work.path("notes", "before", "%06.2f.png" % ts)
+        b = work.path("notes", "after", "%06.2f.png" % ts)
+        if not (os.path.isfile(a) and os.path.isfile(b)):
+            continue
+        if ts == main and n["kind"] == "spot":  # the place pointed at, on both
+            both = []
+            for side, src in (("was", a), ("now", b)):
+                with Image.open(src) as im:
+                    im = im.convert("RGB")
+                    _ring(n, im, ImageDraw.Draw(im))
+                    dst = work.path("notes", "after", "%d-%s.png" % (i, side))
+                    im.save(dst)
+                both.append(dst)
+            a, b = both
+        pairs.append((ts, a, b))
+    if not pairs:
+        return None
+    return review.pairs_sheet(pairs, work.path("notes", "after", "%d.jpg" % i))
+
+
+PROOF = "proof-%d.jpg"  # a note's before and after, online beside the version it was made for
+
+
+async def proofs(work, t, notes, frames):
+    """Every timed note's before and after as one picture, drawn from the copy as the round
+    leaves it: {note id: file name in notes/after/}. Its maker checked 13 changes by watching
+    285 seconds of film again; a picture a note shows each at a glance, the ones not made too."""
+    todo = _picked(notes, frames, lambda n: True)
+    if not todo:
+        return {}
+    await _draw_now(work, t, todo)
+    out = {}
+    for i, n, main, times in todo:
+        p = await asyncio.to_thread(_sheet, work, i, n, main, times)
+        if p:
+            shutil.copyfile(p, work.path("notes", "after", PROOF % i))
+            out[n["id"]] = PROOF % i
+    return out
+
+
+async def looked(work, t, notes, verdicts, frames, ask, only=None, rules=None):
+    """Whether the film now shows what each note answered done asked for, as somebody who did
+    not make the change sees it: each note's frames as they were (pack kept them) beside the
+    same moments drawn now, read by a Claude call with no tools that knows only the note.
+    Claude judged its own change from its own stills, and answered done for a paw that still
+    read as a grey pole with a knob (ch7tno.r1): its maker found out by watching, and sent the
+    note again. ask: async (text, [jpeg bytes]) -> (dict, cost). only: these note ids.
+    -> {note id: {"ok", "sure", "why"}} for the notes it could look at (a note on the words, or
+    on the whole film, has no frames to compare)."""
+    import review
+
+    todo = _picked(
+        notes,
+        frames,
+        lambda n: (
+            (verdicts.get(n["id"]) or {}).get("state") == "done"
+            and n["kind"] != "line"
+            and (only is None or n["id"] in only)
+        ),
+    )
+    if not todo:
+        return {}
+    await _draw_now(work, t, todo)
+
     def sheet(i, n, main, times):
-        pairs = []
-        for ts in times:
-            a = work.path("notes", "before", "%06.2f.png" % ts)
-            b = work.path("notes", "after", "%06.2f.png" % ts)
-            if not (os.path.isfile(a) and os.path.isfile(b)):
-                continue
-            if ts == main and n["kind"] == "spot":  # the place pointed at, on both
-                both = []
-                for side, src in (("was", a), ("now", b)):
-                    with Image.open(src) as im:
-                        im = im.convert("RGB")
-                        _ring(n, im, ImageDraw.Draw(im))
-                        dst = work.path("notes", "after", "%d-%s.png" % (i, side))
-                        im.save(dst)
-                    both.append(dst)
-                a, b = both
-            pairs.append((ts, a, b))
-        if not pairs:
-            return None
-        return review.jpeg(review.pairs_sheet(pairs, work.path("notes", "after", "%d.jpg" % i)))
+        p = _sheet(work, i, n, main, times)
+        return review.jpeg(p) if p else None
 
     out = {}
     for k in range(0, len(todo), CHECK_NOTES):
@@ -1883,7 +1931,11 @@ async def _run(job, film, sched):
 
     def verdicts():
         return [
-            {"id": x["id"], **(state.verdicts.get(x["id"]) or {"state": "sent", "reply": None})}
+            {
+                "id": x["id"],
+                **(state.verdicts.get(x["id"]) or {"state": "sent", "reply": None}),
+                **({"proof": state.proofs[x["id"]]} if state.proofs.get(x["id"]) else {}),
+            }
             for x in notes
         ]
 
@@ -2196,6 +2248,12 @@ async def _run(job, film, sched):
                                 v["reply"] = (v["reply"] + " " + UNSURE % c["why"])[:600]
                     except Exception as e:  # noqa: BLE001 -- never fails a round
                         emit({"type": "log", "text": "the second look did not run: %s" % e})
+                shown = {}
+                if frames and not r0.get("refresh"):
+                    try:  # each note's before and after, for its maker: never fails a round
+                        shown = await proofs(work, t, notes, frames)
+                    except Exception as e:  # noqa: BLE001
+                        emit({"type": "log", "text": "no before and after: %s" % e})
             after = await asyncio.to_thread(digest, work)
         if after == fresh:
             await over(
@@ -2261,6 +2319,12 @@ async def _run(job, film, sched):
         strip = await media.publish_one(film, STRIP_FILE, "image/jpeg", out=out, rev=rev)
         if strip:
             urls["strip"] = strip
+        for nid, name in (shown if not hand else {}).items():
+            url = await media.publish_one(
+                film, name, "image/jpeg", out=work.path("notes", "after"), rev=rev
+            )
+            if url:
+                state.proofs[nid] = url
         await unbrand._sends_over(fid)
         bill = cost()  # read from the copy, which the swap is about to make the film
         # the film must still be what this copy was made from: whatever wrote into its folder
