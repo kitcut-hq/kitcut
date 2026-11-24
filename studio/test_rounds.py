@@ -297,7 +297,7 @@ async def main():
     )
     lim = rounds.limits(30, 3)
     check(
-        lim["claude_s"] == 11 * 60 and lim["budget_usd"] < films.limits(30)["budget_usd"],
+        lim["claude_s"] == 14 * 60 and lim["budget_usd"] < films.limits(30)["budget_usd"],
         "a round's allowance: minutes by its notes, less than a film's budget",
     )
     fab = rounds.limits(30, 3, model="claude-fable-5-2")
@@ -315,12 +315,166 @@ async def main():
     whole = [{"kind": "film"}, {"kind": "line"}, {"kind": "line"}, {"kind": "moment"}]
     check(
         rounds.wide(whole) == 1
-        and rounds.limits(210, 4, rounds.wide(whole))["claude_s"] == 18 * 60
-        and rounds.limits(210, 4)["claude_s"] == 12 * 60
-        and rounds.limits(210, 20, 2)["claude_s"] == 35 * 60,
+        and rounds.limits(210, 4, rounds.wide(whole))["claude_s"] == 26 * 60
+        and rounds.limits(210, 4)["claude_s"] == 16 * 60
+        and rounds.limits(210, 20, 2)["claude_s"] == 68 * 60
+        and rounds.limits(210, 20, 2, reach=9999)["claude_s"] == 70 * 60,
         "a note on the whole film adds the time to look at every shot it changes (fhkoaw.r1)",
     )
+    turn = {"id": "a", "kind": "stretch", "t": 216, "t2": 285, "text": "Turn their heads."}
+    paw = {"id": "b", "kind": "stretch", "t": 21, "t2": 23, "text": "A cat's paw."}
+    check(
+        rounds.weight([turn]) == 69 * rounds.REACH_S
+        and rounds.weight([paw]) == 2 * rounds.REACH_S
+        and rounds.weight([{"kind": "stretch", "t": 0, "t2": 900}]) == rounds.REACH_MAX_S
+        and rounds.weight([{"kind": "film"}, {"kind": "moment", "t": 3}]) == 0
+        and rounds.limits(285, 2, reach=rounds.weight([turn, paw]))["claude_s"]
+        == 8 * 60 + 2 * 120 + 71 * rounds.REACH_S,
+        "a note's working time grows with the seconds of film it covers (ch7tno.r2)",
+    )
+    long_ts = rounds.frame_times(turn, 285)
+    check(
+        long_ts[0] == 250.5
+        and min(long_ts) == 216
+        and max(long_ts) == 285
+        and len(long_ts) == rounds.FRAMES_MAX + 1
+        and rounds.frame_times(paw, 285) == [22.0, 21.0, 23.0]
+        and rounds.frame_times({"kind": "moment", "t": 0.2}, 5) == [0.2, 0.0, 0.7]
+        and rounds.frame_times({"kind": "moment", "t": 5.0}, 5) == [5.0, 4.5]
+        and rounds.frame_times({"kind": "film"}, 5) == []
+        and sum(map(len, rounds._thin([[1, 2, 3, 4], [5], [6, 7, 8]], 5))) == 5
+        and [x[0] for x in rounds._thin([[1, 2, 3, 4], [5], [6, 7, 8]], 5)] == [1, 5, 6],
+        "a note comes with frames from its start to its end, its own moment first",
+    )
+    told = rounds.notes_text(
+        [paw],
+        [],
+        {"b": [(22.0, "notes/1.png"), (23.0, "notes/1-023.00.png"), (21.0, "notes/1-021.00.png")]},
+    )
+    check(
+        "The frame at 0:22.0: notes/1.png" in told
+        and "Around it: notes/1-021.00.png at 0:21.0, notes/1-023.00.png at 0:23.0" in told,
+        "the notes name every frame of a note, in the film's order",
+    )
+    import tempfile
+
+    class Kept:  # a film, as far as the history goes
+        def __init__(self):
+            self.dir = tempfile.mkdtemp()
+
+        def path(self, *parts):
+            return os.path.join(self.dir, *parts)
+
+    kept = Kept()
+    check(rounds.earlier(kept) == "" and rounds.history(kept) == [], "no rounds: nothing told")
+    rounds.keep_history(
+        kept,
+        "f.r1",
+        2,
+        "done",
+        [paw, turn],
+        [{"id": "b", "state": "done", "reply": "It is a real cat's paw now."}],
+        "The paw.",
+    )
+    rounds.keep_history(kept, "f.r1", 2, "done", [paw], [], None)  # asked twice: kept once
+    rounds._backfill(
+        kept,
+        {
+            "round": {
+                "id": "f.r2",
+                "n": 3,
+                "state": "unchanged",
+                "notes": [turn],
+                "answers": [{"id": "a", "state": "cannot", "reply": "No room."}],
+            }
+        },
+    )
+    rounds._backfill(kept, {"round": {"id": "f.r3", "state": "running", "notes": [turn]}})
+    told = rounds.earlier(kept, kept)
+    check(
+        [x["rid"] for x in rounds.history(kept)] == ["f.r1", "f.r2"]
+        and "made version 2" in told
+        and "[from 0:21.0 to 0:23.0] A cat's paw." in told
+        and "Answered: Done. It is a real cat's paw now." in told
+        and "made no version" in told
+        and "Answered: Not changed. No room." in told
+        and "do it another way" in told
+        and os.path.isfile(kept.path("notes", "earlier.md")),
+        "a round is told the rounds before it: what was asked, and what was answered",
+    )
+
+    from PIL import Image
+
+    class Stills:  # the film's tools, as far as the second look goes: frames drawn "now"
+        calls = []
+
+        async def stills(self, times, sheet=True):
+            Stills.calls.append(list(times))
+            os.makedirs(kept.path("outputs", "review"), exist_ok=True)
+            for ts in times:
+                Image.new("RGB", (320, 180), "green").save(
+                    kept.path("outputs", "review", "%06.2f.png" % ts)
+                )
+
+    spot = {"id": "c", "kind": "spot", "t": 4.0, "x": 0.5, "y": 0.5, "text": "Bigger."}
+    said = {"id": "d", "kind": "line", "t": 1, "t2": 2, "line": 0, "text": "Slower."}
+    ns = [paw, turn, spot, said]
+    frames = {
+        "b": [(22.0, "notes/1.png"), (21.0, "notes/1-021.00.png"), (23.0, "notes/1-023.00.png")],
+        "a": [(250.5, "notes/2.png")],
+        "c": [(4.0, "notes/3.png")],
+        "d": [(1.5, "notes/4.png")],
+    }
+    os.makedirs(kept.path("notes", "before"), exist_ok=True)
+    for ts in (21.0, 22.0, 23.0, 250.5, 4.0, 1.5):
+        Image.new("RGB", (320, 180), "red").save(kept.path("notes", "before", "%06.2f.png" % ts))
+    asked = []
+
+    async def eyes(text, images):
+        asked.append((text, len(images)))
+        return {
+            "notes": [
+                {"number": 1, "ok": False, "sure": True, "why": "A grey pole with a knob."},
+                {"number": 3, "ok": False, "sure": False, "why": "Cannot tell."},
+                {"number": 9, "ok": False},
+            ]
+        }, 0.01
+
+    verdicts = {
+        "b": {"state": "done", "reply": "A paw."},
+        "a": {"state": "cannot", "reply": "No."},
+        "c": {"state": "done", "reply": "Bigger."},
+        "d": {"state": "done", "reply": "Slower."},
+    }
+    seen = await rounds.looked(kept, Stills(), ns, verdicts, frames, eyes)
+    check(
+        seen
+        == {
+            "b": {"ok": False, "sure": True, "why": "A grey pole with a knob."},
+            "c": {"ok": True, "sure": False, "why": "Cannot tell."},
+        }
+        and asked[0][1] == 2
+        and "Picture 1 -- note 1 [from 0:21.0 to 0:23.0]: A cat's paw." in asked[0][0]
+        and "Picture 2 -- note 3 [at 0:04.0] (the orange mark is the place): Bigger." in asked[0][0]
+        and sorted(Stills.calls[0]) == [4.0, 21.0, 22.0, 23.0]
+        and os.path.isfile(kept.path("notes", "after", "1.jpg"))
+        and os.path.isfile(kept.path("notes", "after", "3-now.png")),
+        "the second look: every note answered done, its frames as they were beside now; not "
+        "the notes left undone or on the words; a doubt it is not sure of does not send it back",
+    )
+    again = rounds.again_text(ns, [1], seen)
+    only = await rounds.looked(kept, Stills(), ns, verdicts, frames, eyes, {"c"})
+    check(
+        "1. [from 0:21.0 to 0:23.0] A cat's paw." in again
+        and "What they saw: A grey pole with a knob." in again
+        and "notes/after/022.00.png" in again
+        and list(only) == ["c"]
+        and asked[-1][1] == 1,
+        "what did not show goes back with what was seen, and is looked at again alone",
+    )
     told = rounds.ASK % {
+        "earlier": "",
+        "project": "",
         "extra": "",
         "length": 210,
         "minutes": 18,
@@ -332,6 +486,10 @@ async def main():
         and "never leave the narration naming something the picture no longer shows" in told
         and "`stills` of EVERY shot you changed" in told
         and "nobody blinks out and back" in told
+        and "not a fence" in told
+        and "Make each group as ONE change" in told
+        and 'Never answer a note "not changed" because time is short' in told
+        and "`stills` once more at every note's own moment" in told
         and "This round has 7 recordings" in told
         and "shortened BEFORE recording" in told,
         "a round is told: a note whole or not at all, every changed shot looked at, the "
@@ -499,7 +657,9 @@ async def main():
         seen = SEEN[-1] if SEEN else {}
         check(
             seen.get("notes")
-            and seen.get("frames") == ["1.png"]
+            and seen.get("frames") == ["1-000.50.png", "1-001.50.png", "1.png"]
+            and [x["rid"] for x in rounds.history(f)] == [rd.get("id")]
+            and rounds.history(f)[0]["notes"][0].get("reply")
             and "Make this label bigger." in seen.get("prompt", "")
             and "the whole film" in seen.get("prompt", ""),
             "Claude was given the notes, and the frame of the one at a moment (%s)"

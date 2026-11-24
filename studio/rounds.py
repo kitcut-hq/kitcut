@@ -111,7 +111,19 @@ MOVED = (
     "their place. The film is as it was found; make the version again from it."
 )
 EFFORT = "high"  # a round changes a film that exists: it reads more than it invents
-WHOLE_S = 6 * 60  # working time a note on the whole film adds to the minute every note has
+WHOLE_S = 10 * 60  # working time a note on the whole film adds to what every note has
+NOTE_S = 2 * 60  # ... what every note has
+# ... and what a note adds for each second of the film it covers, up to REACH_MAX_S: a note on a
+# 69-second stretch that needed a head turn drawn for four cats had the same one minute as a note
+# on a two-second paw, and came back "I ran out of working time" (ch7tno.r2, 2026-11-24)
+REACH_S, REACH_MAX_S = 8, 10 * 60
+MORE = 2  # further passes a round gets for notes its first left unanswered
+# the frames a note comes with: its own moment, and for a stretch one about every FRAME_EVERY
+# seconds from its start to its end (a moment: LEAD seconds before and after as well)
+LEAD, FRAME_EVERY, FRAMES_MAX, FRAMES_ALL = 0.5, 8.0, 8, 72
+HISTORY = "history.jsonl"  # in versions/: every round's notes and what was answered, a line each
+EARLIER = 3  # rounds of them the next round is told
+CHECK_NOTES, CHECK_ROWS, CHECK_S = 5, 3, 240  # the second look: notes a call, rows a note, its time
 STRIP = (24, 160)  # the filmstrip: tiles in a row, and a tile's width in px
 STRIP_FILE = "strip.jpg"
 RING = (217, 115, 63)  # the colour a note's spot is ringed in on its frame
@@ -276,17 +288,31 @@ def refresh_notes(film, names):
     return have, [{"id": REFRESH_NOTE, "kind": "film", "text": text}]
 
 
-def limits(length, notes, whole=0, model=None):
-    """A round's allowance: Claude's working time by its notes, half the film's budget. A note on
-    the whole film (`whole` of them) is not one change but one in every shot: 12 minutes for four
-    notes, one of them "keep Dad out of the wide views and do not jump between close and far",
-    reframed a 210-second film and stopped before the last shots were looked at; the version
-    went out with a character blinking out of one of them (fhkoaw.r1, 2026-10-09)."""
+def weight(notes):
+    """The working time the notes' reach adds, in seconds: a note on a long stretch is a change
+    to every shot in it."""
+    s = 0.0
+    for n in notes:
+        if n.get("kind") in ("stretch", "line") and n.get("t2") is not None:
+            s += min(REACH_MAX_S, max(0.0, float(n["t2"]) - float(n.get("t") or 0)) * REACH_S)
+    return int(round(s))
+
+
+def limits(length, notes, whole=0, model=None, reach=0):
+    """A round's allowance: Claude's working time by its notes (how many, and `reach`: what
+    they cover, weight), half the film's budget. A note on the whole film (`whole` of them) is
+    not one change but one in every shot: 12 minutes for four notes, one of them "keep Dad out
+    of the wide views and do not jump between close and far", reframed a 210-second film and
+    stopped before the last shots were looked at; the version went out with a character blinking
+    out of one of them (fhkoaw.r1, 2026-10-09). The time is what a careful change takes, not a
+    price: its maker's own time, sending a note twice, costs more than Claude's."""
     lim = films.limits(length, model)  # the round's own model: a Fable round may spend twice
-    work = min((25 + (10 if whole else 0)) * 60, 8 * 60 + 60 * notes + WHOLE_S * whole)
+    work = min(
+        (60 + (10 if whole else 0)) * 60, 8 * 60 + NOTE_S * notes + int(reach) + WHOLE_S * whole
+    )
     return lim | {
         "claude_s": work,
-        "wall_s": work + 20 * 60,
+        "wall_s": work + 30 * 60,
         "budget_usd": max(2.0, round(lim["budget_usd"] / 2, 2)),
         "reserve_usd": round(max(1.0, lim["reserve_usd"] / 2), 2),
     }
@@ -910,6 +936,48 @@ def frame_time(n):
     return round((n["t"] + n["t2"]) / 2, 2) if n.get("t2") is not None else n["t"]
 
 
+def frame_times(n, length):
+    """Every moment a note's frames are drawn at, its own (frame_time) first: a moment with one
+    a little before and after it, a stretch from its start to its end. A note's time is where its
+    maker saw the thing, and one frame from the middle of a stretch showed neither where it
+    begins nor that it is the same in every shot."""
+    main = frame_time(n)
+    if main is None:
+        return []
+    t, t2 = n["t"], n.get("t2")
+    if t2 is None or t2 - t < 2 * LEAD:
+        ts = [main - LEAD, main + LEAD]
+    else:
+        k = min(FRAMES_MAX, max(3, int((t2 - t) // FRAME_EVERY) + 2))
+        ts = [t + (t2 - t) * i / (k - 1) for i in range(k)]
+    out = [main]
+    for x in ts:
+        x = round(min(float(length), max(0.0, x)), 2)
+        if all(abs(x - y) > 0.05 for y in out):
+            out.append(x)
+    return out
+
+
+def _thin(per, cap=FRAMES_ALL):
+    """[[times]] a note, cut to `cap` frames in all: every note keeps its own moment, and the
+    longest lists lose their last frames first."""
+    per = [list(ts) for ts in per]
+    while sum(map(len, per)) > cap:
+        longest = max(per, key=len)
+        if len(longest) <= 1:
+            break
+        longest.pop()
+    return per
+
+
+def _frames_of(got):
+    """A note's frames as [(seconds or None, path)], its own first: what pack returns, or the
+    one path it returned before a note had several."""
+    if isinstance(got, str):
+        return [(None, got)]
+    return [(x[0], x[1]) for x in got or []]
+
+
 def notes_text(notes, lines, frames):
     """The notes as Claude reads them (its first message, and notes/notes.md)."""
     out = []
@@ -940,7 +1008,8 @@ def notes_text(notes, lines, frames):
             body.append("   " + said_at(lines, n["t"], n.get("t2")))
         elif n["kind"] == "line" and not n.get("words"):
             body.append('   The line: "%s"' % n["was"])
-        if frames.get(n["id"]):
+        got = _frames_of(frames.get(n["id"]))
+        if got:
             ring = (
                 " (the orange box is the area)"
                 if n["kind"] == "spot" and n.get("w")
@@ -948,7 +1017,12 @@ def notes_text(notes, lines, frames):
                 if n["kind"] == "spot"
                 else ""
             )
-            body.append("   The frame at %s: %s%s" % (_mmss(frame_time(n)), frames[n["id"]], ring))
+            body.append("   The frame at %s: %s%s" % (_mmss(frame_time(n)), got[0][1], ring))
+            if len(got) > 1:
+                body.append(
+                    "   Around it: "
+                    + ", ".join("%s at %s" % (p, _mmss(ts)) for ts, p in sorted(got[1:]))
+                )
         out.append("\n".join(body))
     return "\n\n".join(out)
 
@@ -969,11 +1043,24 @@ little more, the studio lengthens the film and says so). Your working time: abou
 The notes (also in notes/notes.md):
 
 %(notes)s
-
+%(earlier)s%(project)s
 How to work:
 - Read every note before you change anything, and decide the order: the words first (they are \
-the scarce part), then one note at a time. Finish a note, look at it, answer it, and only then \
-start the next -- when your time runs out, the film must hold only whole, looked-at changes.
+the scarce part), then one change at a time. Finish it, look at it, answer its notes, and only \
+then start the next -- when your time runs out, the film must hold only whole, looked-at changes.
+- Notes can belong together: the same character or thing, the same shot, the same cause (three \
+hops drawn flat are one hop drawn wrong; two forelegs that stretch are one way of reaching). \
+After reading them all, write notes/plan.md: the notes in groups, and the order. Notes that \
+depend on each other (where somebody stands, then what they do from there) go in that order. \
+Make each group as ONE change -- one drawing, one function, used everywhere its notes point -- \
+and then answer each of its notes.
+- A note's time is where its maker saw the thing, not a fence. Find the whole shot or action \
+the note is about and change it from where it begins to where it ends, also where that is \
+before or after the time given. Where the same fault shows elsewhere in the film (the same pose \
+used again, the same drawing in another shot), fix it there too and say where in the `note`: \
+that is the note's own change, not something more.
+- Never answer a note "not changed" because time is short. Leave it without a `note`: when \
+this time is up, the studio gives you more for the notes left.
 - Look at each note's frame first (Read it), then find in film.js what draws what the note \
 points at, by its time and what is on the frame.
 - Change only what a note asks for. Around it, the same scenes, timing, words and music.
@@ -1004,6 +1091,10 @@ done, and one plain sentence for the maker saying what you changed (no file name
 words). A note you could not or should not do -- unclear, or it would break the film, or the \
 film cannot hold it -- gets `note` with done false and one sentence saying why and what would \
 make it possible. Do not guess at a note you cannot read: say so.
+- Before `summary`: `stills` once more at every note's own moment, all of them, and look. A \
+later change can break an earlier one: fix what broke. When you stop, somebody who has not seen \
+your work compares each note's frames as they were with the same moments now, and what does \
+not show what was asked comes back to you. So judge by the frame, not by the code.
 - Last, `summary`: one short paragraph, in plain words, of what is different in this version.
 - Do not render the film; the studio does that when you are done.
 """
@@ -1027,15 +1118,70 @@ NO_VOICE = (
     "there is no `voice` tool. A note that asks for other words, or for a line to be recorded "
     "again, gets `note` with done false.\n"
 )
+CONTINUE = (
+    "Your time for this round was up with these notes not yet answered: %s. Here is more: about "
+    "%d minutes. This is the same session, and everything you changed is on disk as you left it. "
+    "First `check` and look at the last thing you were changing (`stills`): finish it or put it "
+    "back. Then the notes left, one change at a time as before, each with its `note`; then "
+    "`summary` if you have not."
+)
+AGAIN = (
+    "Somebody who did not make these changes compared each note's frames as they were with the "
+    "same moments as they are now. These notes are answered done, and the frames do not show "
+    "what was asked:\n\n%s\n\nFor each: Read the frames named and look as they did. If they "
+    "are right, the change is not there yet: make it so that the frame shows it, in another way "
+    "than before where that way did not read. Then `stills` at those moments and look again. "
+    "Call `note` again for each (its number, done, one sentence). Change nothing else. About %d "
+    "minutes."
+)
+UNSURE = "A second look at the frames was not sure of this one: %s"
+EARLIER_TEXT = (
+    "\nEarlier rounds of notes on this film, oldest first (also in notes/earlier.md). A note "
+    "now that asks again for what an earlier one asked means that change was not good enough as "
+    "its maker sees it: look at what was done then, and do it another way, not the same again."
+    "\n\n%s\n"
+)
+PROJECT = (
+    "\nThis film keeps its own copies of its project's scenes and characters, from the day it "
+    "was made. The project's own, where they differ now, are in notes/project/:\n%s\nThe film "
+    "keeps its own unless a note asks otherwise. Where a note names one with @name, asks for "
+    "the new one, or asks for a scene or character the film does not have and the project does, "
+    "use the project's: a drawn one by copying notes/project/cast/<name>.js to cast/<name>.js "
+    "and drawing it through SK.cast.<name>; a painted one by copying its picture over the "
+    "film's in inputs/ and painting again every painting whose ref names it (`paint` with "
+    "retake, those only). Then `stills` of every shot it is in, and look.\n"
+)
+CHECK_SYSTEM = (
+    "You check changes made to an animated film against what its maker asked for. You see the "
+    "request and frames of the film; you did not make the change and you cannot see how it was "
+    "made. Answer with one JSON object and nothing else."
+)
+CHECK = (
+    "Each picture is one note the film's maker left, in the order below: rows of the same "
+    "moments of the film, as it was (left) and as it is now (right). Whoever changed the film "
+    "says each of these notes is done. For each, look at the right-hand frames and say whether "
+    "they show what the note asked for.\n\n%s\n\n"
+    "Judge what a still frame can show: what is drawn, where, how big, whether it reads at a "
+    "glance as the thing asked for, whether what should be gone is gone. ok is false when the "
+    "frames plainly do not show it: nothing is different; it still reads as what the maker "
+    "complained of; or the change broke something beside it that was right on the left. Be "
+    "exact about what you see (a note asking for a cat's paw is not done by a grey pole with a "
+    "knob). A note about sound, music, words, speed, or how something moves between these "
+    "frames cannot be judged from them: ok true, sure false.\n\n"
+    '{"notes": [{"number": 1, "ok": true, "sure": true, "why": "one plain sentence: what the '
+    'frames show now"}]}'
+)
 ANSWER = (
     "Before you stop: these notes have no `note` yet: %s. Call `note` for each now (done or "
     "not, one sentence), then `summary` if you have not. Change nothing else."
 )
 
 
-def ask(work, notes, frames, lim):
+def ask(work, notes, frames, lim, earlier="", project=""):
     extra = "".join(", " + n for n in work.editable() if n not in films.EDITABLE)
     return ASK % {
+        "earlier": earlier,
+        "project": project,
         "extra": extra,
         "length": work.length,
         "minutes": lim["claude_s"] // 60,
@@ -1051,6 +1197,7 @@ class Round:
     def __init__(self, notes, can_voice, on_change):
         self.notes, self.on_change = notes, on_change
         self.verdicts, self.summary = {}, None  # note id -> {"state", "reply"}
+        self.checks = {}  # note id -> {"ok", "sure", "why"}: the second look (looked)
         self.without = ("name_film",) + (() if can_voice else ("voice",))
 
     def missing(self):
@@ -1113,39 +1260,321 @@ class Round:
 
 
 async def pack(work, t, notes):
-    """notes/: each timed note's frame, drawn from the film's code at that moment (exact, where
-    a frame cut from the video is a compressed neighbour), a spot ringed on it; and notes.md.
-    Returns {note id: "notes/<n>.png"}."""
+    """notes/: each timed note's frames, drawn from the film's code at those moments (exact,
+    where a frame cut from the video is a compressed neighbour), a spot ringed on its own; the
+    same frames untouched in notes/before/, for the second look (looked); and notes.md.
+    Returns {note id: [(seconds, "notes/<file>.png"), ...]}, the note's own moment first."""
     from PIL import Image, ImageDraw
 
-    os.makedirs(work.path("notes"), exist_ok=True)
-    timed = [(i, n, frame_time(n)) for i, n in enumerate(notes, 1) if frame_time(n) is not None]
-    timed = timed[: toolbox.MAX_STILLS]
+    os.makedirs(work.path("notes", "before"), exist_ok=True)
+    timed = [(i, n) for i, n in enumerate(notes, 1) if frame_time(n) is not None]
+    per = _thin([frame_times(n, work.length) for _, n in timed])
     frames = {}
-    if timed:
-        await t.stills(sorted({ts for _, _, ts in timed}), sheet=False)
-        for i, n, ts in timed:
+    every = sorted({ts for one in per for ts in one})
+    for k in range(0, len(every), toolbox.MAX_STILLS):
+        await t.stills(every[k : k + toolbox.MAX_STILLS], sheet=False)
+        for ts in every[k : k + toolbox.MAX_STILLS]:  # the next call draws over review/
             src = work.path("outputs", "review", "%06.2f.png" % ts)
+            if os.path.isfile(src):
+                shutil.copyfile(src, work.path("notes", "before", "%06.2f.png" % ts))
+    for (i, n), times in zip(timed, per):
+        got = []
+        for j, ts in enumerate(times):
+            src = work.path("notes", "before", "%06.2f.png" % ts)
             if not os.path.isfile(src):
                 continue
+            name = "%d.png" % i if j == 0 else "%d-%06.2f.png" % (i, ts)
             with Image.open(src) as im:
                 im = im.convert("RGB")
-                if n["kind"] == "spot" and n.get("w"):  # an area: its box, as it was drawn
-                    d = ImageDraw.Draw(im)
-                    x0, y0, x1, y1 = _box(n, im.width, im.height)
-                    for k, col in ((5, (255, 255, 255)), (0, RING)):
-                        d.rectangle((x0 - k, y0 - k, x1 + k, y1 + k), outline=col, width=5)
-                elif n["kind"] == "spot":
-                    d = ImageDraw.Draw(im)
-                    cx, cy, r = n["x"] * im.width, n["y"] * im.height, max(18, im.width // 55)
-                    for k, col in ((r + 5, (255, 255, 255)), (r, RING)):
-                        d.ellipse((cx - k, cy - k, cx + k, cy + k), outline=col, width=5)
+                if j == 0:
+                    _ring(n, im, ImageDraw.Draw(im))
                 im.thumbnail((1280, 1280))
-                im.save(work.path("notes", "%d.png" % i))
-            frames[n["id"]] = "notes/%d.png" % i
+                im.save(work.path("notes", name))
+            got.append((ts, "notes/" + name))
+        if got and got[0][0] == times[0]:  # its own moment was drawn
+            frames[n["id"]] = got
     with open(work.path("notes", "notes.md"), "w", encoding="utf-8") as f:
         f.write("# The maker's notes\n\n" + notes_text(notes, timeline(work), frames) + "\n")
     return frames
+
+
+def _ring(n, im, d):
+    """A spot note's ring, or its area's box, on a frame."""
+    if n["kind"] == "spot" and n.get("w"):  # an area: its box, as it was drawn
+        x0, y0, x1, y1 = _box(n, im.width, im.height)
+        for k, col in ((5, (255, 255, 255)), (0, RING)):
+            d.rectangle((x0 - k, y0 - k, x1 + k, y1 + k), outline=col, width=5)
+    elif n["kind"] == "spot":
+        cx, cy, r = n["x"] * im.width, n["y"] * im.height, max(18, im.width // 55)
+        for k, col in ((r + 5, (255, 255, 255)), (r, RING)):
+            d.ellipse((cx - k, cy - k, cx + k, cy + k), outline=col, width=5)
+
+
+# ------------------------------------------------------------------ what was asked before
+def history(film):
+    """Every round of notes this film has had, oldest first: [{rid, n, state, at, summary,
+    notes: [{kind, t, t2, text, words, state, reply}]}] (versions/history.jsonl)."""
+    out = []
+    with contextlib.suppress(OSError):
+        with open(film.path(KEPT, HISTORY), encoding="utf-8") as f:
+            for line in f:
+                with contextlib.suppress(ValueError):
+                    got = json.loads(line)
+                    if isinstance(got, dict):
+                        out.append(got)
+    return out
+
+
+def keep_history(film, rid, n, state, notes, verdicts, summary=None):
+    """A round that is over, kept for the rounds after it: its notes and what was answered. The
+    record holds only the latest round's, and the next round was told nothing of them: a paw
+    asked for twice was drawn the second time with no word of the first (ch7tno, 2026-11-24)."""
+    mine = [x for x in notes if x.get("id") != REFRESH_NOTE]
+    if not mine or any(x.get("rid") == rid for x in history(film)):
+        return
+    said = {v.get("id"): v for v in verdicts or []}
+    keys = ("kind", "t", "t2", "x", "y", "line", "was", "words", "text")
+    row = {
+        "rid": rid,
+        "n": n,
+        "state": state,
+        "at": _now(),
+        "summary": summary,
+        "notes": [
+            {
+                **{k: x[k] for k in keys if x.get(k) is not None},
+                "state": (said.get(x["id"]) or {}).get("state"),
+                "reply": (said.get(x["id"]) or {}).get("reply"),
+            }
+            for x in mine
+        ],
+    }
+    os.makedirs(film.path(KEPT), exist_ok=True)
+    with open(film.path(KEPT, HISTORY), "a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def _backfill(film, rec):
+    """The round the record still holds, into the history, before the next one takes its place
+    there (a film whose last round was made before the history was kept)."""
+    r = rec.get("round") or {}
+    if r.get("id") and r.get("notes") and not r.get("hand") and r.get("state") not in ACTIVE:
+        with contextlib.suppress(Exception):
+            keep_history(
+                film,
+                r["id"],
+                r.get("n"),
+                r.get("state"),
+                r["notes"],
+                r.get("answers"),
+                r.get("summary"),
+            )
+
+
+def _when(n):
+    if n.get("kind") == "film" or n.get("t") is None:
+        return "the whole film"
+    if n.get("kind") == "line":
+        return "the words of line %s" % n.get("line")
+    if n.get("t2") is not None:
+        return "from %s to %s" % (_mmss(n["t"]), _mmss(n["t2"]))
+    return "at %s" % _mmss(n["t"])
+
+
+def earlier(film, work=None):
+    """The last rounds of notes on this film, for the round being made: "" when there were
+    none; also written to the copy's notes/earlier.md."""
+    rows = history(film)[-EARLIER:]
+    out = []
+    for r in rows:
+        made = "made version %s" % r.get("n") if r.get("state") == "done" else "made no version"
+        body = ["Round of %s, %s:" % (str(r.get("at") or "")[:10], made)]
+        for x in r.get("notes") or []:
+            asked = x.get("text") or ""
+            if x.get("words"):
+                asked = ('Say "%s" instead of "%s". %s' % (x["words"], x.get("was"), asked)).strip()
+            body.append("- [%s] %s" % (_when(x), asked))
+            if x.get("reply"):
+                done = "Done" if x.get("state") == "done" else "Not changed"
+                body.append("  Answered: %s. %s" % (done, x["reply"]))
+        out.append("\n".join(body))
+    if not out:
+        return ""
+    text = "\n\n".join(out)[-6000:]
+    if work is not None:
+        with contextlib.suppress(OSError):
+            os.makedirs(work.path("notes"), exist_ok=True)
+            with open(work.path("notes", "earlier.md"), "w", encoding="utf-8") as f:
+                f.write("# Earlier rounds of notes on this film\n\n" + text + "\n")
+    return EARLIER_TEXT % text
+
+
+# ------------------------------------------------------------------ the project, as it is now
+def _same(a, b):
+    try:
+        with open(a, "rb") as f, open(b, "rb") as g:
+            return f.read() == g.read()
+    except OSError:
+        return False
+
+
+def project_now(work):
+    """notes/project/: the scenes and characters of the film's project that are not what the
+    film has -- changed there since, or new -- for a note that asks for one. An episode keeps
+    its own copies (library.seed copies by value), so a round knew nothing of a scene made
+    after the episode. -> what the round is told of them, or "". Nothing in the film changes
+    here: Claude copies one in only where a note asks."""
+    import library
+
+    rec = work.record()
+    lib = library.lib_of(rec) if (rec.get("project") or {}).get("id") else None
+    if not lib:
+        return ""
+    idx, d = library.load(lib), library.dir_of(lib)
+    rows = []
+    for n, e in sorted(idx["cast"].items()):
+        if e.get("deleted") or len(rows) >= 24:
+            continue
+        what = "a scene" if e.get("kind") == "place" else "a character"
+        about = " ".join(str(e.get("about") or "").split())[:120]
+        if e.get("painted"):
+            src = os.path.join(d, "cast", n, "v%s.%s" % (e.get("version"), e.get("ext")))
+            mine = next(
+                (
+                    p
+                    for p in (
+                        work.path("inputs", "cast_%s.%s" % (n, x)) for x in library.PICTURE_EXT
+                    )
+                    if os.path.isfile(p)
+                ),
+                None,
+            )
+            if not os.path.isfile(src) or mine is None or _same(src, mine):
+                continue  # a painted one the film never had is not a round's to bring in
+            rel, new = "notes/project/cast_%s.%s" % (n, e.get("ext")), False
+            how = "painted; the film's is inputs/%s" % os.path.basename(mine)
+        else:
+            src = os.path.join(d, "cast", n, "v%s.js" % e.get("version"))
+            mine = work.path("cast", n + ".js")
+            if not os.path.isfile(src) or _same(src, mine):
+                continue
+            rel, new = "notes/project/cast/%s.js" % n, not os.path.isfile(mine)
+            how = "drawn"
+        dst = work.path(*rel.split("/"))
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(src, dst)
+        rows.append(
+            "- @%s (%s, %s%s): %s -- %s"
+            % (
+                n,
+                what,
+                how,
+                "; " + about if about else "",
+                "new: this film does not have it" if new else "changed since this film's copy",
+                rel,
+            )
+        )
+    return PROJECT % "\n".join(rows) if rows else ""
+
+
+# ------------------------------------------------------------------ the second look
+async def looked(work, t, notes, verdicts, frames, ask, only=None):
+    """Whether the film now shows what each note answered done asked for, as somebody who did
+    not make the change sees it: each note's frames as they were (pack kept them) beside the
+    same moments drawn now, read by a Claude call with no tools that knows only the note.
+    Claude judged its own change from its own stills, and answered done for a paw that still
+    read as a grey pole with a knob (ch7tno.r1): its maker found out by watching, and sent the
+    note again. ask: async (text, [jpeg bytes]) -> (dict, cost). only: these note ids.
+    -> {note id: {"ok", "sure", "why"}} for the notes it could look at (a note on the words, or
+    on the whole film, has no frames to compare)."""
+    from PIL import Image, ImageDraw
+
+    import review
+
+    todo = []
+    for i, n in enumerate(notes, 1):
+        got = [x for x in _frames_of(frames.get(n["id"])) if x[0] is not None]
+        if (verdicts.get(n["id"]) or {}).get("state") != "done" or not got or n["kind"] == "line":
+            continue
+        if only is not None and n["id"] not in only:
+            continue
+        rest = sorted(got[1:])
+        pick = [got[0]] + rest[:1] + (rest[-1:] if len(rest) > 1 else [])
+        todo.append((i, n, got[0][0], sorted(x[0] for x in pick[:CHECK_ROWS])))
+    if not todo:
+        return {}
+    os.makedirs(work.path("notes", "after"), exist_ok=True)
+    every = sorted({ts for _, _, _, times in todo for ts in times})
+    for k in range(0, len(every), toolbox.MAX_STILLS):
+        await t.stills(every[k : k + toolbox.MAX_STILLS], sheet=False)
+        for ts in every[k : k + toolbox.MAX_STILLS]:
+            src = work.path("outputs", "review", "%06.2f.png" % ts)
+            if os.path.isfile(src):
+                shutil.copyfile(src, work.path("notes", "after", "%06.2f.png" % ts))
+
+    def sheet(i, n, main, times):
+        pairs = []
+        for ts in times:
+            a = work.path("notes", "before", "%06.2f.png" % ts)
+            b = work.path("notes", "after", "%06.2f.png" % ts)
+            if not (os.path.isfile(a) and os.path.isfile(b)):
+                continue
+            if ts == main and n["kind"] == "spot":  # the place pointed at, on both
+                both = []
+                for side, src in (("was", a), ("now", b)):
+                    with Image.open(src) as im:
+                        im = im.convert("RGB")
+                        _ring(n, im, ImageDraw.Draw(im))
+                        dst = work.path("notes", "after", "%d-%s.png" % (i, side))
+                        im.save(dst)
+                    both.append(dst)
+                a, b = both
+            pairs.append((ts, a, b))
+        if not pairs:
+            return None
+        return review.jpeg(review.pairs_sheet(pairs, work.path("notes", "after", "%d.jpg" % i)))
+
+    out = {}
+    for k in range(0, len(todo), CHECK_NOTES):
+        said, images, ids = [], [], {}
+        for i, n, main, times in todo[k : k + CHECK_NOTES]:
+            img = await asyncio.to_thread(sheet, i, n, main, times)
+            if img is None:
+                continue
+            images.append(img)
+            ids[i] = n["id"]
+            mark = " (the orange mark is the place)" if n["kind"] == "spot" else ""
+            said.append(
+                "Picture %d -- note %d [%s]%s: %s" % (len(images), i, _when(n), mark, n["text"])
+            )
+        if not images:
+            continue
+        d, _cost = await asyncio.wait_for(ask(CHECK % "\n".join(said), images), CHECK_S)
+        for x in (d or {}).get("notes") or []:
+            try:
+                nid = ids[int(x.get("number"))]
+            except (AttributeError, KeyError, TypeError, ValueError):
+                continue
+            out[nid] = {
+                "ok": x.get("ok") is not False or x.get("sure") is False,
+                "sure": x.get("sure") is not False,
+                "why": " ".join(str(x.get("why") or "").split())[:300],
+            }
+    return out
+
+
+def again_text(notes, bad, seen):
+    """The notes the second look did not pass, for the turn that makes them again."""
+    out = []
+    for i in bad:
+        n = notes[i - 1]
+        ts = frame_time(n)
+        out.append(
+            "%d. [%s] %s\n   What they saw: %s\n   As it is now: notes/after/%06.2f.png; as it "
+            "was: notes/before/%06.2f.png; both side by side: notes/after/%d.jpg"
+            % (i, _when(n), n["text"], seen[n["id"]]["why"] or "it does not show it", ts, ts, i)
+        )
+    return "\n\n".join(out)
 
 
 # ------------------------------------------------------------------ asking
@@ -1253,6 +1682,8 @@ def _begin(
         max([version_of(rec)] + [v.get("n", 0) for v in rec.get("versions") or []]) + 1,
     )
     asked = asked or _now()
+    if tries == 1:
+        _backfill(film, rec)
     days = list(rec.get("round_days") or [])[-20:] + (
         [asked] if tries == 1 and hand is None else []
     )
@@ -1416,7 +1847,13 @@ async def _run(job, film, sched):
     r0 = film.record().get("round") or {}
     notes, auth, hand = r0.get("notes") or [], r0.get("auth") or "api", r0.get("hand")
     first = "Taking the changed files" if hand else "Reading your notes"
-    lim = limits(film.length, len(notes), wide(notes), model=claude_of(film.record()).get("model"))
+    lim = limits(
+        film.length,
+        len(notes),
+        wide(notes),
+        model=claude_of(film.record()).get("model"),
+        reach=weight(notes),
+    )
     log = film.path(KEPT, "r%s.events.jsonl" % rid.rsplit(".r", 1)[-1])
     os.makedirs(os.path.dirname(log), exist_ok=True)
     t0, meter, clock = time.time(), agent.Meter(), Clock()
@@ -1504,6 +1941,9 @@ async def _run(job, film, sched):
         """The round ended without a version: the film is as it was."""
         _set(film, job, st, error=error, finished=_now(), server=None, now=None, answers=verdicts())
         _drop_mark(fid)
+        if not hand:
+            with contextlib.suppress(Exception):
+                keep_history(film, rid, n, st, notes, verdicts(), state.summary)
         emit({"type": "error" if st != "unchanged" else "done", "text": error or st})
         await _tell(
             agent,
@@ -1595,13 +2035,15 @@ async def _run(job, film, sched):
                     raise RoundError(
                         409, "This film cannot be changed here: %s" % str(e)[:300]
                     ) from None
+                past = await asyncio.to_thread(earlier, film, work)
+                theirs = "" if r0.get("refresh") else await asyncio.to_thread(project_now, work)
                 say = {
-                    "prompt": ask(work, notes, frames, lim),
+                    "prompt": ask(work, notes, frames, lim, past, theirs),
                     "system": agent.system_prompt(work.look, work.caps),
                     "effort": EFFORT,
                     "budget_usd": lim["budget_usd"],
                 }
-                res = None
+                res, late = None, False
                 for attempt in (1, 2):
                     try:
                         res = await agent._within(
@@ -1633,29 +2075,100 @@ async def _run(job, film, sched):
                             "budget_usd": max(1.0, lim["budget_usd"] - meter.usd()),
                         }
                     except TimeoutError:
-                        break  # past its time: what it changed and answered so far is judged below
+                        late = True  # past its time: more of it below for the notes left
+                        break
                 if res is not None and res.is_error:
                     raise RuntimeError("Claude stopped early: %s" % (res.result or res.subtype))
-                if state.missing() and t.session:  # one short turn for the notes left unanswered
-                    last = {
-                        "prompt": ANSWER % ", ".join(map(str, state.missing())),
-                        "resume": t.session,
-                        "effort": "low",
-                        "system": say["system"],
-                        "budget_usd": 1.0,
-                    }
+
+                async def turn(prompt, secs, effort=None, budget=None):
+                    """One more turn of the round's own session, in a time of its own. Never
+                    raises: what it changed and answered is judged with the rest."""
+                    clock.t0, clock.paused = time.time(), 0.0
                     with contextlib.suppress(Exception):
                         await agent._within(
-                            agent.run_claude(work, emit, meter, t, auth, **last),
-                            Clock(),
-                            {"claude_s": 180, "wall_s": 600},
+                            agent.run_claude(
+                                work,
+                                emit,
+                                meter,
+                                t,
+                                auth,
+                                prompt=prompt,
+                                resume=t.session,
+                                effort=effort or EFFORT,
+                                system=say["system"],
+                                budget_usd=budget or max(1.0, lim["budget_usd"] / 2),
+                            ),
+                            clock,
+                            {"claude_s": secs, "wall_s": secs + 20 * 60},
                             None,
                         )
+
+                # notes its time ran out on get more of it, sized by them: never "no time"
+                for _ in range(MORE if late else 0):
+                    left = [notes[i - 1] for i in state.missing()]
+                    if not left or not t.session:
+                        break
+                    more = limits(film.length, len(left), wide(left), reach=weight(left))
+                    tell_now("Taking more time for %d of your notes" % len(left), force=True)
+                    emit({"type": "log", "text": "more time: notes %s" % state.missing()})
+                    await turn(
+                        CONTINUE % (", ".join(map(str, state.missing())), more["claude_s"] // 60),
+                        more["claude_s"],
+                    )
+                if state.missing() and t.session:  # one short turn for the notes left unanswered
+                    await turn(ANSWER % ", ".join(map(str, state.missing())), 180, "low", 1.0)
                 for i in state.missing():
                     state.verdicts[notes[i - 1]["id"]] = {
                         "state": "cannot",
                         "reply": "Claude ran out of time before it reached this note.",
                     }
+                # the second look: what is answered done, against its frames, by other eyes; what
+                # does not show comes back once. It can be wrong and it can break: neither fails
+                # a round, and a note it still doubts says so to its maker.
+                import review  # noqa: PLC0415 -- it imports agent, as this function does
+
+                if frames and not r0.get("refresh") and review.enabled():
+                    try:
+                        import ytdraft  # noqa: PLC0415
+
+                        async def eyes(text, images):
+                            return await ytdraft.ask_json(
+                                text,
+                                images,
+                                auth,
+                                work,
+                                ytdraft.MODEL,
+                                review.EFFORT,
+                                CHECK_SYSTEM,
+                                "round-check",
+                            )
+
+                        tell_now("Checking each change against your notes", force=True)
+                        seen = await looked(work, t, notes, state.verdicts, frames, eyes)
+                        bad = [
+                            i
+                            for i, x in enumerate(notes, 1)
+                            if (seen.get(x["id"]) or {}).get("ok") is False
+                        ]
+                        for i in bad:
+                            why = seen[notes[i - 1]["id"]]["why"]
+                            emit({"type": "log", "text": "the second look, note %d: %s" % (i, why)})
+                        if bad and t.session:
+                            tell_now("Doing %d again that did not show yet" % len(bad), force=True)
+                            secs = min(25 * 60, 4 * 60 + 4 * 60 * len(bad))
+                            await turn(AGAIN % (again_text(notes, bad, seen), secs // 60), secs)
+                            tell_now("Checking them again", force=True)
+                            ids = {notes[i - 1]["id"] for i in bad}
+                            seen.update(
+                                await looked(work, t, notes, state.verdicts, frames, eyes, ids)
+                            )
+                        state.checks = seen
+                        for x in notes:
+                            c, v = seen.get(x["id"]), state.verdicts.get(x["id"])
+                            if c and c["ok"] is False and v and v["state"] == "done":
+                                v["reply"] = (v["reply"] + " " + UNSURE % c["why"])[:600]
+                    except Exception as e:  # noqa: BLE001 -- never fails a round
+                        emit({"type": "log", "text": "the second look did not run: %s" % e})
             after = await asyncio.to_thread(digest, work)
         if after == fresh:
             await over(
@@ -1742,6 +2255,9 @@ async def _run(job, film, sched):
             answers=verdicts(),
         )
         _drop_mark(fid)
+        if not hand:
+            with contextlib.suppress(Exception):
+                keep_history(film, rid, n, "done", notes, verdicts(), state.summary)
         rec = film.record()
         await agent.save(
             fid,
@@ -1766,6 +2282,7 @@ async def _run(job, film, sched):
                 "now": None,
                 "notes": verdicts(),
                 "summary": state.summary,
+                "checks": [{"id": k, **v} for k, v in state.checks.items()],
                 "rev": entry["rev"],
                 **bill,
                 "seconds": round(time.time() - t0, 1),
@@ -2040,7 +2557,13 @@ async def _by_hand(args):
     for i, n in enumerate(notes, 1):
         n.setdefault("id", "n%d" % i)
     rec = film.record()
-    lim = limits(film.length, len(notes), wide(notes), model=claude_of(film.record()).get("model"))
+    lim = limits(
+        film.length,
+        len(notes),
+        wide(notes),
+        model=claude_of(film.record()).get("model"),
+        reach=weight(notes),
+    )
     plan = {
         "film": film.id,
         "version": version_of(rec),
