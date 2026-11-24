@@ -1151,6 +1151,16 @@ PROJECT = (
     "film's in inputs/ and painting again every painting whose ref names it (`paint` with "
     "retake, those only). Then `stills` of every shot it is in, and look.\n"
 )
+RULES = (
+    "\nThe series' standing rules, from the person who runs it. Each is a note they left on an "
+    "episode and must not have to leave again. Whatever you draw or change in this round "
+    "follows every one of them; a note that asks for the opposite of a rule wins, for that "
+    "note. Do not go through the rest of the film for them: the notes say what to change.\n%s\n"
+)
+CHECK_RULES = (
+    "\n\nThe series has standing rules. Where a right-hand frame, in what this note changed, "
+    "plainly breaks one of them, ok is false too, and why names the rule:\n%s"
+)
 CHECK_SYSTEM = (
     "You check changes made to an animated film against what its maker asked for. You see the "
     "request and frames of the film; you did not make the change and you cannot see how it was "
@@ -1478,7 +1488,7 @@ def project_now(work):
 
 
 # ------------------------------------------------------------------ the second look
-async def looked(work, t, notes, verdicts, frames, ask, only=None):
+async def looked(work, t, notes, verdicts, frames, ask, only=None, rules=None):
     """Whether the film now shows what each note answered done asked for, as somebody who did
     not make the change sees it: each note's frames as they were (pack kept them) beside the
     same moments drawn now, read by a Claude call with no tools that knows only the note.
@@ -1549,7 +1559,10 @@ async def looked(work, t, notes, verdicts, frames, ask, only=None):
             )
         if not images:
             continue
-        d, _cost = await asyncio.wait_for(ask(CHECK % "\n".join(said), images), CHECK_S)
+        text = CHECK % "\n".join(said)
+        if rules:
+            text += CHECK_RULES % "\n".join("- " + r for r in rules)
+        d, _cost = await asyncio.wait_for(ask(text, images), CHECK_S)
         for x in (d or {}).get("notes") or []:
             try:
                 nid = ids[int(x.get("number"))]
@@ -1592,8 +1605,11 @@ def start(
     voice=None,
     claude=None,
     refresh=None,
+    rules=None,
 ):
-    """Make this finished film's next version from these notes; the round's job. `refresh`:
+    """Make this finished film's next version from these notes; the round's job. `rules`: its
+    project's standing rules as they are now (the film's record has them as they were when it
+    was made). `refresh`:
     instead of notes, the names of its project's scenes and characters to bring the film up to
     (refresh_notes, lay_over). Asked again
     with the same key, the round already asked for. Raises RoundError for what cannot be one.
@@ -1649,6 +1665,7 @@ def start(
         voice=voice is not None,
         claude=claude,
         refresh=refresh,
+        rules=rules,
     )
 
 
@@ -1668,6 +1685,7 @@ def _begin(
     voice=False,
     claude=None,
     refresh=None,
+    rules=None,
 ):
     rec = film.record()
     k = k or (rec.get("rounds") or 0) + 1
@@ -1708,6 +1726,7 @@ def _begin(
             **({"voice": True} if voice else {}),
             **({"claude": claude} if claude else {}),
             **({"refresh": list(refresh)} if refresh else {}),
+            **({"rules": films.clean_rules(rules)} if rules else {}),
         },
     )
     _set_mark(film.id)
@@ -2037,6 +2056,10 @@ async def _run(job, film, sched):
                     ) from None
                 past = await asyncio.to_thread(earlier, film, work)
                 theirs = "" if r0.get("refresh") else await asyncio.to_thread(project_now, work)
+                # the project's rules as the site sent them with the round, else as the film has them
+                rules = films.clean_rules(r0.get("rules")) or films.rules_of(rec0)
+                if rules:
+                    theirs = RULES % "\n".join("- " + x for x in rules) + theirs
                 say = {
                     "prompt": ask(work, notes, frames, lim, past, theirs),
                     "system": agent.system_prompt(work.look, work.caps),
@@ -2144,7 +2167,9 @@ async def _run(job, film, sched):
                             )
 
                         tell_now("Checking each change against your notes", force=True)
-                        seen = await looked(work, t, notes, state.verdicts, frames, eyes)
+                        seen = await looked(
+                            work, t, notes, state.verdicts, frames, eyes, rules=rules
+                        )
                         bad = [
                             i
                             for i, x in enumerate(notes, 1)
@@ -2160,7 +2185,9 @@ async def _run(job, film, sched):
                             tell_now("Checking them again", force=True)
                             ids = {notes[i - 1]["id"] for i in bad}
                             seen.update(
-                                await looked(work, t, notes, state.verdicts, frames, eyes, ids)
+                                await looked(
+                                    work, t, notes, state.verdicts, frames, eyes, ids, rules
+                                )
                             )
                         state.checks = seen
                         for x in notes:

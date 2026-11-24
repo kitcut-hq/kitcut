@@ -1384,6 +1384,12 @@ async def create(req):
             "name": " ".join(str(project.get("name") or "").split())[:80] or "Untitled",
             "brief": str(project.get("brief") or "").strip()[: films.BRIEF_MAX],
             "from_account_cast": project.get("from_account_cast") is True,
+            # its standing rules: every episode is made by them and read against them
+            **(
+                {"rules": films.clean_rules(project["rules"])}
+                if films.clean_rules(project.get("rules"))
+                else {}
+            ),
             # what its films share (film.PROJECT_KEEPS). Not given: a series, which keeps it all
             **(
                 {"keep": [k for k in films.PROJECT_KEEPS if k in project["keep"]]}
@@ -3199,6 +3205,7 @@ async def versions_make(req):
                 voice=voice,
                 claude=claude if hand is None else None,
                 refresh=refresh,
+                rules=films.clean_rules(body.get("rules")),
             )
         except rounds.RoundError as e:
             return _round_error(e)

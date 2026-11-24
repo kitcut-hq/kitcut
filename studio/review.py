@@ -56,6 +56,8 @@ KINDS = (
     "float",
     "cutoff",
     "continuity",
+    "misread",
+    "rule",
 )
 # kinds that are never a must-fix, whatever the reader says: they are about how a shot is
 # composed, and a fix turn spent on one moved a crown off a name plate (2 of the 2 musts the
@@ -183,6 +185,11 @@ def first_text(mat, events, n_sheets):
     if mat["cast"]:
         out.append(
             "\nWho is in it (the cast's own notes):\n" + "\n".join("- " + c for c in mat["cast"])
+        )
+    if mat.get("rules"):
+        out.append(
+            "\nThe series' standing rules, from the person who runs it (a frame that breaks one "
+            "is a finding of kind rule):\n" + "\n".join("- " + r for r in mat["rules"])
         )
     if mat["narration"]:
         out.append(
@@ -423,6 +430,7 @@ def view_of(film, tools):
 
     rec = film.record()
     mat = material(film.dir, title=str(rec.get("title") or ""), length=film.length)
+    mat["rules"] = ((rec.get("project") or {}).get("rules") or [])[:30]
     if not mat["narration"]:
         mat["narration"] = [
             (a or 0.0, b or 0.0, t) for a, b, t in ytdraft._narration(film) if a is not None
