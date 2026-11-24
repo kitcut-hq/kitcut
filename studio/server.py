@@ -3139,12 +3139,18 @@ async def versions_make(req):
         return web.json_response(
             {"error": "effort must be one of: %s" % ", ".join(films.EFFORTS)}, status=400
         )
+    # "Update episodes" (the project's Scenes and Cast): no notes, the names of the project's
+    # scenes and characters this episode is brought up to (rounds.refresh_notes)
+    refresh = body.get("refresh") if hand is None else None
     try:
-        notes = (
-            []
-            if hand is not None
-            else rounds.clean_notes(f, body.get("notes"), fresh=voice is not None)
-        )
+        if refresh is not None:
+            refresh, notes = rounds.refresh_notes(f, refresh)
+        else:
+            notes = (
+                []
+                if hand is not None
+                else rounds.clean_notes(f, body.get("notes"), fresh=voice is not None)
+            )
     except rounds.RoundError as e:
         return _round_error(e)
     if not await leading():
@@ -3186,6 +3192,7 @@ async def versions_make(req):
                 hand=hand,
                 voice=voice,
                 claude=claude if hand is None else None,
+                refresh=refresh,
             )
         except rounds.RoundError as e:
             return _round_error(e)

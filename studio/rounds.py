@@ -118,6 +118,27 @@ RING = (217, 115, 63)  # the colour a note's spot is ringed in on its frame
 AREA_MIN = 0.02  # a boxed area is at least this much of the picture each way
 
 JOBS = {}  # film id -> the round being made here
+# A round asked for with `refresh` (the project's Scenes and Cast: "Update episodes") has no notes
+# of its maker's: the project's newest versions of the members named are laid over the round's
+# copy (lay_over), and this one note of the studio's asks Claude to make the film use them and
+# change nothing else. An episode keeps its own copy of the cast (library.seed copies by value),
+# so this is how a scene or character changed in the project reaches an episode already made.
+REFRESH_NOTE = "refresh"
+REFRESH = (
+    "The project's maker changed %(what)s since this film was made, and wants this film to use "
+    "%(them)s as %(they)s now. The new %(versions)s already in this folder%(where)s. Make the "
+    "film show %(them)s as %(they)s now, and change nothing else: the same scenes, timing, "
+    "words and music.%(drawn)s%(painted)s Then `stills` of every shot %(they_in)s in, and look: "
+    "is it the new one, does it sit right, and is everything around it as it was?"
+)
+REFRESH_DRAWN = (
+    " A drawn one: film.js must draw it through SK.cast.<name>; where the film drew its own "
+    "copy of it inline, draw the cast member there instead, at the same place and size."
+)
+REFRESH_PAINTED = (
+    " A painted one: every painting whose ref names it is painted again from the new picture "
+    "(`paint` with retake, those paintings only); the other paintings stay."
+)
 # what Claude is doing, as the round's person reads it: the log's own lines (agent._describe)
 # name files and tools, which mean nothing to them
 PLAIN = (
@@ -171,6 +192,88 @@ def wide(notes):
     """How many of the notes are about the whole film: each is a change to every shot it
     touches, and every one of those shots has to be looked at again."""
     return sum(1 for n in notes if n.get("kind") == "film")
+
+
+def lay_over(work, names):
+    """The project's newest versions of these members into a round's copy, over the film's own:
+    a drawn one as cast/<name>.js, a painted one as inputs/cast_<name>.<ext> (and the manifest's
+    images). -> {"drawn": [names], "painted": [names]}; a member the project no longer has is
+    left as the film has it."""
+    import library
+
+    lib = library.lib_of(work.record())
+    got = {"drawn": [], "painted": []}
+    if not lib:
+        return got
+    idx, d = library.load(lib), library.dir_of(lib)
+    man = None
+    for n in names:
+        e = idx["cast"].get(n)
+        if not e or e.get("deleted"):
+            continue
+        if e.get("painted"):
+            src = os.path.join(d, "cast", n, "v%d.%s" % (e["version"], e.get("ext")))
+            if not os.path.exists(src):
+                continue
+            os.makedirs(work.path("inputs"), exist_ok=True)
+            for x in library.PICTURE_EXT:
+                with contextlib.suppress(OSError):
+                    os.remove(work.path("inputs", "cast_%s.%s" % (n, x)))
+            rel = "inputs/cast_%s.%s" % (n, e["ext"])
+            shutil.copyfile(src, work.path(*rel.split("/")))
+            if man is None:
+                with open(work.manifest, encoding="utf-8") as f:
+                    man = json.load(f)
+            man.setdefault("images", {})["cast_" + n] = rel
+            got["painted"].append(n)
+        else:
+            src = os.path.join(d, "cast", n, "v%d.js" % e["version"])
+            if not os.path.exists(src):
+                continue
+            os.makedirs(work.path("cast"), exist_ok=True)
+            shutil.copyfile(src, work.path("cast", n + ".js"))
+            got["drawn"].append(n)
+    if man is not None:
+        films._write_json(work.manifest, man)
+    return got
+
+
+def refresh_notes(film, names):
+    """The one note of a refresh round, for these members of the film's project; raises
+    RoundError when the film is no episode, or names nothing its project has."""
+    import library
+
+    rec = film.record()
+    lib = library.lib_of(rec) if (rec.get("project") or {}).get("id") else None
+    if not lib:
+        raise RoundError(409, "This film is not an episode of a project.", "project")
+    if not isinstance(names, list) or not names or len(names) > 8:
+        raise RoundError(400, "refresh is a list of up to 8 names.")
+    cast = library.load(lib)["cast"]
+    have = [
+        n for n in dict.fromkeys(str(x) for x in names) if n in cast and not cast[n].get("deleted")
+    ]
+    if len(have) != len(set(map(str, names))):
+        raise RoundError(404, "The project has no such scene or character.", "member")
+    drawn = [n for n in have if not cast[n].get("painted")]
+    painted = [n for n in have if cast[n].get("painted")]
+    one = len(have) == 1
+    where = []
+    if drawn:
+        where.append("cast/<name>.js for %s" % ", ".join(drawn))
+    if painted:
+        where.append("inputs/cast_<name>.* for %s" % ", ".join(painted))
+    text = REFRESH % {
+        "what": ", ".join("@" + n for n in have),
+        "them": "it" if one else "them",
+        "they": "it is" if one else "they are",
+        "they_in": "it is" if one else "they are",
+        "versions": "version is" if one else "versions are",
+        "where": " (%s)" % "; ".join(where),
+        "drawn": REFRESH_DRAWN if drawn else "",
+        "painted": REFRESH_PAINTED if painted else "",
+    }
+    return have, [{"id": REFRESH_NOTE, "kind": "film", "text": text}]
 
 
 def limits(length, notes, whole=0, model=None):
@@ -1059,8 +1162,11 @@ def start(
     hand=None,
     voice=None,
     claude=None,
+    refresh=None,
 ):
-    """Make this finished film's next version from these notes; the round's job. Asked again
+    """Make this finished film's next version from these notes; the round's job. `refresh`:
+    instead of notes, the names of its project's scenes and characters to bring the film up to
+    (refresh_notes, lay_over). Asked again
     with the same key, the round already asked for. Raises RoundError for what cannot be one.
     `src`: the version the notes were written on (it must be the film now). `hand`: files
     changed by hand instead of notes (clean_hand), which are not one of its maker's rounds of
@@ -1096,7 +1202,10 @@ def start(
         raise RoundError(
             429, "This film has had its %d rounds of changes for today." % PER_DAY, "rounds"
         )
-    notes = clean_notes(film, notes, fresh=voice is not None)
+    if refresh is not None:
+        refresh, notes = refresh_notes(film, refresh)
+    else:
+        notes = clean_notes(film, notes, fresh=voice is not None)
     if voice is not None:
         keep_pass(film, voice)
     return _begin(
@@ -1110,6 +1219,7 @@ def start(
         auth,
         voice=voice is not None,
         claude=claude,
+        refresh=refresh,
     )
 
 
@@ -1128,6 +1238,7 @@ def _begin(
     hand=None,
     voice=False,
     claude=None,
+    refresh=None,
 ):
     rec = film.record()
     k = k or (rec.get("rounds") or 0) + 1
@@ -1165,6 +1276,7 @@ def _begin(
             **({"hand": hand} if hand else {}),
             **({"voice": True} if voice else {}),
             **({"claude": claude} if claude else {}),
+            **({"refresh": list(refresh)} if refresh else {}),
         },
     )
     _set_mark(film.id)
@@ -1223,6 +1335,7 @@ def resume(film, sched):
         hand=r.get("hand"),
         voice=bool(r.get("voice")),
         claude=r.get("claude"),
+        refresh=r.get("refresh"),
     )
 
 
@@ -1458,6 +1571,8 @@ async def _run(job, film, sched):
             # the copy as it starts, not the film: a copy differs from its film where the studio
             # itself made it differ (the Free plan's closing is taken off its manifest)
             fresh = await asyncio.to_thread(digest, work)
+            if r0.get("refresh"):  # after `fresh`: the members laid over are this round's change
+                await asyncio.to_thread(lay_over, work, r0["refresh"])
             t = toolbox.Tools(work, sched, emit, clock)
             t.priority, t.round, t.pulse = r0.get("priority", 0), state, agent.Pulse()
             if hand:

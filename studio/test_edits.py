@@ -466,6 +466,57 @@ async def main():
         m,
     )
 
+    # ---- an episode brought up to the project's members ("Update episodes": rounds.py refresh)
+    import rounds
+
+    names, notes = rounds.refresh_notes(first, ["room", "kitchen", "room"])
+    text = notes[0]["text"]
+    check(
+        names == ["room", "kitchen"]
+        and notes[0]["kind"] == "film"
+        and notes[0]["id"] == rounds.REFRESH_NOTE
+        and "@room, @kitchen" in text
+        and "SK.cast.<name>" in text
+        and "`paint` with retake" in text
+        and "change nothing else" in text,
+        "a refresh round has one note of the studio's: use the new members, change nothing else",
+        text,
+    )
+    one = rounds.refresh_notes(first, ["room"])[1][0]["text"]
+    check("use it as it is now" in one and "retake" not in one, "worded for one drawn member", one)
+    for bad, status in ((["nobody"], 404), ([], 400), ("room", 400)):
+        try:
+            rounds.refresh_notes(first, bad)
+            check(False, "refresh refused: %r" % (bad,))
+        except rounds.RoundError as e:
+            check(e.status == status, "refresh refused: %r" % (bad,), e.text)
+    loose = films.Film.create("not an episode", 5, "drawn", client=CL)
+    try:
+        rounds.refresh_notes(loose, ["room"])
+        check(False, "a film outside projects has nothing to be brought up to")
+    except rounds.RoundError as e:
+        check(e.reason == "project", "a film outside projects has nothing to be brought up to")
+    check(
+        not os.path.exists(first.path("cast", "room.js")),
+        "the episode was made before the room was",
+    )
+    work = rounds.copy_of(first, "t-refresh", notes)
+    got = rounds.lay_over(work, names)
+    man = json.load(open(work.manifest, encoding="utf-8"))
+    check(
+        got == {"drawn": ["room"], "painted": ["kitchen"]}
+        and "#c0392b" in open(work.path("cast", "room.js"), encoding="utf-8").read()
+        and os.path.exists(work.path("inputs", "cast_kitchen.jpg"))
+        and man["images"].get("cast_kitchen") == "inputs/cast_kitchen.jpg",
+        "the project's newest versions are laid over the round's copy; the film itself is untouched",
+        (got, man.get("images")),
+    )
+    check(
+        not os.path.exists(first.path("cast", "room.js")),
+        "the episode keeps its own until the version is made",
+    )
+    shutil.rmtree(work.dir, ignore_errors=True)
+
     # ---- edits left in the making by a server that is gone
     e = edits._read(lib, "room", 5)
     e.update(state="running", server="gone-server")
