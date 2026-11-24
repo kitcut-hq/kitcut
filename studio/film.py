@@ -328,6 +328,27 @@ ID = re.compile(r"^studio-\d{8}-\d{6}(-[a-z2-7]{6})?$")
 # a project on the site (a series, a channel): its id, and how long its brief may be
 PROJECT_ID = re.compile(r"^p-[a-z2-7]{10}$")
 BRIEF_MAX = 10000  # a series bible: its household, places, running gags (docs/series-plan.md)
+# A project's standing rules (the site's lib/projects.js cleanRules): short sentences its person
+# wants true of every episode, most of them notes left on one episode and marked "always".
+RULES_MAX, RULE_MAX = 30, 300
+
+
+def clean_rules(got):
+    """A project's rules as the site sent them, made safe to quote: [sentence], at most
+    RULES_MAX of RULE_MAX characters, none twice."""
+    out = []
+    for x in got if isinstance(got, list) else []:
+        r = " ".join(str(x or "").split())[:RULE_MAX]
+        if r and r.lower() not in [y.lower() for y in out]:
+            out.append(r)
+    return out[:RULES_MAX]
+
+
+def rules_of(rec):
+    """The standing rules of the project a film is an episode of ([] for none)."""
+    return clean_rules((rec.get("project") or {}).get("rules"))
+
+
 # what a project's films can share. A series keeps them all, and that is every project that does
 # not say otherwise; a collection (a news feed, a run of promos) names fewer or none, and its
 # films are asked to differ in the rest (library.keeps, library.note)

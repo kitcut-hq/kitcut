@@ -79,6 +79,7 @@ import clients
 import locks
 import stylekit
 from film import (
+    clean_rules,
     CAST_USE,
     HOME,
     KIT,
@@ -766,6 +767,18 @@ def _own_note(kept, memory):
     )
 
 
+# A project's standing rules (film.clean_rules), for the film's first message. Its person wrote
+# "the cats' lips don't move" on four episodes in one day (Warrior Cats, 2026-11-23): what they
+# had to say once is said to every episode after.
+RULES = (
+    "Its standing rules, from the person who runs it. Each is a note they left on an earlier "
+    "episode and must not have to leave again. Every shot of this film follows every one of "
+    "them, and they come before your own taste and before what an earlier episode did. Before "
+    "you finish, take the rules one at a time and look at the film for each (`stills` at the "
+    "shots it is about): a film that breaks one is not finished.\n%s"
+)
+
+
 def note(film):
     """What the film has from its library, for the first message ("" when nothing). An
     episode also hears its project's name and brief, in its person's words. A project that
@@ -788,6 +801,9 @@ def note(film):
         )
         if (project.get("brief") or "").strip():
             out.append("Its brief, from the person who runs it:\n" + project["brief"].strip())
+        rules = clean_rules(project.get("rules"))
+        if rules:
+            out.append(RULES % "\n".join("- " + r for r in rules))
     if project and (got.get("brand") or {}).get("name"):
         mark = brandkit.note(film, lib_of(rec))
         if mark:

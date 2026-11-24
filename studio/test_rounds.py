@@ -462,6 +462,23 @@ async def main():
         "the second look: every note answered done, its frames as they were beside now; not "
         "the notes left undone or on the words; a doubt it is not sure of does not send it back",
     )
+    await rounds.looked(kept, Stills(), ns, verdicts, frames, eyes, rules=["Cats trot."])
+    check(
+        "plainly breaks one of them" in asked[-1][0]
+        and "- Cats trot." in asked[-1][0]
+        and "standing rules" not in asked[0][0]
+        and films.clean_rules([" Cats  trot. ", "cats trot.", "", 5, "x" * 400])
+        == ["Cats trot.", "5", "x" * 300]
+        and films.rules_of({"project": {"rules": ["A."]}}) == ["A."]
+        and films.rules_of({}) == [],
+        "the second look is told the series' standing rules, as the studio keeps them",
+    )
+    import library
+
+    check(
+        "must not have to leave again" in library.RULES and "one at a time" in library.RULES,
+        "a new episode is told to follow its project's standing rules, and to check each",
+    )
     again = rounds.again_text(ns, [1], seen)
     only = await rounds.looked(kept, Stills(), ns, verdicts, frames, eyes, {"c"})
     check(
