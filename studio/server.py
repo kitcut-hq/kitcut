@@ -2136,6 +2136,8 @@ async def library_list(req):
             n = await asyncio.to_thread(edits.pending, lib, m["name"])
             if n:
                 m["pending"] = n
+        # new scenes being made from words, or waiting to be chosen from (edits.drafts)
+        got["drafts"] = await asyncio.to_thread(edits.drafts, lib)
     return web.json_response(got)
 
 
@@ -2221,7 +2223,8 @@ async def edits_get(req):
 async def edits_make(req):
     """Change a project's scene or character as asked, in one to four variations (edits.py):
     {"project", "ask", "marks": [{x, y, w?, h?, text}], "variations": 1-4, "key", "model"?,
-    "effort"?, "base"?: {"edit", "letter"}}. It takes its reserve of the day's budget and a turn
+    "effort"?, "base"?: {"edit", "letter"}, "new"?: true or {"about"}: a new scene by this name,
+    made from the asking}. It takes its reserve of the day's budget and a turn
     with Claude, but none of the client's films-at-once places. Asked again with the same key,
     it answers the edit already asked for."""
     if DRAINING or MODE == "stopping":
@@ -2278,6 +2281,9 @@ async def edits_make(req):
                 auth=auth,
                 claude=claude,
                 base=body.get("base") if isinstance(body.get("base"), dict) else None,
+                new=(body.get("new") if isinstance(body.get("new"), dict) else {})
+                if body.get("new")
+                else None,
             )
         except edits.EditError as e:
             return _edit_error(e)

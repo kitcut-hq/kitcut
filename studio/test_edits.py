@@ -99,6 +99,15 @@ async def fake_claude(
     if do == "nothing":
         await r.say_summary("The window belongs to the episode, not to the room.")
         return
+    if do == "new" and not film.edit_painted:  # a new scene: written under its own name
+        for x, col in (("a", "#16a085"), ("b", "#d35400")):
+            with open(film.path("variations", "%s.js" % x), "w", encoding="utf-8") as f:
+                f.write(room(col).replace("SK.cast.room", "SK.cast." + r.name))
+        SEEN[-1]["look"] = await r.look()
+        await r.variation("a", "The harbour at dawn.")
+        await r.variation("b", "The harbour at dusk.")
+        await r.say_summary("Two harbours.")
+        return
     if film.edit_painted:
         os.makedirs(film.path("images"), exist_ok=True)
         for x, col in (("a", (200, 40, 40)), ("b", (40, 200, 40))):
@@ -464,6 +473,83 @@ async def main():
         and m["ext"] == "jpg",
         "choosing it makes the place's next version, still a place",
         m,
+    )
+
+    # ---- a new scene, made from words (the Scenes tab's New scene)
+    PLAN["do"] = "new"
+    idx = library.load(lib)
+    idx["films"] = [first.id]  # a drawn series: its new scene is drawn
+    library._save(lib, idx)
+    for nm in ("room", "Bad name"):
+        try:
+            edits.start(CL, P1, nm, server.SCHED, "a harbour", new={})
+            check(False, "a new scene's name: refused %r" % nm)
+        except edits.EditError as e:
+            check(e.reason == "name", "a new scene's name: refused %r" % nm, e.text)
+    job = edits.start(
+        CL, P1, "harbor", server.SCHED, "A small harbour at dawn, boats tied up.", n=2, new={}
+    )
+    dr = edits.drafts(lib)
+    check(
+        [d["name"] for d in dr] == ["harbor"] and dr[0]["draft"]["state"] in edits.ACTIVE,
+        "a new scene being made is listed as a draft",
+        dr,
+    )
+    await done(job)
+    s, e = SEEN[-1], edits.get(CL, P1, "harbor", 1)
+    check(
+        e["state"] == "done"
+        and e.get("new")
+        and [v["letter"] for v in e["variations"]] == ["a", "b"],
+        "made: two variations to choose from",
+        (e["state"], e["error"], s.get("look")),
+    )
+    check(
+        "a NEW place" in s["prompt"]
+        and "cast/room.js" in s["prompt"]
+        and "kind: 'place'" in s["prompt"]
+        and "A small harbour at dawn" in s["prompt"]
+        and not s["marks"],
+        "Claude is asked for a new place written like the series' others",
+        s["prompt"][:700],
+    )
+    check(
+        "harbor" not in library.load(lib)["cast"]
+        and edits.drafts(lib)[0]["draft"]["state"] == "done",
+        "until one is chosen it is a draft, not in the cast",
+    )
+    got = edits.use(CL, P1, "harbor", 1, "b")
+    m = library.load(lib)["cast"]["harbor"]
+    check(
+        got["version"] == 1
+        and m["kind"] == "place"
+        and not m.get("painted")
+        and m.get("about")
+        and edits.drafts(lib) == [],
+        "chosen: the project's new scene, version 1",
+        m,
+    )
+    idx = library.load(lib)
+    idx["films"] = [pe.id, first.id]  # a painted series: its new scene is painted
+    library._save(lib, idx)
+    PLAN["do"] = "two"
+    job = edits.start(CL, P1, "pier", server.SCHED, "A wooden pier at night.", n=1, new={})
+    await done(job)
+    s, e = SEEN[-1], edits.get(CL, P1, "pier", 1)
+    check(
+        e["state"] == "done"
+        and e["painted"]
+        and "a NEW painted place" in s["prompt"]
+        and "cast_pier" not in s["prompt"]
+        and s["write_paint"],
+        "a painted series' new scene is painted, from words alone",
+        (e["state"], e["error"], s["prompt"][:400]),
+    )
+    edits.dismiss(CL, P1, "pier", 1)
+    check(
+        not os.path.exists(os.path.join(library.dir_of(lib), "cast", "pier"))
+        and edits.drafts(lib) == [],
+        "a new scene thrown away leaves nothing",
     )
 
     # ---- an episode brought up to the project's members ("Update episodes": rounds.py refresh)

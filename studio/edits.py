@@ -25,6 +25,12 @@ What Claude may write there (Work.writable), and nothing else:
 and it answers with `variation(letter, what)` for each one it stands behind, then `summary`.
 A variation Claude did not name, or that does not draw, is not kept.
 
+A new scene (start(new=...): the Scenes tab's "New scene") is an edit with nothing to start from:
+the person describes the place, Claude makes it in one to four variations (drawn or painted, as
+the project's episodes are), and the one chosen is its version 1. Until then the scene is a
+draft (_draft): its edits are kept under its name as any member's, and the library lists it in
+`drafts`, not in its cast.
+
 An edit's record and what it made live with the member, in the project's library:
 
     cast\\<name>\\edits\\<k>\\edit.json     the asking, its state, the variations and what each changed
@@ -132,6 +138,75 @@ def _member(client, project, name):
     return lib, idx, m
 
 
+def _draft_of(e):
+    """The scene a new-scene edit is making, as a member is listed (version 0: none chosen)."""
+    return {
+        "name": e["name"],
+        "kind": "place",
+        "about": (e.get("new") or {}).get("about") or "",
+        "painted": bool(e.get("painted")),
+        "version": 0,
+        "hash": None,
+        "new": True,
+    }
+
+
+def _draft(lib, idx, name):
+    """A scene being made from words and not chosen yet: its newest new-scene edit's, or None."""
+    have = idx["cast"].get(name)
+    if have and not have.get("deleted"):
+        return None
+    e = next((e for e in _all(lib, name) if e.get("new")), None)
+    return _draft_of(e) if e else None
+
+
+def _target(client, project, name):
+    """(lib, idx, member) of a member's edit routes: one of the project's members, or a scene
+    being made from words."""
+    lib = library.owner(client, project)
+    if not lib or not project:
+        raise EditError(404, "No such project.")
+    if not library.NAME.match(name or ""):
+        raise EditError(404, "No such scene or character.")
+    idx = library.load(lib)
+    m = idx["cast"].get(name)
+    if m and not m.get("deleted"):
+        return lib, idx, m
+    d = _draft(lib, idx, name)
+    if not d:
+        raise EditError(404, "No such scene or character.")
+    return lib, idx, d
+
+
+def drafts(lib, idx=None):
+    """The scenes being made from words, or made and waiting to be chosen from, as the library
+    lists them (library_list's `drafts`): [{name, kind, about, painted, draft: {k, state, now}}]."""
+    idx = idx or library.load(lib)
+    try:
+        names = os.listdir(os.path.join(library.dir_of(lib), "cast"))
+    except OSError:
+        return []
+    out = []
+    for n in sorted(names):
+        d = _draft(lib, idx, n) if library.NAME.match(n) else None
+        if not d:
+            continue
+        e = next(e for e in _all(lib, n) if e.get("new"))
+        if e["state"] not in ACTIVE and not (e["state"] == "done" and e.get("variations")):
+            continue
+        out.append(
+            {k: d[k] for k in ("name", "kind", "about", "painted")}
+            | {"draft": {"k": e["k"], "state": e["state"], "now": e.get("now"), "n": e.get("n")}}
+        )
+    return out
+
+
+def _painted_project(idx):
+    """Whether the project's episodes are painted (painted or collage): its new scenes are too."""
+    ep = assets.episode_of(idx)
+    return bool(ep) and getattr(ep, "look", None) in ("painted", "collage")
+
+
 def public(e):
     """An edit as the member's page shows it."""
     return {
@@ -154,13 +229,14 @@ def public(e):
         "summary": e.get("summary"),
         "error": e.get("error"),
         "painted": bool(e.get("painted")),
+        **({"new": True} if e.get("new") else {}),
     }
 
 
 def listing(client, project, name):
     """A member's edits, newest first: the one being made, and the ones with variations to
     choose from or chosen from. Old ones nobody chose from go (KEEP_DAYS)."""
-    lib, _, _ = _member(client, project, name)
+    lib, _, _ = _target(client, project, name)
     out = []
     old = (datetime.now() - timedelta(days=KEEP_DAYS)).isoformat(timespec="seconds")
     for e in _all(lib, name):
@@ -172,7 +248,7 @@ def listing(client, project, name):
 
 
 def get(client, project, name, k):
-    lib, _, _ = _member(client, project, name)
+    lib, _, _ = _target(client, project, name)
     e = _read(lib, name, k)
     if not e:
         raise EditError(404, "No such edit.")
@@ -193,7 +269,7 @@ def pending(lib, name):
 def picture(client, project, name, k, letter, small=False):
     """The path of a variation's picture, or of the marked picture (letter "marks"), or None."""
     try:
-        lib, _, _ = _member(client, project, name)
+        lib, _, _ = _target(client, project, name)
     except EditError:
         return None
     if letter != "marks" and letter not in LETTERS:
@@ -321,9 +397,11 @@ class Work(films.Film):
 def _base_file(lib, name, m, base):
     """The file an edit starts from: the member's version in use, or a variation of an earlier
     edit (Refine this). -> (path, {"version", "hash", "edit"?, "letter"?})."""
+    info = {"version": m["version"], "hash": m.get("hash")}
+    if m.get("new") and not base:
+        return None, info  # a new scene: nothing to start from
     ext = m.get("ext") if m.get("painted") else "js"
     cur = os.path.join(library.dir_of(lib), "cast", name, "v%d.%s" % (m["version"], ext))
-    info = {"version": m["version"], "hash": m.get("hash")}
     if not base:
         if not os.path.exists(cur):
             raise EditError(409, "This version's file is no longer kept.")
@@ -410,7 +488,17 @@ def prepare(lib, idx, name, m, e, episode):
     films._write_json(work.path("studio.json"), rec)
     d = library.dir_of(lib)
     base, _ = _base_file(lib, name, m, e.get("base_asked"))
-    if work.edit_painted:
+    if work.edit_painted and base is None:  # a new painted scene: painted from words alone
+        try:
+            with open(work.path("paint.json"), encoding="utf-8") as f:
+                paint = json.load(f)
+        except (OSError, ValueError):
+            paint = {}
+        paint["images"] = []
+        films._write_json(work.path("paint.json"), paint)
+        shutil.rmtree(work.path("images"), ignore_errors=True)
+        marked = False
+    elif work.edit_painted:
         # the member's picture, as the paintings' "ref": "cast_<name>" reads it
         ext = os.path.splitext(base)[1].lstrip(".")
         rel = "inputs/cast_%s.%s" % (name, ext)
@@ -438,9 +526,14 @@ def prepare(lib, idx, name, m, e, episode):
             src = os.path.join(d, "cast", n, "v%d.js" % c["version"])
             if not c.get("deleted") and not c.get("painted") and os.path.exists(src):
                 shutil.copyfile(src, work.path("cast", n + ".js"))
-        shutil.copyfile(base, work.path("cast", name + ".js"))
+        with contextlib.suppress(OSError):
+            os.remove(
+                work.path("cast", name + ".js")
+            )  # a new scene's name: no older one in its way
+        if base:
+            shutil.copyfile(base, work.path("cast", name + ".js"))
         os.makedirs(work.path("variations"), exist_ok=True)
-        pic = assets.picture(e["client"], e["project"], name)
+        pic = None if m.get("new") else assets.picture(e["client"], e["project"], name)
         if e.get("base_asked"):
             pic = os.path.join(_dir(lib, name, e["base"]["edit"]), "%s.png" % e["base"]["letter"])
         marked = _marked(pic, e["marks"], work.path("variations", "marks.png"))
@@ -509,6 +602,60 @@ maker saying what is different in it. Only variations you name are shown to the 
 - Last, `summary`: one or two plain sentences on what you made.
 Your working time: about %(minutes)d minutes.
 """
+ASK_NEW_DRAWN = """\
+This is not a film to make. The series' maker wants a NEW place for its cast, outside any \
+episode: `%(name)s`, a place the episodes will come back to. What they ask for:
+
+%(ask)s
+
+Every later episode will draw it as SK.cast.%(name)s, so write it the way this series writes its \
+places: %(examples)s The episode in this folder (film.js) shows how the series uses its cast and \
+its places, to read, not to change.
+
+Make %(n)d variation%(s)s. Write each as a whole file, variations/a.js%(more)s: a new cast member \
+that registers SK.cast.%(name)s, with kind: 'place' and an about: line saying in one sentence \
+what the place is. You can write nothing else.
+%(differ)s
+How to work:
+- A place is the whole room or street as the camera sees it: nobody in it and no words in it, in \
+the series' own style, palette and line, the same size on the stage as its other places.
+- `look` draws every variation you have written, alone, as the maker will see it, and tells you \
+where each picture is: Read them. Look after every change; a variation you have not looked at \
+is not done.
+- When a variation is right, call `variation` with its letter and one plain sentence for the \
+maker saying what it shows (no file names, no code words). Only variations you name are shown \
+to the maker.
+- Last, `summary`: one or two plain sentences on what you made.
+Your working time: about %(minutes)d minutes.
+"""
+ASK_NEW_PAINTED = """\
+This is not a film to make. The series' maker wants a NEW painted place for its cast, outside \
+any episode: `%(name)s`, a place the episodes will come back to. Every scene set there will be \
+painted from the picture they choose. What they ask for:
+
+%(ask)s
+
+Make %(n)d variation%(s)s, as paintings in paint.json: images named v_a%(more)s, each a wide \
+painting of the whole place as the camera sees it -- nobody in it, no words, letters or signs -- \
+in the series' look: keep paint.json's `style`, and paint with its palette and light. Describe \
+each fully, in plain visual words. No "ref": this is a new place. Leave the rest of paint.json \
+as it is. You can write nothing else.
+%(differ)s
+How to work:
+- `paint` paints them; then Read images/v_a.jpg%(more2)s: is it the place asked for, in the \
+series' look, with nobody in it? One that is not is painted again with a tighter prompt: `paint` \
+with retake.
+- You have %(runs)d paintings in all, retakes included.
+- When a variation is right, call `variation` with its letter and one plain sentence for the \
+maker saying what it shows. Only variations you name are shown to the maker.
+- Last, `summary`: one or two plain sentences on what you made.
+Your working time: about %(minutes)d minutes.
+"""
+DIFFER_NEW = (
+    "The variations are different takes on the place the maker described (the view, the "
+    "layout, the light, the mood) for them to choose between: not the same picture %d times, "
+    "and nothing the maker did not ask for.\n"
+)
 DIFFER = (
     "The variations answer the same asking in different ways the maker can choose between "
     "(how far the change goes, its shape, its colour): not the same picture %d times, and "
@@ -535,6 +682,42 @@ def ask(work, name, m, e, lim, marked):
         "minutes": lim["claude_s"] // 60,
     }
     letters = list(LETTERS[:n])
+    if m.get("new") and not e.get("base_asked"):
+        common["differ"] = DIFFER_NEW % n if n > 1 else ""
+        if work.edit_painted:
+            return ASK_NEW_PAINTED % (
+                common
+                | {
+                    "more": "".join(", v_%s" % x for x in letters[1:]),
+                    "more2": "".join(", images/v_%s.jpg" % x for x in letters[1:]),
+                    "runs": n * 2 + 1,
+                }
+            )
+        places = (
+            sorted(
+                k
+                for k, c in (library.load(library.lib_of(work.record())) or {"cast": {}})[
+                    "cast"
+                ].items()
+                if c.get("kind") == "place" and not c.get("painted") and not c.get("deleted")
+            )
+            if library.lib_of(work.record())
+            else []
+        )
+        examples = (
+            "its places are %s: read %s first, whole."
+            % (", ".join("cast/%s.js" % x for x in places), "them" if len(places) > 1 else "it")
+            if places
+            else "it has no place yet, so read how cast/ members are written (the "
+            "SK.cast.<name> = {...} shape, about:, draw) and how film.js draws its backgrounds."
+        )
+        return ASK_NEW_DRAWN % (
+            common
+            | {
+                "examples": examples,
+                "more": "".join(", variations/%s.js" % x for x in letters[1:]),
+            }
+        )
     if work.edit_painted:
         file = "cast_%s.%s" % (name, os.path.splitext(_base_name(work, name))[1].lstrip("."))
         return ASK_PAINTED % (
@@ -571,8 +754,9 @@ class State:
     """What an edit adds to the film's tools (tools.Tools.round): `look`, `variation` and
     `summary`, and what they collect."""
 
-    def __init__(self, work, name, n, tools, on_change):
+    def __init__(self, work, name, n, tools, on_change, place=False):
         self.work, self.name, self.n, self.t, self.on_change = work, name, n, tools, on_change
+        self.place = place  # a new scene: each variation must say kind: 'place'
         self.named, self.summary = {}, None  # letter -> what
         self.drawn = {}  # letter -> the hash of the code its picture was drawn from
         self.without = ()  # tools.only already leaves only what an edit uses
@@ -601,13 +785,17 @@ class State:
             )
         if len(code.encode("utf-8")) > library.MAX_BYTES:
             return "variations/%s.js is over %d bytes" % (letter, library.MAX_BYTES)
+        if self.place and library._kind(code) != "place":
+            return "variations/%s.js must say kind: 'place' (it is a scene)" % letter
         return None
 
     async def draw(self, letters):
         """Each of these variations drawn alone, in place of the member: variations/<l>.png."""
         w, orig = self.work, self.work.path("cast", self.name + ".js")
-        with open(orig, encoding="utf-8") as f:
-            keep = f.read()
+        keep = None  # a new scene has no file of its own yet
+        if os.path.exists(orig):
+            with open(orig, encoding="utf-8") as f:
+                keep = f.read()
         out = {}
         try:
             for x in letters:
@@ -630,8 +818,12 @@ class State:
                 self.drawn[x] = library._hash(code)
                 out[x] = None
         finally:
-            with open(orig, "w", encoding="utf-8") as f:
-                f.write(keep)
+            if keep is None:
+                with contextlib.suppress(OSError):
+                    os.remove(orig)
+            else:
+                with open(orig, "w", encoding="utf-8") as f:
+                    f.write(keep)
         return out
 
     async def look(self):
@@ -737,10 +929,15 @@ def start(
     auth="api",
     claude=None,
     base=None,
+    new=None,
 ):
     """Make variations of this member; the edit's job. Asked again with the same key, the edit
-    already asked for. Raises EditError for what cannot be one."""
-    lib, idx, m = _member(client, project, name)
+    already asked for. Raises EditError for what cannot be one. new ({} or {"about"}): a new
+    scene under this name, made from the asking alone (base: a variation of an earlier one)."""
+    if new is not None:
+        lib, idx, m = _new_scene(client, project, name, ask, new, base)
+    else:
+        lib, idx, m = _member(client, project, name)
     for e in _all(lib, name):
         if key and e.get("key") == key:
             return JOBS.get(e["id"]) or {"id": e["id"], "k": e["k"], "state": e["state"]}
@@ -778,6 +975,7 @@ def start(
         "effort": claude.get("effort") or EFFORT,
         "painted": bool(m.get("painted")),
         "kind": m.get("kind"),
+        **({"new": {"about": m["about"]}} if m.get("new") else {}),
         "base": info,
         "base_asked": base if base else None,
         "auth": auth,
@@ -805,8 +1003,55 @@ def start(
     return job
 
 
+def _new_scene(client, project, name, ask, new, base):
+    """(lib, idx, the draft) for a new scene asked for under `name`; refused when the project has
+    a member by that name, or its places are full."""
+    lib = library.owner(client, project)
+    if not lib or not project:
+        raise EditError(404, "No such project.")
+    if not library.NAME.match(name or ""):
+        raise EditError(
+            400,
+            "A scene's name is lowercase letters, digits and _, starting with a letter.",
+            "name",
+        )
+    idx = library.load(lib)
+    have = idx["cast"].get(name)
+    if have and not have.get("deleted"):
+        raise EditError(409, "The project has @%s already: choose another name." % name, "name")
+    if (
+        base is None
+        and _draft(lib, idx, name)
+        and any(e["state"] in ACTIVE for e in _all(lib, name))
+    ):
+        raise EditError(409, "@%s is being made already." % name, "edit")
+    places = [c for c in idx["cast"].values() if c.get("kind") == "place" and not c.get("deleted")]
+    if len(places) >= library.PLACES:
+        raise EditError(
+            409, "A project keeps up to %d scenes: remove one first." % library.PLACES, "places"
+        )
+    about = " ".join(str((new or {}).get("about") or ask or "").split())[: library.MAX_ABOUT]
+    painted = _painted_project(idx)
+    d = _draft(lib, idx, name)
+    if d and base is not None:  # a variation of the draft refined: the draft keeps its kind
+        painted = d["painted"]
+    return (
+        lib,
+        idx,
+        {
+            "name": name,
+            "kind": "place",
+            "about": about,
+            "painted": painted,
+            "version": 0,
+            "hash": (have or {}).get("hash") if have else None,
+            "new": True,
+        },
+    )
+
+
 def stop(client, project, name, k):
-    lib, _, _ = _member(client, project, name)
+    lib, _, _ = _target(client, project, name)
     e = _read(lib, name, k)
     if not e or e["state"] not in ACTIVE:
         raise EditError(409, "No edit is being made.", "none")
@@ -830,13 +1075,15 @@ async def stop_all():
 
 def dismiss(client, project, name, k):
     """Throw an edit's variations away (not one being made)."""
-    lib, _, _ = _member(client, project, name)
+    lib, idx, m = _target(client, project, name)
     e = _read(lib, name, k)
     if not e:
         raise EditError(404, "No such edit.")
     if e["state"] in ACTIVE:
         raise EditError(409, "This edit is being made: stop it first.", "active")
     shutil.rmtree(_dir(lib, name, k), ignore_errors=True)
+    if m.get("new") and not _all(lib, name):  # a draft with nothing left: no trace of it
+        shutil.rmtree(os.path.join(library.dir_of(lib), "cast", name), ignore_errors=True)
     return True
 
 
@@ -979,7 +1226,11 @@ async def _run(job, lib, sched):
             )
             idx = library.load(lib)
             m = idx["cast"].get(name)
-            if not m or m.get("deleted"):
+            if e.get("new"):
+                if m and not m.get("deleted"):
+                    raise EditError(409, "The project has @%s already." % name)
+                m = _draft_of(e) | {"hash": (m or {}).get("hash")}
+            elif not m or m.get("deleted"):
                 raise EditError(409, "It was removed from the project meanwhile.")
             episode = assets.episode_of(idx)
             if not episode:
@@ -994,7 +1245,14 @@ async def _run(job, lib, sched):
             t = toolbox.Tools(work, sched, emit, clock)
             t.priority, t.pulse = e.get("priority", 0), agent.Pulse()
             t.only = ("paint",) if work.edit_painted else ()
-            state = State(work, name, e["n"], t, lambda text: tell_now(text, force=True))
+            state = State(
+                work,
+                name,
+                e["n"],
+                t,
+                lambda text: tell_now(text, force=True),
+                place=bool(e.get("new")),
+            )
             t.round = state
             say = {
                 "prompt": ask(work, name, m, e, lim, marked),
@@ -1110,7 +1368,7 @@ def use(client, project, name, k, letter, force=False):
     would write over that change. Returns assets.info()."""
     from PIL import Image
 
-    lib, idx, m = _member(client, project, name)
+    lib, idx, m = _target(client, project, name)
     e = _read(lib, name, k)
     v = next((v for v in (e or {}).get("variations") or [] if v["letter"] == letter), None)
     if not e or e["state"] != "done" or not v:
@@ -1119,7 +1377,7 @@ def use(client, project, name, k, letter, force=False):
     src = os.path.join(d, v["file"])
     if not os.path.exists(src):
         raise EditError(404, "That variation is no longer kept.")
-    if m.get("hash") != (e.get("base") or {}).get("hash") and not force:
+    if not m.get("new") and m.get("hash") != (e.get("base") or {}).get("hash") and not force:
         raise EditError(
             409,
             "%s has changed since this edit was made (it is version %d now). Using this "
@@ -1131,9 +1389,16 @@ def use(client, project, name, k, letter, force=False):
         with library._lock(lib):
             idx = library.load(lib)
             cur = idx["cast"].get(name)
-            if not cur or cur.get("deleted") or cur.get("hash") != m.get("hash"):
+            if m.get("new"):  # a new scene: its first version, a place
+                if cur and not cur.get("deleted"):
+                    raise EditError(409, "The project has @%s already." % name)
+                library._put_painted(
+                    lib, idx, name, src, m.get("about"), now, edited=e["id"], kind="place"
+                )
+            elif not cur or cur.get("deleted") or cur.get("hash") != m.get("hash"):
                 raise EditError(409, "%s changed in the project meanwhile: try again." % name)
-            library._put_painted(lib, idx, name, src, cur.get("about"), now, edited=e["id"])
+            else:
+                library._put_painted(lib, idx, name, src, cur.get("about"), now, edited=e["id"])
             library._save(lib, idx)
             library._contact(lib, idx)
     else:
@@ -1143,10 +1408,16 @@ def use(client, project, name, k, letter, force=False):
             small.load()
         with Image.open(os.path.join(d, letter + ".png")) as large:
             large.load()
+        if m.get("new"):
+            cur = idx["cast"].get(name)
+            if cur and not cur.get("deleted"):
+                raise EditError(409, "The project has @%s already." % name)
+            it["about"] = it["about"] or m.get("about") or ""
+            seen = (cur or {}).get("hash") if cur else None
+        else:
+            seen = m.get("hash")
         try:
-            assets.put_drawn(
-                lib, [it], {name: m.get("hash")}, {name: small}, {name: large}, edited=e["id"]
-            )
+            assets.put_drawn(lib, [it], {name: seen}, {name: small}, {name: large}, edited=e["id"])
         except assets.AssetError as err:
             raise EditError(err.status, err.text) from None
     got = assets.info(client, project, name)
