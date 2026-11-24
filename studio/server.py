@@ -183,6 +183,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402
 import assets  # noqa: E402
+import edits  # noqa: E402
 import clients  # noqa: E402 -- imports _env first, which re-execs into .venv; then the secrets
 import film as films  # noqa: E402
 import library  # noqa: E402
@@ -760,6 +761,10 @@ async def adopt(app=None):
     for f in await asyncio.to_thread(rounds.orphans):
         rounds.resume(f, SCHED)
 
+    # the edits of a scene or character whose server went (edits.py): ended, their credits back
+    for eid, fields in await asyncio.to_thread(edits.sweep):
+        await agent.save(eid, {**fields, "finished_at": store.now()}, True)
+
     # the films that waited too long for their person's voice: put down, their credits back
     for f in await asyncio.to_thread(overdue):
         await put_down(
@@ -829,6 +834,7 @@ async def shutdown(app):
         await asyncio.wait(tasks, timeout=SHUTDOWN_WAIT_S)
     await unbrand.stop_all()  # back in the queue, for the next leader
     await rounds.stop_all()  # and so do the rounds of changes
+    await edits.stop_all()  # an edit of a scene or character ends as interrupted
 
 
 # ------------------------------------------------------------------ a server's life among others
@@ -2120,8 +2126,17 @@ def project_of(req):
 
 async def library_list(req):
     """The asker's own library (library.py): their cast and the films it remembers; with
-    ?project=, that project's, with its pictures."""
-    return web.json_response(library.listing(client_of(req), project_of(req)))
+    ?project=, that project's, with its pictures, and on each member how many of its edits are
+    being made or wait to be chosen from (`pending`, edits.py)."""
+    client, project = client_of(req), project_of(req)
+    got = library.listing(client, project)
+    lib = library.owner(client, project) if project else None
+    if lib:
+        for m in got["cast"]:
+            n = await asyncio.to_thread(edits.pending, lib, m["name"])
+            if n:
+                m["pending"] = n
+    return web.json_response(got)
 
 
 async def library_thumb(req):
@@ -2170,6 +2185,158 @@ async def library_restore(req):
     except assets.AssetError as e:
         return web.json_response({"error": e.text}, status=e.status)
     return web.json_response(got)
+
+
+def _edit_error(e):
+    body = {"error": e.text}
+    if e.reason:
+        body["reason"] = e.reason
+    return web.json_response(body, status=e.status)
+
+
+def _edit_of(req):
+    """(client, project, name, k) of an edit's route; k None on the routes without one."""
+    k = req.match_info.get("k")
+    return client_of(req), project_of(req), req.match_info["name"], int(k) if k else None
+
+
+async def edits_list(req):
+    """A project's scene or character's edits, newest first (edits.listing)."""
+    client, project, name, _ = _edit_of(req)
+    try:
+        got = await asyncio.to_thread(edits.listing, client, project, name)
+    except edits.EditError as e:
+        return _edit_error(e)
+    return web.json_response({"edits": got})
+
+
+async def edits_get(req):
+    client, project, name, k = _edit_of(req)
+    try:
+        return web.json_response(await asyncio.to_thread(edits.get, client, project, name, k))
+    except edits.EditError as e:
+        return _edit_error(e)
+
+
+async def edits_make(req):
+    """Change a project's scene or character as asked, in one to four variations (edits.py):
+    {"project", "ask", "marks": [{x, y, w?, h?, text}], "variations": 1-4, "key", "model"?,
+    "effort"?, "base"?: {"edit", "letter"}}. It takes its reserve of the day's budget and a turn
+    with Claude, but none of the client's films-at-once places. Asked again with the same key,
+    it answers the edit already asked for."""
+    if DRAINING or MODE == "stopping":
+        return web.json_response({"error": RESTARTING}, status=503)
+    try:
+        body = await req.json()
+    except ValueError:
+        body = None
+    if not isinstance(body, dict):
+        return web.json_response({"error": 'send JSON: {"project", "ask", ...}'}, status=400)
+    client, project, name = client_of(req), str(body.get("project") or ""), req.match_info["name"]
+    if not films.PROJECT_ID.match(project) or not library.owner(client, project):
+        return web.json_response({"error": "No such project."}, status=404)
+    claude = {k: body.get(k) for k in ("model", "effort") if body.get(k) is not None}
+    try:
+        _, _, n, claude = edits.clean(
+            body.get("ask"), body.get("marks"), body.get("variations"), claude
+        )
+    except edits.EditError as e:
+        return _edit_error(e)
+    if not await leading():
+        return web.json_response({"error": RESTARTING}, status=503)
+    local = from_this_machine(req)
+    auth = (os.environ.get("STUDIO_LOCAL_AUTH") or "login") if local else site_auth()
+    async with ADMIT:
+        if not peers.leads() or MODE != "serving" or DRAINING:
+            return web.json_response({"error": RESTARTING}, status=503)
+        refused = await over_limit(
+            client,
+            30,
+            auth,
+            99,  # an edit is not a film in the making: only the day's budget can refuse it
+            peers.peers(),
+            need=edits.reserve(n, auth, claude.get("model")),
+            films_day=False,
+        )
+        if refused:
+            return web.json_response(
+                {"reason": "budget" if "budget" in refused else "busy", "error": refused},
+                status=429,
+            )
+        try:
+            job = edits.start(
+                client,
+                project,
+                name,
+                SCHED,
+                body.get("ask"),
+                body.get("marks"),
+                body.get("variations"),
+                key=str(body.get("key") or "")[:80] or None,
+                member=req.headers.get("X-Member", "").strip() or None,
+                priority=1 if req.headers.get("X-Priority", "").strip() == "1" else 0,
+                auth=auth,
+                claude=claude,
+                base=body.get("base") if isinstance(body.get("base"), dict) else None,
+            )
+        except edits.EditError as e:
+            return _edit_error(e)
+    return web.json_response(
+        {"name": name, "edit": {"id": job["id"], "k": job["k"], "state": job["state"]}},
+        status=202,
+    )
+
+
+async def edits_use(req):
+    """A variation becomes the member's next version: {"letter", "force"?} (edits.use)."""
+    client, project, name, k = _edit_of(req)
+    try:
+        body = await req.json()
+    except ValueError:
+        body = {}
+    body = body if isinstance(body, dict) else {}
+    try:
+        got = await asyncio.to_thread(
+            edits.use,
+            client,
+            project or str(body.get("project") or "") or None,
+            name,
+            k,
+            str(body.get("letter") or ""),
+            bool(body.get("force")),
+        )
+    except edits.EditError as e:
+        return _edit_error(e)
+    return web.json_response(got)
+
+
+async def edits_stop(req):
+    client, project, name, k = _edit_of(req)
+    try:
+        return web.json_response(edits.stop(client, project, name, k))
+    except edits.EditError as e:
+        return _edit_error(e)
+
+
+async def edits_dismiss(req):
+    client, project, name, k = _edit_of(req)
+    try:
+        await asyncio.to_thread(edits.dismiss, client, project, name, k)
+    except edits.EditError as e:
+        return _edit_error(e)
+    return web.json_response({"k": k, "deleted": True})
+
+
+async def edits_picture(req):
+    """A variation's picture (a.png ... d.png), or the picture as it was marked (marks.png);
+    ?small=1 for a variation's thumbnail."""
+    client, project, name, k = _edit_of(req)
+    p = await asyncio.to_thread(
+        edits.picture, client, project, name, k, req.match_info["letter"], "small" in req.query
+    )
+    if p is None:
+        raise web.HTTPNotFound()
+    return web.FileResponse(p, headers={"Cache-Control": "private, max-age=3600"})
 
 
 async def library_delete(req):
@@ -3487,6 +3654,15 @@ def make_app(token):
             web.get("/api/library/brand/{kind}/{name}", brand_asset),
             web.get("/api/library/{name}/thumb.png", library_thumb),
             web.get("/api/library/{name}/versions", library_versions),
+            web.get("/api/library/{name}/edits", edits_list),
+            web.post("/api/library/{name}/edits", edits_make),
+            web.get(r"/api/library/{name}/edits/{k:\d{1,6}}", edits_get),
+            web.delete(r"/api/library/{name}/edits/{k:\d{1,6}}", edits_dismiss),
+            web.post(r"/api/library/{name}/edits/{k:\d{1,6}}/use", edits_use),
+            web.post(r"/api/library/{name}/edits/{k:\d{1,6}}/stop", edits_stop),
+            web.get(
+                r"/api/library/{name}/edits/{k:\d{1,6}}/{letter:[a-d]|marks}.png", edits_picture
+            ),
             web.get(r"/api/library/{name}/v/{n:\d{1,6}}.png", library_picture),
             web.post(r"/api/library/{name}/versions/{n:\d{1,6}}/current", library_restore),
             web.delete("/api/library/{name}", library_delete),
