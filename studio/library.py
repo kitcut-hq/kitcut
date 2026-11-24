@@ -1161,9 +1161,10 @@ def sheet(film, names, items=()):
     return os.path.join(d, "sketch.json"), times
 
 
-def thumbs(film, names):
+def thumbs(film, names, size=480):
     """Each member's thumbnail from sheet()'s stills: the drawn frame cropped to what differs
-    from the empty one. {name: PIL image}; a member that drew nothing has none."""
+    from the empty one, at most `size` on its long side. {name: PIL image}; a member that drew
+    nothing has none."""
     from PIL import Image, ImageChops
 
     d = film.path("temp", "castsheet", "stills")
@@ -1186,7 +1187,7 @@ def thumbs(film, names):
                 min(B.height, box[3] + pad),
             )
             im = B.crop(box)
-            im.thumbnail((480, 480))
+            im.thumbnail((size, size))
             out[n] = im
     return out
 
@@ -1606,6 +1607,13 @@ def picture_thumb(client, project, name):
 CHARACTERS = 16  # a project's painted characters: every episode carries them all
 MIN_SIDE = 512  # a character's short side: less gives the painter too little of a face
 MAX_ABOUT = 200  # a character's description, as a cast member's (_about)
+# A painted place (a series' kitchen, its street) is a painted member with kind "place": kept,
+# seeded and painted from exactly as a character is (inputs/cast_<name>.*, "ref": "cast_<name>"),
+# and told to Claude as a place (painted_note). The site shows places under Scenes, the rest
+# under Cast. Each kind has its own cap.
+PLACES = 16  # a project's painted places
+PAINTED_KINDS = (None, "place")
+_ANY = object()
 
 
 def _bytes_hash(path):
@@ -1613,8 +1621,17 @@ def _bytes_hash(path):
         return hashlib.sha256(f.read()).hexdigest()[:16]
 
 
-def _live_painted(idx):
-    return {n: e for n, e in idx["cast"].items() if e.get("painted") and not e.get("deleted")}
+def _live_painted(idx, kind=_ANY):
+    """The live painted members: all of them, or only the characters (None) or the places."""
+    return {
+        n: e
+        for n, e in idx["cast"].items()
+        if e.get("painted") and not e.get("deleted") and (kind is _ANY or e.get("kind") == kind)
+    }
+
+
+def _painted_cap(kind):
+    return PLACES if kind == "place" else CHARACTERS
 
 
 def _put_painted(lib, idx, name, src, about, now, **meta):
@@ -1634,6 +1651,8 @@ def _put_painted(lib, idx, name, src, about, now, **meta):
         raise PictureError(400, "A character is a PNG, JPEG or WebP picture.")
     e = idx["cast"].get(name) or {"version": 0, "films": [], "created": now}
     v = int(e.get("version") or 0) + 1
+    # a place stays a place over its versions unless the caller says what it is now
+    kind = meta.pop("kind", e.get("kind") if e.get("painted") else None)
     md = os.path.join(dir_of(lib), "cast", name)
     os.makedirs(md, exist_ok=True)
     shutil.copyfile(src, os.path.join(md, "v%d.%s" % (v, ext)))
@@ -1649,7 +1668,7 @@ def _put_painted(lib, idx, name, src, about, now, **meta):
         version=v,
         hash=_bytes_hash(src),
         about=" ".join(str(about or "").split())[:MAX_ABOUT],
-        kind=None,
+        kind=kind if kind in PAINTED_KINDS else None,
         painted=True,
         ext=ext,
         w=w,
@@ -1663,22 +1682,33 @@ def _put_painted(lib, idx, name, src, about, now, **meta):
     return e
 
 
-def add_character(client, project, name, about, src):
+def add_character(client, project, name, about, src, kind=None):
     """Put a ready-made painted character (an upload's picture, checked by uploads.receive) into
     a project's cast, under a name, with a description of who it is; the same name again is its
-    next version. Returns its entry as listing() shows it."""
+    next version. kind "place" puts in a painted place instead (the project's Scenes). Returns its
+    entry as listing() shows it."""
     lib = owner(client, project)
     if not lib or not project:
         raise PictureError(404, "No such project.")
+    if kind not in PAINTED_KINDS:
+        raise PictureError(400, 'kind is "place", or left out for a character.')
+    place = kind == "place"
+    what = "scene" if place else "character"
     if not NAME.match(name or ""):
         raise PictureError(
-            400, "A character's name is lowercase letters, digits and _, starting with a letter."
+            400,
+            "A %s's name is lowercase letters, digits and _, starting with a letter." % what,
         )
     about = " ".join(str(about or "").split())
     if not about:
-        raise PictureError(400, "Say who the character is, in a line: it goes with the picture.")
+        raise PictureError(
+            400,
+            "Say what the place is, in a line: it goes with the picture."
+            if place
+            else "Say who the character is, in a line: it goes with the picture.",
+        )
     if len(about) > MAX_ABOUT:
-        raise PictureError(400, "A character's description is at most %d characters." % MAX_ABOUT)
+        raise PictureError(400, "A %s's description is at most %d characters." % (what, MAX_ABOUT))
     from PIL import Image
 
     try:
@@ -1689,8 +1719,9 @@ def add_character(client, project, name, about, src):
     if short < MIN_SIDE:
         raise PictureError(
             400,
-            "A character's picture needs at least %d px on its short side (this one has %d): "
-            "the painter copies the face from it." % (MIN_SIDE, short),
+            "A %s's picture needs at least %d px on its short side (this one has %d): "
+            "the painter copies the %s from it."
+            % (what, MIN_SIDE, short, "place" if place else "face"),
         )
     now = datetime.now().isoformat(timespec="seconds")
     with _lock(lib):
@@ -1700,11 +1731,20 @@ def add_character(client, project, name, about, src):
             raise PictureError(
                 409, "The cast has a drawn member called %s already: choose another name." % name
             )
-        if name not in _live_painted(idx) and len(_live_painted(idx)) >= CHARACTERS:
+        if e and not e.get("deleted") and e.get("kind") != kind:
             raise PictureError(
-                409, "A project holds up to %d painted characters: remove one first." % CHARACTERS
+                409,
+                "The project has a %s called %s already: choose another name."
+                % ("scene" if e.get("kind") == "place" else "character", name),
             )
-        e = _put_painted(lib, idx, name, src, about, now, uploaded=now)
+        cap = _painted_cap(kind)
+        if name not in _live_painted(idx, kind) and len(_live_painted(idx, kind)) >= cap:
+            raise PictureError(
+                409,
+                "A project holds up to %d painted %s: remove one first."
+                % (cap, "scenes" if place else "characters"),
+            )
+        e = _put_painted(lib, idx, name, src, about, now, uploaded=now, kind=kind)
         _save(lib, idx)
         _contact(lib, idx)
     return _listed(name, e)
@@ -1724,6 +1764,7 @@ def _seed_painted(film, lib, idx):
         out.append(
             {"name": n, "file": rel, "about": e.get("about", "")}
             | {k: e.get(k) for k in ("w", "h", "hash")}
+            | ({"kind": "place"} if e.get("kind") == "place" else {})
         )
     if out:
         with open(film.manifest, encoding="utf-8") as f:
@@ -1737,6 +1778,36 @@ def painted_note(film, painted, own_cast=False):
     """What an episode is told of its project's painted characters, and of keeping one."""
     paints = bool(paint_kinds(film.caps))
     out = []
+    places = [c for c in painted if c.get("kind") == "place"]
+    painted = [c for c in painted if c.get("kind") != "place"]
+    if places:
+        out.append(
+            "The project's places, as pictures (its scenes: put in by its person, or kept by "
+            "earlier episodes; each in inputs/, Read it to see them):"
+        )
+        out += ["- cast_%s: %s" % (c["name"], c.get("about") or "no description") for c in places]
+        out.append(
+            'Whenever a scene is set in one of them, paint it with "ref": "cast_<name>" (with the '
+            "characters in it, in one list, up to 4) and describe the place in its prompt as "
+            "written here: the painter keeps its layout, furniture, colours and light, so the "
+            "place is the same in every film. Another angle or time of day is yours to ask for in "
+            "the prompt; never rebuild the place from the words alone."
+            if paints
+            else "On screen as they are: SK.image('cast_<name>', x, y, w)."
+        )
+    if paints:
+        out.append(
+            "A new place the series should keep (a room, a street it will come back to): paint "
+            'it empty, nobody in it, and mark that painting "keep": true, "kind": "place" with '
+            '"about": "<what the place is, what is in it>" in paint.json; after the film it joins '
+            "the project's scenes under the painting's name, and the next episodes paint from it."
+            + (
+                " The project holds %d painted places and is full: keep a new one only by "
+                "repainting one of these." % PLACES
+                if len(places) >= PLACES
+                else ""
+            )
+        )
     if painted:
         out.append(
             "The project's characters, as pictures (its cast: put in by its person, or kept by "
@@ -1875,6 +1946,7 @@ def kept_paintings(film):
         if os.path.exists(p):
             out.append(
                 {"name": im["name"], "about": im.get("about") or im.get("prompt"), "path": p}
+                | ({"kind": "place"} if im.get("kind") == "place" else {})
             )
     return out
 
@@ -1898,7 +1970,9 @@ def _keep_painted(film, lib, idx, now):
             continue
         if live and e.get("hash") == _bytes_hash(it["path"]):
             continue  # the same picture: nothing new
-        if not live and len(_live_painted(idx)) >= CHARACTERS:
+        # what it is: what the member is already, or what the film said of a new one
+        kind = e.get("kind") if live else it.get("kind")
+        if not live and len(_live_painted(idx, kind)) >= _painted_cap(kind):
             refused.append(n)
             continue
         _put_painted(
@@ -1909,6 +1983,7 @@ def _keep_painted(film, lib, idx, now):
             it["about"],
             now,
             film=film.id,
+            kind=kind,
             **({} if live else {"from_film": film.id}),
         )
         saved.append(n)

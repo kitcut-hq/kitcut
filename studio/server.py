@@ -182,6 +182,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402
+import assets  # noqa: E402
 import clients  # noqa: E402 -- imports _env first, which re-execs into .venv; then the secrets
 import film as films  # noqa: E402
 import library  # noqa: E402
@@ -1129,6 +1130,7 @@ def limits_doc():
             "project_voice_lines": library.VOICE_LINES,
             # a project's painted characters (library.add_character, _keep_painted)
             "painted_characters": library.CHARACTERS,
+            "painted_places": library.PLACES,
             "character_min_side_px": library.MIN_SIDE,
             "character_about_chars": library.MAX_ABOUT,
             "characters_per_painting": validate.MAX_REFS,
@@ -2130,6 +2132,46 @@ async def library_thumb(req):
     return web.FileResponse(p, headers={"Cache-Control": "private, no-cache"})
 
 
+async def library_versions(req):
+    """A project's scene or character with the versions still held (assets.info)."""
+    try:
+        got = await asyncio.to_thread(
+            assets.info, client_of(req), project_of(req), req.match_info["name"]
+        )
+    except assets.AssetError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(got)
+
+
+async def library_picture(req):
+    """A version's picture, full size: a painted member's own file, a drawn one's render."""
+    p = await asyncio.to_thread(
+        assets.picture,
+        client_of(req),
+        project_of(req),
+        req.match_info["name"],
+        int(req.match_info["n"]),
+    )
+    if p is None:
+        raise web.HTTPNotFound()
+    return web.FileResponse(p, headers={"Cache-Control": "private, max-age=3600"})
+
+
+async def library_restore(req):
+    """An older version becomes the newest again (assets.restore): every new episode gets it."""
+    try:
+        got = await asyncio.to_thread(
+            assets.restore,
+            client_of(req),
+            project_of(req),
+            req.match_info["name"],
+            req.match_info["n"],
+        )
+    except assets.AssetError as e:
+        return web.json_response({"error": e.text}, status=e.status)
+    return web.json_response(got)
+
+
 async def library_delete(req):
     """Leave a cast member out of the asker's next films (or their project's)."""
     name, project = req.match_info["name"], project_of(req)
@@ -2563,6 +2605,7 @@ async def character_add(req):
             str(body.get("name") or ""),
             str(body.get("about") or ""),
             uploads.file_of(uploader, meta),
+            body.get("kind") or None,
         )
     except library.PictureError as e:
         return web.json_response({"error": e.text}, status=e.status)
@@ -3443,6 +3486,9 @@ def make_app(token):
             web.delete("/api/library/brand/files/{fid}", brand_file_delete),
             web.get("/api/library/brand/{kind}/{name}", brand_asset),
             web.get("/api/library/{name}/thumb.png", library_thumb),
+            web.get("/api/library/{name}/versions", library_versions),
+            web.get(r"/api/library/{name}/v/{n:\d{1,6}}.png", library_picture),
+            web.post(r"/api/library/{name}/versions/{n:\d{1,6}}/current", library_restore),
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),
             web.get("/api/films/{id}/lines", film_lines),

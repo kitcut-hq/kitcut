@@ -192,6 +192,7 @@ def _vo(d, max_lines, length=60, people=(), characters=(), voices=None):
 
 MAX_REFS = 4  # sketch-paint.py MAX_REFS: the pictures one painting is made from
 CHARACTERS = 16  # library.CHARACTERS: a project's painted characters
+PLACES = 16  # library.PLACES: a project's painted places
 CAST_NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")  # library.NAME: a kept painting joins the cast
 
 
@@ -211,7 +212,9 @@ def _paint(d, length, caps, film_dir=None, cast=None):
     ims = d.get("images", [])
     kinds = paint_kinds(caps)  # what this film's capabilities paint (film.CAPS)
     cap = sum(limits(length)[kind["cap"]] for kind in kinds)
-    keys = {"name", "prompt", "ref", "keep", "about"} | {k for kind in kinds for k in kind["keys"]}
+    keys = {"name", "prompt", "ref", "keep", "about", "kind"} | {
+        k for kind in kinds for k in kind["keys"]
+    }
     if not isinstance(ims, list) or len(ims) > cap:
         return out + ["paint.json: images is a list of at most %d" % cap]
     names = [im.get("name") for im in ims if isinstance(im, dict)]
@@ -271,6 +274,8 @@ def _keep(im, i, cast):
         return ["paint.json: image %d keep is true or false" % i]
     if "about" in im and not (isinstance(im["about"], str) and 0 < len(im["about"]) <= 200):
         return ["paint.json: image %d about is one line saying who it is (at most 200)" % i]
+    if "kind" in im and (im["kind"] != "place" or not im.get("keep")):
+        return ['paint.json: image %d kind is "place", on a painting kept as a place' % i]
     if not im.get("keep"):
         return []
     if cast is None:
@@ -294,14 +299,27 @@ def _kept_count(ims, cast):
     """The project's painted characters once this film's kept paintings join them, over the cap."""
     if not cast:
         return []
-    new = {im.get("name") for im in ims if isinstance(im, dict) and im.get("keep") is True}
-    if len(set(cast["painted"]) | new) > CHARACTERS:
-        return [
-            "paint.json: the project's cast holds %d painted characters and has %d: keep fewer "
-            "new ones, or keep one as the next version of a character it has"
-            % (CHARACTERS, len(cast["painted"]))
-        ]
-    return []
+    places = set(cast.get("places") or ())
+    kept = [im for im in ims if isinstance(im, dict) and im.get("keep") is True]
+    out = []
+    for place, cap, many, one in (
+        (False, CHARACTERS, "characters", "character"),
+        (True, PLACES, "places", "place"),
+    ):
+        has = {n for n in cast["painted"] if (n in places) == place}
+        # a kept painting named as a member is that member's next version, whatever it says
+        new = {
+            im.get("name")
+            for im in kept
+            if im.get("name") not in cast["painted"] and (im.get("kind") == "place") == place
+        }
+        if new and len(has | new) > cap:
+            out.append(
+                "paint.json: the project's cast holds %d painted %s and has %d: keep fewer "
+                "new ones, or keep one as the next version of a %s it has"
+                % (cap, many, len(has), one)
+            )
+    return out
 
 
 def _named(ims, cast):
@@ -340,8 +358,9 @@ def _cast_of(film):
     if os.path.isdir(film.path("cast")):
         drawn |= {n[:-3] for n in os.listdir(film.path("cast")) if n.endswith(".js")}
     painted = [c["name"] for c in got.get("painted") or []]
+    places = [c["name"] for c in got.get("painted") or [] if c.get("kind") == "place"]
     named = [n for n in rec.get("characters") or [] if n in painted]
-    return {"drawn": drawn, "painted": painted, "named": named}
+    return {"drawn": drawn, "painted": painted, "places": places, "named": named}
 
 
 def _cut_ok(c):

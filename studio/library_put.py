@@ -25,27 +25,15 @@ import re
 import sys
 import glob
 import json
-import shutil
 import argparse
-import tempfile
-import subprocess
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import assets  # noqa: E402
 import library  # noqa: E402
-from film import KIT, Film  # noqa: E402
+from film import Film  # noqa: E402
 
 DECLARES = re.compile(r"\bSK\.cast\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{")
-
-
-class Stage:
-    """Enough of a film for library.sheet/thumbs: a folder with a manifest and a cast/."""
-
-    def __init__(self, d, manifest):
-        self.dir, self.manifest = d, manifest
-
-    def path(self, *p):
-        return os.path.join(self.dir, *p)
 
 
 def find(project):
@@ -83,46 +71,16 @@ def read_member(path):
 
 
 def draw(d, idx, items, episode, out):
-    """Each member drawn alone, with the library's whole current cast loaded: {name: image}."""
-    stage = Stage(tempfile.mkdtemp(prefix="library-put-"), None)
+    """Each member drawn alone (assets.draw): ({name: thumbnail}, {name: large picture})."""
     try:
-        os.makedirs(stage.path("cast"))
-        for n, e in idx["cast"].items():
-            src = os.path.join(d, "cast", n, "v%d.js" % e["version"])
-            if not e.get("deleted") and os.path.exists(src):
-                shutil.copyfile(src, stage.path("cast", n + ".js"))
-        for it in items:
-            with open(stage.path("cast", it["name"] + ".js"), "w", encoding="utf-8") as f:
-                f.write(it["code"])
-        stage.manifest = stage.path("sketch.json")
-        shutil.copyfile(episode.manifest, stage.manifest)
-        with open(episode.manifest, encoding="utf-8") as f:
-            fonts = json.load(f).get("fonts", [])
-        for ft in fonts:  # the episode's own (fonts/, web/fonts/), where the manifest names them
-            src = episode.path(*ft["file"].split("/"))
-            if os.path.exists(src):
-                os.makedirs(os.path.dirname(stage.path(*ft["file"].split("/"))), exist_ok=True)
-                shutil.copyfile(src, stage.path(*ft["file"].split("/")))
-        names = [it["name"] for it in items]
-        man, times = library.sheet(stage, names)
-        r = subprocess.run(
-            [sys.executable, "-X", "utf8", os.path.join(KIT, "scripts", "sketch-render.py")]
-            + ["--manifest", man, "--stills", ",".join("%g" % t for t in times)]
-            + ["--into", stage.path("temp", "castsheet", "stills")],
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-        if r.returncode:
-            sys.exit("the cast sheet did not render:\n" + (r.stdout + r.stderr)[-1500:])
-        pics = library.thumbs(stage, names)
-        if out:
-            os.makedirs(out, exist_ok=True)
-            for n, im in pics.items():
-                im.save(os.path.join(out, n + ".png"))
-        return pics
-    finally:
-        shutil.rmtree(stage.dir, ignore_errors=True)
+        pics = assets.draw(d, idx, items, episode, (480, assets.PICTURE))
+    except assets.AssetError as e:
+        sys.exit("the cast sheet did not render:\n" + e.text)
+    if out:
+        os.makedirs(out, exist_ok=True)
+        for n, im in pics[480].items():
+            im.save(os.path.join(out, n + ".png"))
+    return pics[480], pics[assets.PICTURE]
 
 
 def main():
@@ -162,7 +120,7 @@ def main():
         )
     if not items:
         return
-    pics = draw(d, idx, items, episode, a.out)
+    pics, large = draw(d, idx, items, episode, a.out)
     for it in items:
         print(
             "%-12s thumbnail: %s"
@@ -177,49 +135,11 @@ def main():
         print("dry run: nothing written to %s" % d)
         return
     now = datetime.now().isoformat(timespec="seconds")
-    with library._lock(lib):
-        idx = library.load(lib)
-        for it in items:  # nothing may have moved since the plan
-            e = idx["cast"].get(it["name"])
-            if (e.get("hash") if e else None) != seen[it["name"]]:
-                sys.exit("%s changed in the library meanwhile: nothing written" % it["name"])
-        for it in items:
-            n = it["name"]
-            e = idx["cast"].get(n) or {"version": 0, "films": [], "created": now, "from_film": None}
-            v = e["version"] + 1
-            md = os.path.join(d, "cast", n)
-            os.makedirs(md, exist_ok=True)
-            with open(os.path.join(md, "v%d.js" % v), "w", encoding="utf-8") as f:
-                f.write(it["code"])
-            for old in range(1, v - library.KEEP + 1):
-                try:
-                    os.remove(os.path.join(md, "v%d.js" % old))
-                except OSError:
-                    pass
-            tp = os.path.join(md, "thumb.png")
-            if n in pics:
-                pics[n].save(tp)
-            elif os.path.exists(tp):
-                os.remove(tp)
-            e.update(
-                version=v,
-                hash=it["hash"],
-                about=it["about"] or e.get("about", ""),
-                kind=it["kind"],
-                updated=now,
-                last_used=now,
-                film=None,
-                by_hand=now,
-                thumb=n in pics,
-            )
-            e.pop("deleted", None)
-            idx["cast"][n] = e
-        library._save(lib, idx)
-        library._contact(lib, idx)
-    print(
-        "written: %s"
-        % ", ".join("%s v%d" % (it["name"], idx["cast"][it["name"]]["version"]) for it in items)
-    )
+    try:
+        wrote = assets.put_drawn(lib, items, seen, pics, large, by_hand=now)
+    except assets.AssetError as e:
+        sys.exit(e.text)
+    print("written: %s" % ", ".join("%s v%d" % (n, v) for n, v in wrote.items()))
 
 
 if __name__ == "__main__":
