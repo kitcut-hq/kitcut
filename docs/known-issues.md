@@ -1318,3 +1318,18 @@ with rough paper up to about 150 px in at its edges (the painter bake-off of 202
 painting about 1430 wide, which covers the frame and keeps the paper off screen; a style picture's
 painter paints 9:16, drawn about 1170 wide (`film.TALL_PAINTING`). `studio/test_paint_frame.py`
 holds all of it.
+
+### KI-069 · fixed · studio · A film still in line for the renderer was stopped for running past its working time
+
+**Symptom.** 2026-11-10: a 15 s collage film (studio-20261110-131121-ifgn4m) failed with "Claude
+ran past the 20-minute limit" after about 12 minutes of Claude's work. Its `motion` check had
+waited 8 minutes for the renderer behind a 5-minute film's final render (19,380 frames, 530 s on
+3 browsers), and was still waiting when the film was stopped.
+**Cause.** Waits for the machine are meant to stay off a film's clock (`sched.Clock.active`), but
+`Pool.hold` added a wait to `clock.paused` only once the slot was granted. While the film stood
+in line, `agent._within` (every 2 s) counted the wait as working time. Two tools in line at once
+were also each added in full, so overlapping waits counted twice.
+**Fix.** `Clock.waiting()` keeps a wait off the clock while it lasts, and counts waits that
+overlap once. `Pool.hold` waits inside it. The phase's wall time (`film.limits` `wall_s`, an hour
+for a short film) still bounds a film that waits too long. `studio/test_sched.py` checks the
+clock mid-wait and with two waits at once.

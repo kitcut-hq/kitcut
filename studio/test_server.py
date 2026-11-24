@@ -372,15 +372,6 @@ async def projects(c, auth, mem, check):
         headers=me,
     )
     check(r.status == 400, "and is one of KitCut's voices")
-    # a quality above a draft, only where the painter has one (film.chooses_quality)
-    for body, why in (
-        ({"look": "collage", "quality": "ultra"}, "a quality that is not one"),
-        ({"look": "drawn", "quality": "high"}, "a drawn film"),
-        ({"look": "painted", "quality": "high"}, "a painted film outside a project (Muse)"),
-        ({"look": "painted", "quality": "medium", "project": project}, "a project with no style"),
-    ):
-        r = await c.post("/api/films", json={"prompt": "x"} | body, headers=me)
-        check(r.status == 400, "a quality is refused for %s (%d)" % (why, r.status))
     # the site asks as the workspace ("o:proj", the personal one: the same owner as "u:proj"),
     # says who asked, and sends the narrator the project set
     r = await c.post(
@@ -404,12 +395,10 @@ async def projects(c, auth, mem, check):
         f.record().get("member") == "u:proj" and mem.docs[ep].get("member") == "u:proj",
         "the film and its run record who asked",
     )
-    with open(f.path("vo.json"), encoding="utf-8") as vf:
-        check(
-            f.record().get("narrator") == {"source": "kitcut", "voice": "Puck"}
-            and json.load(vf)["voice"] == "Puck",
-            "the narrator the project set is the film's voice",
-        )
+    check(
+        f.record().get("narrator") == {"source": "kitcut", "voice": "Puck"},
+        "the narrator the project set is in the film's record",
+    )
     r = await c.get("/api/films/%s" % ep, headers=me)
     check(r.status == 200, "and the person's old name still owns it")
     lim = await (await c.get("/api/limits", headers=auth)).json()
@@ -428,6 +417,11 @@ async def projects(c, auth, mem, check):
         st.get("status") == "done" and "brief" not in json.dumps(st) and "project" not in st,
         "the film's status says nothing of the project",
     )
+    # read once the film is done: the stand-in Claude writes "Kore" into vo.json on purpose and
+    # the studio pins the person's voice back at its next check, so a read while the film runs
+    # saw either, depending on who got there first
+    with open(f.path("vo.json"), encoding="utf-8") as vf:
+        check(json.load(vf)["voice"] == "Puck", "the narrator the project set is the film's voice")
     check("title" in mem.docs[ep] and mem.docs[ep]["project_id"] == P, "the final record has both")
     lib = await (await c.get("/api/library?project=" + P, headers=me)).json()
     own = await (await c.get("/api/library", headers=me)).json()
@@ -787,7 +781,7 @@ async def main():
             and lim["prompt"]["max_chars"] == server.PROMPT_MAX
             and lim["attachments"]["pictures_per_film"] == server.uploads.MAX_IMAGES
             and lim["library"]["style_pictures"] == server.stylekit.MAX_PICTURES
-            and lim["pictures"]["choose"] == {"looks": ["collage"], "style_routes": ["gpt"]}
+            and "pictures" not in lim
             and lim["films"]["per_account_per_day"] == server.PER_CLIENT_DAILY
             and lim["films"]["at_once_per_account_max"] == server.AT_ONCE_MAX,
             "the limits are the constants the studio enforces (%s)" % lim["lengths"],
@@ -851,6 +845,35 @@ async def main():
         check(
             r.status == 400 and said.get("reason") == "prompt" and "Shorten" in said["error"],
             "a prompt longer than the studio reads is refused, not cut (it was cut at 12,000)",
+        )
+        # the person's own Claude model and effort (kitcut.ai's picker, paid plans)
+        r = await c.post(
+            "/api/films",
+            json={"prompt": "x" * 10, "seconds": 15, "model": "claude-haiku-5-5"},
+            headers=auth,
+        )
+        check(
+            r.status == 400 and "model" in (await r.json())["error"],
+            "a model the studio does not make films with is refused, never swapped",
+        )
+        r = await c.post(
+            "/api/films", json={"prompt": "x" * 10, "seconds": 15, "effort": "huge"}, headers=auth
+        )
+        check(r.status == 400 and "effort" in (await r.json())["error"], "an unknown effort too")
+        check(
+            films.limits(30, "claude-fable-5-2")["budget_usd"] == 2 * films.limits(30)["budget_usd"]
+            and films.limits(30, "claude-fable-5-2")["reserve_usd"]
+            == 2 * films.limits(30)["reserve_usd"],
+            "a Fable film may spend twice the dollars: its tokens cost twice Opus's",
+        )
+        fab = films.Film.create(
+            "a fable", 15, "drawn", client="u:fab", model="claude-fable-5-2", effort="max"
+        )
+        plain = films.Film.create("a plain one", 15, "drawn", client="u:fab", model="gpt-9")
+        check(
+            (fab.claude_model, fab.claude_effort) == ("claude-fable-5-2", "max")
+            and (plain.claude_model, plain.claude_effort) == (None, None),
+            "a film keeps the model and effort chosen for it, and nothing else",
         )
 
         # ------------------------------------------------ three films at once, three clients
@@ -1244,7 +1267,9 @@ async def main():
 
         # ------------------------------------------------ Claude past its time
         real_limits = agent.limits
-        agent.limits = lambda n: real_limits(n) | ({"claude_s": 3} if n in (20, 25, 30) else {})
+        agent.limits = lambda n, model=None: (
+            real_limits(n, model) | ({"claude_s": 3} if n in (20, 25, 30) else {})
+        )
         r1 = await c.post(
             "/api/films",
             json={"prompt": "overtime, the film written", "seconds": 20},

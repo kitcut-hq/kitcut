@@ -300,6 +300,18 @@ async def main():
         lim["claude_s"] == 11 * 60 and lim["budget_usd"] < films.limits(30)["budget_usd"],
         "a round's allowance: minutes by its notes, less than a film's budget",
     )
+    fab = rounds.limits(30, 3, model="claude-fable-5-2")
+    check(
+        fab["budget_usd"] == 2 * lim["budget_usd"] and fab["claude_s"] == lim["claude_s"],
+        "a Fable round may spend twice the dollars, in the same minutes",
+    )
+    check(
+        rounds.claude_of({"round": {"claude": {"model": "claude-fable-5-2", "effort": "max"}}})
+        == {"model": "claude-fable-5-2", "effort": "max"}
+        and rounds.claude_of({"round": {"claude": {"model": "gpt-9", "effort": "huge"}}}) == {}
+        and rounds.claude_of({"model": "claude-fable-5-2"}) == {},
+        "a round's model and effort are its own: never the film's, never one the studio lacks",
+    )
     whole = [{"kind": "film"}, {"kind": "line"}, {"kind": "line"}, {"kind": "moment"}]
     check(
         rounds.wide(whole) == 1
@@ -377,20 +389,14 @@ async def main():
             and v["round"] is None,
             "its maker is: one version, no round",
         )
-        # a sharper version: only for pictures painted by a model with a quality (rounds.pictures)
-        check(
-            v.get("pictures") == {"quality": None, "can": []},
-            "a drawn film has no picture quality to raise (%s)" % v.get("pictures"),
-        )
+        # Sharper pictures were taken away (2026-11-17): a film's versions say nothing of its
+        # pictures' quality, and a round asking for one is refused
+        check("pictures" not in v, "the versions say nothing of picture quality")
         r = await c.post(url, json={"key": "s0", "from": 1, "sharpen": "high"}, headers=me)
         check(
-            r.status == 409 and (await r.json()).get("reason") == "sharpen",
-            "so a sharper version of it is refused (%d)" % r.status,
+            r.status == 400 and (await r.json()).get("reason") == "sharpen",
+            "a sharper version is refused (%d)" % r.status,
         )
-        r = await c.post(
-            url, json={"key": "s1", "sharpen": "high", "notes": [{"text": "x"}]}, headers=me
-        )
-        check(r.status == 400, "and sharpen takes no notes (%d)" % r.status)
         check(
             one.get("strip") == {"count": 24, "w": 160, "h": 90}
             and os.path.getsize(f.path("outputs", "strip.jpg")) > 2000

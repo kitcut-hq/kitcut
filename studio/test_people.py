@@ -28,6 +28,7 @@ import agent  # noqa: E402
 import procs  # noqa: E402
 import store  # noqa: E402
 import validate  # noqa: E402
+import library  # noqa: E402
 import film as films  # noqa: E402
 from film import Film  # noqa: E402
 from tools import Tools  # noqa: E402
@@ -223,6 +224,54 @@ async def main():
         ):
             check(validate._vo(d, 6, 10, ppl) != [], "refused: " + what)
         check("cast" in validate.VO_KEYS, "the guard keeps cast when it pins vo.json")
+        # ElevenLabs voices the prompt names (film.prompt_voices): characters by name, those ids
+        R, S = "S0ypc51SmsvcKXTWvjqJ", "mrQhZWGbb2k9qWJb5qeA"
+        got = films.prompt_voices(
+            "Warriors fence scene. Voices on ElevenLabs: Rusty %s, Smudge %s, and Rusty again %s."
+            " Characterisations everywhere." % (R, S, R)
+        )
+        check(
+            got == {"ids": [R, S], "model": films.EL_MODEL},
+            "the prompt's voice ids, once each, in the newest model: %r" % got,
+        )
+        check(films.prompt_voices("Rusty %s" % R) is None, "no ElevenLabs in the prompt: none")
+        check(
+            films.prompt_voices("ElevenLabs, but characterisationsxx only") is None,
+            "a long word is not a voice id",
+        )
+        check(
+            films.prompt_voices("ElevenLabs %s in eleven_v3" % R)["model"] == "eleven_v3",
+            "a model the prompt names",
+        )
+        check(
+            films.prompt_voices("ElevenLabs %s in eleven_v9" % R)["model"] == films.EL_MODEL,
+            "a model ElevenLabs does not have is not taken",
+        )
+        el = {**films._prompt_pins({"model": films.EL_MODEL}), "voice": R, "language": "en"}
+        cats = {
+            **el,
+            "cast": {"rusty": {"voice": R}, "smudge": {"voice": S}},
+            "lines": [
+                {"who": "smudge", "text": "[alarmed] You're not going into those woods?"},
+                {"who": "rusty", "text": "Just for a look!"},
+                {"text": "He went anyway."},
+            ],
+        }
+        check(validate._vo(cats, 6, 10, [], voices=[R, S]) == [], "painted characters cast by name")
+        for what, d in (
+            ("a narrator voice the prompt did not name", {**cats, "voice": "Kore"}),
+            ("a cast voice it did not name", {**cats, "cast": {"rusty": {"voice": "Kore"}}}),
+            ("a speaker name that is not one", {**cats, "cast": {"Rusty!": {"voice": R}}}),
+            (
+                "a line whose speaker has no voice",
+                {**cats, "lines": [{"who": "princess", "text": "x"}]},
+            ),
+        ):
+            check(validate._vo(d, 6, 10, [], voices=[R, S]) != [], "refused: " + what)
+        check(
+            validate._vo({**cats, "voice": "Kore", "tts": "gemini"}, 6, 10, []) != [],
+            "without the prompt's voices a character is not cast by name",
+        )
         # a person's own ElevenLabs voice speaks for nobody else: in its film the people are seen,
         # not heard (its grant speaks in that one voice, and a voice is never put in another's mouth)
         own = {**ok, "tts": "elevenlabs", "voice": "a1B2c3D4e5F6g7H8i9J0", "model": "eleven_v3"}
@@ -235,6 +284,33 @@ async def main():
         plain = {**own, "lines": [{"text": "They bake."}]}
         plain.pop("cast")
         check(validate._vo(plain, 6, 10, ["p1", "p2"]) == [], "and takes the narrator's lines")
+
+        # a series character (the project's cast, drawn or painted) speaks in a voice of its own:
+        # a storyteller in Leda while the narrator, in Sadachbia, reads the greeting
+        story = vo(
+            voice="Sadachbia",
+            cast={"olenka": {"voice": "Leda", "style": "a girl telling a story"}},
+            lines=[{"text": "Hello."}, {"who": "olenka", "text": "I have a habit."}],
+        )
+        check(validate._vo(story, 6, 10, [], ["girl", "olenka"]) == [], "a character speaks")
+        check(
+            validate._vo(story, 6, 10, ["p1"], ["olenka"]) == [], "beside the film's people too"
+        )
+        said = validate._vo(story, 6, 10, [], ["girl"])
+        check(
+            said and all("olenka" in x for x in said), "a name not in the cast is still refused", said
+        )
+        own = {**story, "tts": "elevenlabs", "voice": "a1B2c3D4e5F6g7H8i9J0", "model": "eleven_v3"}
+        said = validate._vo(own, 6, 10, [], ["olenka"])
+        check(
+            len(said) == 1 and "speaks for nobody else" in said[0],
+            "an own-voice film refuses a character's voice too",
+            said,
+        )
+        # an approved line is filed under the voice that said it: a character's under its own
+        check(library._voice_of(story)["voice"] == "Sadachbia", "a narrator's line: the narrator")
+        check(library._voice_of(story, "olenka")["voice"] == "Leda", "a character's: its voice")
+        check(library._voice_of(story, "nobody")["voice"] == "Sadachbia", "an unknown: narrator")
 
     # the drawing step, head-rig stubbed: p1 draws; p2 is refused, then refused as a sticker too
     calls = []

@@ -19,6 +19,7 @@ os.environ["STUDIO_HOME"] = HOME
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent  # noqa: E402
 import film as films  # noqa: E402
+import library  # noqa: E402
 import validate  # noqa: E402
 from guard import guard, pin_after  # noqa: E402
 from sched import Sched  # noqa: E402
@@ -93,6 +94,175 @@ def caps_cases(expect, A, B, C):
     except ToolError as e:
         said = str(e)
     expect("check: engine/collage.js is checked", "engine/collage.js" in said, True)
+
+
+def role_cases(expect):
+    """What a person said a picture is for is held (validate._roles, _style_refs, _scenes_show),
+    each at the earliest file that can show it, and only where it can be kept: a film's own
+    attachments, while Claude writes the film for the first time."""
+    D = films.Film.create("a film with marked pictures", 10, "painted")
+    os.makedirs(D.path("inputs"), exist_ok=True)
+    roles = {"upload1": "show", "upload2": "scene", "upload3": "style", "pic_logo": "show"}
+    with open(D.path("inputs", "roles.json"), "w", encoding="utf-8") as f:
+        json.dump(roles, f)
+    for n in ("upload1", "upload2", "upload3", "pic_logo"):  # the files a ref must find
+        with open(D.path("inputs", n + ".png"), "wb") as f:
+            f.write(b"\x89PNG")
+
+    def js(code, where="film.js"):
+        with open(D.path(*where.split("/")), "w", encoding="utf-8") as f:
+            f.write(code)
+
+    def problems(name="film.js"):
+        return validate.problems(D, name)
+
+    # show: nothing asked before film.js; then the attachment, never the project's picture
+    expect("roles: nothing asked before film.js", problems(), [])
+    js("SK.setGround('white');\n")
+    got = problems()
+    expect(
+        "roles: a show attachment film.js never names stops the film",
+        (len(got), "upload1" in got[0], "Show it as it is" in got[0]),
+        (1, True, True),
+    )
+    expect(
+        "roles: a project's show picture an episode leaves out is not asked for",
+        any("pic_logo" in g for g in got),
+        False,
+    )
+    expect("roles: the gate says it too", validate.gate(D) == got, True)
+    js("SK.setGround('white');\n// upload1 goes on the wall later\n/* and upload1 here */\n")
+    expect("roles: a name in a comment is not a draw", len(problems()), 1)
+    js("const wall = ['upload1'];\nwall.forEach((n, i) => SK.image(n, i * 300, 0, 280));\n")
+    expect("roles: drawn through a loop of its own counts", problems(), [])
+    js('SK.image("upload1", 0, 0, 600); // https://example.com/a\n')
+    expect("roles: a link in a comment after the draw does not hide it", problems(), [])
+
+    # scene: never named in code
+    js("SK.image('upload1', 0, 0, 600);\nSK.cutout('upload2', 0, 400, 600);\n")
+    got = problems()
+    expect(
+        "roles: a scene picture in code is refused, whatever helper draws it",
+        (len(got), "upload2" in got[0], "never on screen" in got[0]),
+        (1, True, True),
+    )
+    js("SK.image('upload1', 0, 0, 600);\n// upload2: three windows, a palm tree\n")
+    expect("roles: a scene picture named in a comment is fine", problems(), [])
+
+    # style: checked when paint.json is saved, before anything is painted
+    paint = json.load(open(D.path("paint.json"), encoding="utf-8"))
+    paint["images"] = [{"name": "street", "prompt": "a street at dusk"}]
+    with open(D.path("paint.json"), "w", encoding="utf-8") as f:
+        json.dump(paint, f)
+    got = problems("paint.json")
+    expect(
+        "roles: a style attachment no painting is made from is said at paint.json",
+        any("upload3" in g and "How we draw this" in g for g in got),
+        True,
+    )
+    paint["images"] = [
+        {"name": "street", "prompt": "a street at dusk", "ref": "upload3"},
+        {"name": "door", "prompt": "the same street, a door", "ref": ["street", "upload3"]},
+    ]
+    with open(D.path("paint.json"), "w", encoding="utf-8") as f:
+        json.dump(paint, f)
+    expect(
+        "roles: made from it, paint.json passes",
+        [g for g in problems("paint.json") if "upload3" in g],
+        [],
+    )
+
+    # a round, a translation and a template are not held: their promise is another one
+    js("SK.setGround('white');\nSK.image('upload2', 0, 0, 600);\n")
+    for k, v in (("round_of", {"film": "x"}), ("localized", {"from": "x"}), ("template", "t")):
+        D.update(**{k: v})
+        expect("roles: a film with %s is not held" % k, problems(), [])
+        D.update(**{k: None})
+    expect("roles: and the same film, first written, is", len(problems()), 2)
+
+    # a film made in scenes: the plan names the show picture before any scene is written
+    js("SK.image('upload1', 0, 0, 600);\n")
+    os.makedirs(D.path("scenes"), exist_ok=True)
+    D.update(mode="scenes")
+    js("SK.setGround('white');\n")
+    plan = {"scenes": [{"id": "s1", "shows": "the street"}, {"id": "s2", "shows": "the end"}]}
+    with open(D.path("scenes.json"), "w", encoding="utf-8") as f:
+        json.dump(plan, f)
+    expect(
+        "roles: in scenes, a plan that gives no scene the show picture is told at once",
+        any("upload1" in g and "shows" in g for g in problems("scenes.json")),
+        True,
+    )
+    expect("roles: in scenes, film.js is not held while a scene is unwritten", problems(), [])
+    plan["scenes"][1]["shows"] = "the photo upload1, pinned to the wall"
+    with open(D.path("scenes.json"), "w", encoding="utf-8") as f:
+        json.dump(plan, f)
+    expect(
+        "roles: in scenes, the plan names it",
+        [g for g in problems("scenes.json") if "upload1" in g],
+        [],
+    )
+    import scenes  # noqa: PLC0415
+
+    expect(
+        "roles: the scene that shows it is told what it is for, the other is not",
+        (
+            "upload1" in validate.scene_pictures(D, plan["scenes"][1]),
+            validate.scene_pictures(D, plan["scenes"][0]),
+        ),
+        (True, ""),
+    )
+    expect("roles: scene_message carries it", callable(scenes.scene_message), True)
+    js("// the opening\n", "scenes/s1.js")
+    js("// the close\n", "scenes/s2.js")
+    expect("roles: in scenes, every scene written and none draws it", len(problems()), 1)
+    js("SK.image('upload1', 0, 0, 600);\n", "scenes/s2.js")
+    expect("roles: in scenes, drawn", problems(), [])
+    expect(
+        "roles: drawn_pictures is what the render keeps", validate.drawn_pictures(D), {"upload1"}
+    )
+
+    # what Claude reads: the role wins over the prompt; a project's show picture is optional
+    expect(
+        "roles: the attachment's note says it is required, a project picture's that it is not",
+        (
+            "not finished" in library.role_line("show"),
+            "where this episode uses it" in library.role_line("show", required=False),
+        ),
+        (True, True),
+    )
+    expect(
+        "roles: the show note puts it where the prompt does, with no fallback place",
+        (
+            "exactly where the prompt puts it" in library.role_line("show"),
+            "framed print" in library.role_line("show"),
+        ),
+        (True, False),
+    )
+
+    # @picture1...: where the prompt puts each picture, told to Claude with its role
+    expect(
+        "roles: the prompt's sentences that name each picture",
+        library.picture_places(
+            "Open on the sea. Then @picture1 on the last frame, big!\n"
+            "@Picture3 is the hill's look; @picture1 @picture1 again. a@picture2.com"
+        ),
+        {1: ["Then @picture1 on the last frame, big!", "@Picture3 is the hill's look; @picture1 @picture1 again."], 3: ["@Picture3 is the hill's look; @picture1 @picture1 again."]},
+    )
+    P = films.Film.create("A bakery. @picture1 on the last frame, over the shop's door.", 10, "painted")
+    os.makedirs(P.path("inputs"), exist_ok=True)
+    with open(P.path("inputs", "roles.json"), "w", encoding="utf-8") as f:
+        json.dump({"upload1": "show", "upload2": "show"}, f)
+    expect(
+        "roles: each picture's place, as the prompt says it",
+        (library.place_line(P, "upload1"), library.place_line(P, "upload2"), library.place_line(P, "pic_logo")),
+        (' The prompt names it @picture1, and it goes where this says: "@picture1 on the last frame, over the shop\'s door."', "", ""),
+    )
+    expect(
+        "roles: a scene's pass is told the place too",
+        "over the shop's door" in validate.scene_pictures(P, {"shows": "upload1 over the door"}),
+        True,
+    )
 
 
 def main():
@@ -231,6 +401,7 @@ def main():
         )
 
         caps_cases(expect, A, B, C)
+        role_cases(expect)
 
         # a link inside a film that leads to another film does not get through (real paths)
         link = A.path("link")
@@ -329,6 +500,80 @@ def main():
             set(E.vo_pins()) - validate.VO_KEYS,
             set(),
         )
+        # a prompt that names ElevenLabs voices (film.prompt_voices): read in them with the
+        # studio's key, Claude casts the characters among them, and its cast passes the check
+        R, S = "S0ypc51SmsvcKXTWvjqJ", "mrQhZWGbb2k9qWJb5qeA"
+        V = films.Film.create("Rusty (ElevenLabs %s) and Smudge (%s) at the fence" % (R, S), 30)
+        with open(V.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        expect(
+            "the prompt's voices start in vo.json",
+            (vo["tts"], vo["model"], vo["voice"], V.record()["el_voices"]["ids"]),
+            ("elevenlabs", films.EL_MODEL, R, [R, S]),
+        )
+        with open(V.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "tts": "gemini",
+                    "voice": R,
+                    "language": "en",
+                    "cast": {"rusty": {"voice": R}, "smudge": {"voice": S}},
+                    "lines": [
+                        {"who": "smudge", "text": "[alarmed] Into those woods?"},
+                        {"who": "rusty", "text": "Just for a look!"},
+                    ],
+                },
+                f,
+            )
+        note = pin_after("vo.json", V)
+        with open(V.path("vo.json"), encoding="utf-8") as f:
+            vo = json.load(f)
+        expect("its backend is pinned back", (vo["tts"], vo["model"]), ("elevenlabs", "eleven_v4"))
+        expect("and its cast of characters passes: %s" % note, "vo.json:" in note, False)
+        expect("its pins are all keys vo.json may hold", set(V.vo_pins()) - validate.VO_KEYS, set())
+        expect("the first message names the voices", R in agent.voice_note(V), True)
+        expect("no relay pass: KitCut's own key", V.own_voice(), None)
+        # ... or in a script attached with the idea (make_film's documents)
+        doc = os.path.join(tempfile.mkdtemp(), "script.md")
+        with open(doc, "w", encoding="utf-8") as f:
+            f.write("Cast (ElevenLabs): Princess acCWxmzPBgXdHwA63uzP\n- L01. PRINCESS: \"Hi.\"\n")
+        D = films.Film.create(
+            "The fence scene, as the script says",
+            30,
+            attachments=[{"kind": "text", "ext": "md", "src": doc, "name": "script.md"}],
+        )
+        expect(
+            "voices in an attached script are taken",
+            (D.record().get("el_voices") or {}).get("ids"),
+            ["acCWxmzPBgXdHwA63uzP"],
+        )
+        expect(
+            "an own ElevenLabs narrator wins over the prompt's voices",
+            "el_voices"
+            in films.Film.create(
+                "ElevenLabs %s" % R,
+                5,
+                narrator={"source": "elevenlabs", "voice": S, "model": "eleven_v3"},
+            ).record(),
+            False,
+        )
+
+        # an actor (studio/actors.md, library._seed_actors) speaks its own lines in its own
+        # voice: until 2026-11-19 the check refused its line, although actors.md asks for it
+        T = films.Film.create("an actor speaks", 10)
+        T.update(library={"actors": [{"name": "duchess", "faces": [], "talk": ["neutral"]}]})
+        with open(T.path("vo.json"), "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "voice": "Kore",
+                    "language": "en",
+                    "cast": {"duchess": {"voice": "Leda"}},
+                    "lines": [{"who": "duchess", "text": "Good morning."}, {"text": "She bows."}],
+                },
+                f,
+            )
+        expect("an actor's line passes", validate.problems(T, "vo.json"), [])
+
         expect("the first message names it", "person's choice: Puck" in agent.voice_note(P), True)
         expect("a film without one says nothing", agent.voice_note(A), "")
         d = P.direction()

@@ -115,7 +115,7 @@ def spent(film):
 def pass_limits(film, kind, span=None):
     """Claude's working time (s) and budget (USD) for one pass: bounded by what the pass is, not
     by the film's length -- that is the point. The film's own limit still caps the sum."""
-    film_budget = limits(film.length)["budget_usd"]
+    film_budget = limits(film.length, film.claude_model)["budget_usd"]
     # raised 2026-09-29 after i4d52n (8 min, 12 scenes): its director needed a second try, having
     # spent its 28 minutes on narration retakes, and a scene pass got 10 minutes and used them all
     # thinking before it wrote a line
@@ -228,32 +228,36 @@ def scene_message(film, k, sheet=None):
     except OSError:
         look = "(missing)"
     existing = os.path.exists(film.path(*scene_file(scene).split("/")))
-    return _read("scene.md").format(
-        K=k + 1,
-        N=len(rows),
-        ID=scene["id"],
-        FILE=scene_file(scene),
-        TITLE=scene.get("title", ""),
-        SHOWS=scene.get("shows", ""),
-        NOTES=scene.get("notes", "") or "(none)",
-        START="%.2f" % start,
-        END="%.2f" % end,
-        LOCAL_END="%.2f" % (end - start),
-        LINES=_lines_text(film, scene),
-        STYLE=pr.get(DIRECTOR, {}).get("summary") or "(see film.js)",
-        BEFORE=_about(prev, pr.get(prev["id"], {}).get("summary") if prev else ""),
-        AFTER=_about(nxt, "") if nxt else "(none -- this is the last scene)",
-        SHEET=sheet or "(none: this is the first scene)",
-        LOOK=look,
-        SHARED=shared_helpers(film, k),
-        MINUTES=pass_limits(film, "scene", (start, end))["claude_s"] // 60,
-        EXISTING=(
-            "A previous attempt at this scene left %s: Read it, then finish it or rewrite it."
-            % scene_file(scene)
-            if existing
-            else "Write %s from scratch." % scene_file(scene)
-        ),
-    ) + mark_note(film)
+    return (
+        _read("scene.md").format(
+            K=k + 1,
+            N=len(rows),
+            ID=scene["id"],
+            FILE=scene_file(scene),
+            TITLE=scene.get("title", ""),
+            SHOWS=scene.get("shows", ""),
+            NOTES=scene.get("notes", "") or "(none)",
+            START="%.2f" % start,
+            END="%.2f" % end,
+            LOCAL_END="%.2f" % (end - start),
+            LINES=_lines_text(film, scene),
+            STYLE=pr.get(DIRECTOR, {}).get("summary") or "(see film.js)",
+            BEFORE=_about(prev, pr.get(prev["id"], {}).get("summary") if prev else ""),
+            AFTER=_about(nxt, "") if nxt else "(none -- this is the last scene)",
+            SHEET=sheet or "(none: this is the first scene)",
+            LOOK=look,
+            SHARED=shared_helpers(film, k),
+            MINUTES=pass_limits(film, "scene", (start, end))["claude_s"] // 60,
+            EXISTING=(
+                "A previous attempt at this scene left %s: Read it, then finish it or rewrite it."
+                % scene_file(scene)
+                if existing
+                else "Write %s from scratch." % scene_file(scene)
+            ),
+        )
+        + validate.scene_pictures(film, scene)
+        + mark_note(film)
+    )
 
 
 def _sounds(film):

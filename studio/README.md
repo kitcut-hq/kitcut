@@ -127,6 +127,24 @@ The public site is https://kitcut.ai (create.kitcut.ai redirects there), from
   - A film request's `voice` is the narrator the person picked, `{source: "kitcut", voice}`.
     The voice is pinned in `vo.json` (`Film.vo_pins`), and Claude still directs how it is read
     (`docs/reference.md`, "Workspaces, and the narrator a person picks").
+  - **ElevenLabs voices named in the prompt** (2026-11-19). A prompt that says "ElevenLabs" and
+    gives voice ids ("Rusty: ElevenLabs S0ypc51SmsvcKXTWvjqJ, Smudge: mrQhZWGbb2k9qWJb5qeA") is read
+    in those voices with the studio's own ElevenLabs key, never the site's relay
+    (`film.prompt_voices`, kept in the record as `el_voices`). An id is a 20-character token with a
+    digit or both cases in it; up to 12 are taken, once each. The model is the newest
+    (`film.EL_MODEL`, `eleven_v4`) unless the prompt names another ElevenLabs model. `vo_pins` pins
+    `tts`, `model`, `takes` 1 and `jobs` 2; Claude casts the ids itself (the narrator's in `voice`,
+    each speaking character's in `cast` under a lower-case name, and `who` on their lines), told so
+    by `agent.voice_note`. `validate._vo` takes only those ids and lets any character be cast by
+    name. A character the project has as an actor (`actor-pack.py`, an animal too: `"body":
+    "animal"`, drawn after its cast picture with `"reference"`, put in with `actor_put.py`) is cast
+    under the actor's name and its mouth follows its voice; a painted character without one is only
+    seen. The takes are KitCut's money: `sketch-vo.py studio_spend` logs each at list price in
+    `audio/vo/spend.jsonl`, counted in the film's cost and the day's budget. A person's own
+    ElevenLabs narrator (the site's voice setting) wins: such a film ignores the prompt's ids. The
+    idea and the documents attached with it (a script with its cast) are read. The same change lets
+    a project's actors speak their own lines: `validate` refused them before, although `actors.md`
+    asks for it.
   - For other calls it is the visitor's IP.
   - The sign-up wall and the credits live in the site's `api/studio.js` and `lib/credits.js`,
     not here. The site holds a film's seconds before forwarding it, and settles them from this
@@ -780,24 +798,28 @@ ROUND makes all of it into the film's next VERSION -- the same film, page and li
   and `guard.pin_paint`), or a changed default would record every line again in another voice;
   and what each tool spent before (the copy starts with no `spend.jsonl`, so a round's allowance
   and its cost are its own: `rounds.limits`).
-- **What it cannot do yet:** change the words of a film told in a person's own ElevenLabs voice
-  (their pass to their account was for the film's making), or change a film made in scenes.
+- **A film told in a person's own ElevenLabs voice** (2026-11-11): its making's pass to their
+  account has run out, so a round records only with a fresh one. `words` says `{can: false, why:
+  own_voice, with_pass: true}`; the site mints a pass to that same voice (as for a translation)
+  and sends it as the round's `voice`. `rounds.keep_pass` keeps it in the film's
+  `temp/round-voice.json` (never the record; another voice is refused, 409 `own_voice`),
+  `copy_of` gives it to the copy as `temp/voice.json`, and the copy speaks through the relay as
+  the round (`X-Film` is the rid, which the site binds the pass to). Without a pass the round
+  still changes the picture, the timing and the music, and answers a note on the words not done.
+- **A line taken again with the same words** (bad sound, a slip, the wrong tone): `voice` with
+  `retake_line` and vo.json left as it is (`rounds.VOICE` tells Claude so).
+- **What it cannot do yet:** change a film made in scenes.
 - **Limits.** A round takes one of its maker's films-at-once places and holds its reserve of the
   day's budget (`rounds.mine`, `rounds.reserve`), but is not one of the day's films. A film may
   have `STUDIO_ROUNDS_PER_DAY` (5) rounds in a day, a round up to 20 notes. A YouTube send and a
   redraw without branding each wait for a round, and a round for them.
-- **A sharper version** (2026-10-29): `POST .../versions {"key", "from", "sharpen": "medium"|"high"}`
-  instead of notes. Every film's paintings are drafts (`film.DRAFT`, wherever the painter has a
-  quality: `film.QUALITY_MODELS`); `rounds.pictures` says a film's quality and what it may be
-  raised to (`pictures` on `GET .../versions`: nothing for Muse, a drawn film or one in scenes).
-  The round takes no turn with Claude: `rounds.sharpen` keeps each painting in the copy's
-  `drafts/` and pins the quality and `redo`, `sketch-paint.py` paints every picture again from its
-  own draft alone ("this exact picture, finished": the camera moves were written for where things
-  stand), `rounds.unsharpen` takes `redo` and the drafts away, and the round renders as any other.
-  The paintings are cached under the keys they have without `redo`, so the version's next round
-  of notes paints nothing again. The draft stays one of the versions. It is one of the film's
-  rounds of the day; the site holds its credits as for notes, and the film's document gets
-  `paint_quality`.
+- **No sharper versions** (2026-11-17, the owner's call): Draft, Standard and High (2026-10-29
+  to 2026-11-17: every film painted as a draft, a film asked for at a quality, a round that
+  painted every picture again from its draft) are gone. Each painter paints at its one quality
+  again (`film.CUTOUTS_PINNED` medium, `film.STYLE_ROUTES` gpt high); `POST /api/films` no longer
+  reads `quality`, and `POST .../versions` refuses `sharpen` (reason "sharpen"). A film made in
+  those weeks keeps its record's `paint_quality` and its paint.json's quality, so its rounds
+  repaint nothing.
 - **A filmstrip per version** (`rounds.make_strip`, `outputs/strip.jpg`, online beside the rest):
   24 small frames in a row, each sought in the web copy rather than the film decoded. The
   site's notes page cannot read a video's pixels off another host, so it cannot make its own.
@@ -1007,8 +1029,7 @@ its films, next to `projects\` (its text is in its project's git repository too:
   style picture (`style/style.jpg`, the main one, then `style2.jpg`...), sent with every painting
   and cut-out by `sketch-paint.py` beside the line (2026-10-29: given only a main picture of people
   on a plain ground and no line, a reel painted its full places in the painter's own look). GPT
-  Image paints a draft (`film.DRAFT`, quality low; collage cut-outs too), and a sharper version is
-  its person's to ask for (below). The guard holds all of it, and a round keeps what its film was
+  Image paints at high (collage cut-outs at medium). The guard holds all of it, and a round keeps what its film was
   painted with (a film from before keeps no quality, so nothing repaints); the run's
   document says `paint_route`, and the site marks a Gemini episode. Measured on KitCut's own collage
   still: the read in ~40 s, the card ~$0.05 on the key, a proof $0.03 (GPT Image + Muse) or $0.13
@@ -1080,7 +1101,19 @@ film it vouches is the person's. That film is an episode:
   take the same (`picture_roles: {upload id: role}` on `POST /api/films`). Both reach the film's
   `inputs\roles.json` (the studio's; Claude never writes `inputs\`) and Claude's note, and an
   attachment (`upload<n>`) is a painting's `ref` only when its role is `style`, a `scene` picture
-  never (`_sketch.project_picture`). Every episode gets them as
+  never (`_sketch.project_picture`). The roles are held, not hinted, each at the earliest file
+  that can show it (`validate.held_roles`): a film's own `show` attachment must be named in its
+  code (film.js, its scenes, a template's data; comments do not count) once the picture is
+  written; a `scene` picture is never named in code; a `style` attachment is the `ref` of at
+  least one painting, said when paint.json is saved, before anything is painted; in a film made
+  in scenes, scenes.json names each `show` picture in the plan of the scene that shows it, and
+  that scene's pass is told what it is for (`validate.scene_pictures`). Held only where it can
+  be kept: a film's own attachments (a project's `show` picture is shown when an episode uses
+  it, and optional), and only while Claude writes a film for the first time (not a round, a
+  translation or a template's film). The agent's note says the role beats the prompt's wording. The prompt names the attachments `@picture1`, `@picture2`... (`upload1`..., pictures only, in the order attached), and a `show` picture goes where the sentence naming it says: each picture's note quotes that sentence (`library.picture_places`, `place_line`), a scene's pass too. kitcut.ai refuses a prompt that never names a `show` attachment, or names one that is not attached, before any credit is held (its `lib/attachments.js` `picturesProblem`); `library.mentioned` never takes `@picture1` for a character.
+  Replayed on the 42 finished films with roles (2026-11-09): 40 pass, and the two it stops are
+  the two that broke a role -- a fashion film that painted a stranger instead of showing the
+  portrait, and an app promo that left 5 of its 9 screenshots out. Every episode gets them as
   `inputs\pic_<name>.*`, in the manifest as `pic_<name>`; the ones neither film.js nor the cast
   draws leave before the final render, like unused attachments. `once: true` seeds only the
   project's next episode: `_seed_pictures` removes it from the project's library right after, so
@@ -1093,7 +1126,15 @@ film it vouches is the person's. That film is an episode:
   `audio\vo\approved\`, and sketch-vo.py plays one for any line with the same key instead of
   recording it (never retaken; the voice tool refuses). What for: a series' greeting and sign-off,
   and a name the voice stresses wrongly now and then -- no check hears stress (KI-047).
-  `docs/studio-voice-lines.md` has the design.
+  `docs/studio-voice-lines.md` has the design. A line is approved and matched in the voice that
+  says it: the narrator's (`vo.voice`), or for a line a character speaks (`who`), that
+  character's in `vo.cast` (`library._voice_of`, sketch-vo's `line_vo`).
+- **Characters who speak.** A member of the project's cast, drawn or painted, may speak its own
+  lines in a voice of its own: `vo.cast` gives it the voice and its lines say `"who": "<name>"`
+  (validate.py's `_vo` takes the film's people and its cast, `_cast_of`). A storytime series can so
+  have its girl tell the story in one voice while the narrator reads the greeting and sign-off,
+  approved, in another. Until 2026-11-12 only a film's people (photos, `p1`...) could speak: the
+  first two-voice storytime episode was refused its second voice and read in one.
 - **What Claude hears.** The first message names the project and gives its brief (the person's
   words), then the pictures, the approved voice lines (to use word for word, each a line of its
   own), the cast and the earlier episodes. The first episode hears that its
@@ -1121,6 +1162,22 @@ thumbnails. Run it on the laptop
 with `STUDIO_ENV_FILE` naming the studio's `.env` (MONGODB_URI, the media SAS); the VPN must be up
 for `--vm`. The first import (2026-09-30): the Web Summit speaker promo,
 `studio-20260930-114530-nhdy7i`, in project `p-s2alo2aepx`.
+
+## A finished film cut into a Short: `shortcut.py`
+
+kitcut.ai's `film_to_short` (sketch-studio `lib/filmshort.js`). `POST /api/films {"short": {"from",
+"version", "segments"?, "headline"?, "key"}, "listed"?}` makes a new film from the original's
+finished master, with no Claude, voice or picture model: 1080x1920, the whole 16:9 frame over a
+blurred, darkened copy of itself, the headline above it, the film's own `film.vtt` large below it,
+the film's own sound. `segments` keep those seconds, in order; a result over 180 s is refused with
+`long`, before a film is made. A Short is cut in the `cpu` pool and is not an episode of a project,
+so a series' next episode never starts from it.
+
+The studio's thumbnails, share page and YouTube drafts all draw a film from its code, so the Short's
+folder holds a small `film.js` that shows sixteen of its own frames (`images/`), and its subtitles as
+a narration on its own clock (`vo.json`, `audio/vo/timeline.json`). The video is never drawn from
+that code: the site refuses notes, and translation, on a Short. `python studio/shortcut.py --plan
+<film> --segments 0-22,140-159` says what it would be; `studio/test_shortcut.py` does one real cut.
 
 ## Templates: a finished film others remake as they ask (`templates.py`)
 

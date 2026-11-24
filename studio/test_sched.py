@@ -94,6 +94,40 @@ async def main():
         clock.paused > 0.3 and clock.active() < clock.wall() - 0.3,
     )
 
+    # ...while the wait lasts, not only once it ends: a limit looked at mid-wait (agent._within
+    # every 2 s) must not count the line as working time
+    clock, seen = Clock(), []
+    h = asyncio.create_task(hog())
+    await asyncio.sleep(0.02)
+
+    async def watch():
+        await asyncio.sleep(0.3)
+        seen.append((clock.active(), clock.wall()))
+
+    w = asyncio.create_task(watch())
+    async with q.hold(1, "film", clock=clock):
+        pass
+    await asyncio.gather(h, w)
+    expect(
+        "mid-wait the clock stood still (active %.2f s of %.2f s)" % seen[0],
+        seen[0][1] > 0.3 and seen[0][0] < 0.1,
+    )
+
+    # two waits at once (two tools in line together) are off the clock once, not twice
+    clock = Clock()
+    h = asyncio.create_task(hog())
+    await asyncio.sleep(0.02)
+
+    async def in_line(name):
+        async with q.hold(1, name, clock=clock):
+            pass
+
+    await asyncio.gather(in_line("tool-a"), in_line("tool-b"), h)
+    expect(
+        "overlapping waits counted once (paused %.2f of %.2f s)" % (clock.paused, clock.wall()),
+        clock.paused <= clock.wall() and clock.active() >= 0,
+    )
+
     # priority: ahead of everyone without it, first come first served among its own
     order.clear()
     one = Pool("claude", 1)

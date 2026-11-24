@@ -745,6 +745,29 @@ def voice_note(film):
                 else ""
             )
         )
+    el = film.record().get("el_voices") or {}
+    if el.get("ids"):  # ElevenLabs voices the prompt names (film.prompt_voices)
+        return (
+            "\n\nThe voices are ElevenLabs voices the prompt names: %s (model %s, set by the "
+            "studio). This replaces the voice section's Gemini voices: leave `tts`, `model`, "
+            "`takes`, `jobs`, `lead` and `gap` as they are. Cast them as the prompt says: "
+            "`voice` is the narrator's id (the one the prompt gives the narrator; with none, the "
+            "first, %s), and each character who speaks gets their own id in `cast`, under a name "
+            'in lower case letters, digits and _: `"cast": {"rusty": {"voice": "<id>"}}`. Every '
+            'line a character says names them, `{"who": "rusty", "text": "..."}`, and says their '
+            "words exactly as the prompt or its script has them; a line with no `who` is the "
+            "narrator's. One voice is never given to two characters unless the prompt says so. "
+            "`style` is not read by ElevenLabs: how a line is said goes at its start as an audio "
+            'tag in square brackets, `{"text": "[worried, calling after him] Please be careful!"}` '
+            "(tags are not spoken, shown or counted as words), and never a whisper, which makes "
+            "every voice sound alike. A line moves a mouth only when the speaker is drawn with "
+            "one that talks: a character the film has as an actor (The actors) is cast under the "
+            "actor's own name and drawn with SK.actor while it speaks, so its mouth follows its "
+            "voice. A character with no actor is seen while their line plays and the line starts "
+            "on them, so it is always clear who speaks. Every line is recorded with KitCut's "
+            "ElevenLabs account: record once the words are final."
+            % (", ".join(el["ids"]), el.get("model"), el["ids"][0])
+        )
     if n.get("source") == "kitcut" and n.get("voice"):
         return (
             "\n\nThe narrator's voice is the person's choice: %s. Keep `voice` as it is in "
@@ -826,21 +849,23 @@ def attached_note(film):
             % (label, validate.N.summary(said), validate.MAX_LINE_CHARS),
         ]
     for a in pics:
+        place = library.place_line(film, a["name"])  # the prompt's sentence that names it
         if a.get("role") in library.ROLE_NOTE:
             lines.append(
-                "- Picture %s (%sx%s): Read %s to see it. The person said what it is for%s."
+                "- Picture %s (%sx%s): Read %s to see it. The person said what it is for%s.%s"
                 % (
                     a["name"],
                     a.get("w"),
                     a.get("h"),
                     a["file"],
                     library.role_line(a["role"], bool(films.paint_kinds(film.caps))),
+                    place,
                 )
             )
             continue
         lines.append(
-            "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w)."
-            % (a["name"], a.get("w"), a.get("h"), a["file"], a["name"])
+            "- Picture %s (%sx%s): Read %s to see it. On screen: SK.image('%s', x, y, w).%s"
+            % (a["name"], a.get("w"), a.get("h"), a["file"], a["name"], place)
         )
     if pics:
         lines += [
@@ -849,12 +874,23 @@ def attached_note(film):
             "(a logo, a product, a person, a place: put it on screen with SK.image), a reference "
             "to match (a look, a character, a layout: draw in its spirit, don't paste it), or the "
             "brief itself (a screenshot, a note, a sketch of the story: read it as the prompt). "
-            "Where the person said how to use one (its role above, or the prompt), do that; "
-            "otherwise decide. Before you write anything, say in one short sentence per picture "
-            "what you took it to be. A photo in a drawn film sits best framed, as a pinned print "
-            "or a card, so it belongs to the drawn world. A picture you don't draw never leaves "
-            "the studio.",
+            "Where the person gave one a role above, the role is what it is for, whatever the "
+            'prompt\'s wording seems to say ("no other elements", "use it as a reference"): '
+            "the studio checks the roles and the film does not finish without them. The prompt "
+            "names the pictures @picture1, @picture2... (@picture1 is upload1): a picture to show "
+            "goes exactly where the sentence that names it says -- that shot, that moment, that "
+            "place in the frame -- and nowhere it does not. Where there is no role, the prompt "
+            "says, or you decide. Before you write anything, say in one short sentence per "
+            "picture what you took it to be and, for one with a role, where it goes. A photo in a "
+            "drawn film sits best framed, as a pinned print or a card, so it belongs to the drawn "
+            "world. A picture you don't draw never leaves the studio.",
         ]
+        if film.mode == "scenes" and any(a.get("role") == "show" for a in pics):
+            lines.append(
+                "This film is made in scenes, and a scene's pass sees only its own plan: name "
+                'each picture marked "show" in the "shows" of the scene that puts it on screen '
+                "(scenes.json is checked for it)."
+            )
     if not rec.get("prompt", "").strip():
         lines += [
             "",
@@ -879,9 +915,7 @@ def _doc_text(path):
         return None
 
 
-# the visitor's pictures, their project's, its brand's (brandkit.py: brand_pic_<name>; never its
-# logos, which the end card draws through SK.BRAND), and what Claude took from the web (web-grab.py)
-PICTURE = r"upload\d+|pic_[a-z0-9_]+|brand_pic_[a-z0-9_]+|web_[a-z0-9_]+"
+PICTURE = validate.PICTURE  # the pictures a film may carry: the person's, a project's, the web's
 
 
 def drop_unused_uploads(film):
@@ -889,21 +923,12 @@ def drop_unused_uploads(film):
     web) that neither film.js nor the cast draws leave the manifest before the final render, so
     they are never bundled into the film's files. Returns the names dropped. A template's film
     names its pictures in its data (content.json), not its code: read too, or every photo it
-    found left the film and its frames drew empty (an open house remake, 2026-10-04)."""
+    found left the film and its frames drew empty (an open house remake, 2026-10-04). What is
+    drawn is validate.drawn_pictures, the same reading the gate holds a "show" picture to."""
     with open(film.manifest, encoding="utf-8") as f:
         m = json.load(f)
     images = m.get("images") or {}
-    code = [film.path("film.js")]
-    code += [film.path(*str(rel).split("/")) for rel in (m.get("data") or {}).values()]
-    if os.path.isdir(film.path("cast")):
-        code += [film.path("cast", n) for n in os.listdir(film.path("cast")) if n.endswith(".js")]
-    used = set()
-    for p in code:
-        try:
-            with open(p, encoding="utf-8") as f:
-                used |= set(re.findall(r"\b(?:%s)\b" % PICTURE, f.read()))
-        except OSError:
-            pass
+    used = validate.drawn_pictures(film)
     gone = [k for k in images if re.fullmatch(PICTURE, k) and k not in used]
     if gone:
         for k in gone:
@@ -1069,6 +1094,8 @@ def _result_text(block):
 # bundles). Sonnet is here only to price a run already on record; the studio runs MODEL.
 PRICES = {
     "claude-opus-5-5": {"in": 4, "out": 20, "w5m": 5, "w1h": 8, "read": 0.2},
+    # a film the person asked to be made with Fable (film.CLAUDE_MODELS)
+    "claude-fable-5-2": {"in": 8, "out": 40, "w5m": 10, "w1h": 16, "read": 0.2},
     "claude-sonnet-5": {"in": 2, "out": 10, "w5m": 2.5, "w1h": 4, "read": 0.2},
 }
 # every run's record lives in kitcut's MongoDB (store.py); the outbox holds what could not be sent
@@ -1305,8 +1332,9 @@ async def run_claude(
         except RuntimeError as e:  # no Claude Code on this machine: the login cannot be used
             raise SignInError(str(e)) from None
     opts = ClaudeAgentOptions(
-        model=MODEL,
-        effort=effort or EFFORT,  # a pass of a film made in scenes thinks less (scenes.EFFORT)
+        model=film.claude_model or MODEL,  # the person's choice (kitcut.ai, paid plans)
+        # a pass of a film made in scenes thinks less (scenes.EFFORT), unless the person chose
+        effort=film.claude_effort or effort or EFFORT,
         cwd=film.dir,
         system_prompt={"type": "file", "path": sp},
         # the web: facts, and the real logos, pages and fonts of what a film is about (the
@@ -1324,7 +1352,7 @@ async def run_claude(
         },
         can_use_tool=can_use,
         max_turns=limits(film.length)["turns"],
-        max_budget_usd=budget_usd or limits(film.length)["budget_usd"],
+        max_budget_usd=budget_usd or limits(film.length, film.claude_model)["budget_usd"],
         # a review sheet of painted frames is a PNG of several MB, and it comes back to the SDK
         # as one message (the default limit, 1 MB, failed a painted film)
         max_buffer_size=64 * 1024 * 1024,
@@ -1555,6 +1583,10 @@ async def make_film(
     if film.record().get("server") != peers.SERVER_ID:
         film.update(server=peers.SERVER_ID)
     rec = film.record()
+    if rec.get("short_of"):  # a Short cut from a finished film: no Claude, no voice, no render
+        import shortcut  # noqa: PLC0415 -- it imports this module's neighbours
+
+        return await shortcut.make(film, emit, sched, control)
     # its length left to Claude: picked first, so everything below is made for the length picked
     pick_usd = 0.0
     if rec.get("auto_length") and not rec.get("length_picked") and not (finish_only or resume):
@@ -1592,8 +1624,8 @@ async def make_film(
     billed = auth == "api"  # on the login, Claude's tokens are covered by the plan
     summary = {
         "prompt": prompt,
-        "model": MODEL,
-        "effort": scenes.EFFORT if film.mode == "scenes" else EFFORT,
+        "model": film.claude_model or MODEL,
+        "effort": film.claude_effort or (scenes.EFFORT if film.mode == "scenes" else EFFORT),
         "length": length,
         "look": look,
         "release": RELEASE,
@@ -1606,7 +1638,15 @@ async def make_film(
             if k in carry
         }
     )
-    emit({"type": "job", "id": film.id, "model": MODEL, "length": length, "look": look})
+    emit(
+        {
+            "type": "job",
+            "id": film.id,
+            "model": film.claude_model or MODEL,
+            "length": length,
+            "look": look,
+        }
+    )
 
     def price():
         # the SDK's own figure when the run reached its end; the meter's when it did not. Not
@@ -1691,7 +1731,7 @@ async def make_film(
     def on_wait(pool, ahead):
         emit({"type": "wait", "pool": pool, "ahead": ahead, "text": waiting_text(pool, ahead)})
 
-    lim, talk = limits(length), {}
+    lim, talk = limits(length, film.claude_model), {}
     if film.mode == "scenes":  # every pass's allowance (scenes.film_claude_s), waits on top
         need = scenes.film_claude_s(film)
         if need > lim["claude_s"]:
@@ -1728,7 +1768,8 @@ async def make_film(
         within = lim if within is None else within
         m0 = meter.usd()
         budget0 = say.get("budget_usd") or max(
-            1.0, limits(length)["budget_usd"] - (carry.get("claude_cost_usd") or 0)
+            1.0,
+            limits(length, film.claude_model)["budget_usd"] - (carry.get("claude_cost_usd") or 0),
         )
         attempt = 0  # stalls so far (a plan limit is picked up once, and does not count)
         credit_retried = False  # the credit key's month ran out (apikey.CreditOut): once
@@ -2483,8 +2524,8 @@ def first_record(film, source, client):
         **({"member": rec["member"]} if rec.get("member") else {}),
         "host": store.HOST,
         "prompt": rec.get("prompt"),
-        "model": MODEL,
-        "effort": EFFORT,
+        "model": film.claude_model or MODEL,
+        "effort": film.claude_effort or EFFORT,
         "job": film.id,
         "length": rec.get("length"),
         # its length is Claude's to choose (pick_length): `length` is the longest until it has
@@ -2537,6 +2578,8 @@ def first_record(film, source, client):
         **({"music": "none"} if rec.get("music") == "none" else {}),
         # a translation of a finished film (localize.py): kitcut.ai finds it by its key and its original
         **({"localized": rec["localized"]} if rec.get("localized") else {}),
+        # a Short cut from a finished film (shortcut.py): kitcut.ai finds it by its key
+        **({"short_of": rec["short_of"]} if rec.get("short_of") else {}),
         "state": "queued",
         "cost_usd": 0.0,
     }

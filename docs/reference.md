@@ -3134,8 +3134,10 @@ in the order given, so the prompt names them by number.
 
 A film exported from kitcut.ai carries KitCut advertising that must never
 reach one of our videos: a "made with kitcut.ai" mark burned into the
-bottom-right corner of every frame, and a closing card (a cocktail glass,
-"Make your own film", "kitcut.ai") over the last ~2-3 seconds. Its soundtrack
+bottom-right corner of every frame, and a closing card (the logo, "Make your
+own film", "kitcut.ai") over the last ~2-3 seconds. The logo is the citrus
+slice (amber, with an aquamarine play segment) since 2026-11-14; older exports
+carry a cocktail glass. Its soundtrack
 is also unwanted -- our voice-over and music run across the insert.
 
 ```powershell
@@ -3152,8 +3154,8 @@ box (215x172 px instead of 132x60). A box bigger than 12 % x 9 % of the frame
 is refused as "something static merged into it".
 
 **The card is found twice and the earlier wins:** the first frame with its
-lime glass, and the moment the mark vanishes. The mark goes ~0.7 s before the
-glass shows (30.0 -> 30.75 s, 15.0 -> 15.7 s measured) because the card slides
+logo (the slice's aquamarine appearing, or an older export's lime glass), and
+the moment the mark vanishes. The mark goes ~0.7 s before the logo shows (30.0 -> 30.75 s, 15.0 -> 15.7 s measured) because the card slides
 in over the whole frame -- counting those mark-less frames as "before the card"
 is how K4's mark once fell under the 97 % bar and went undetected. The film is
 cut 0.25 s before the card.
@@ -4471,10 +4473,6 @@ is and never painted.
 - A picture the person attached, `upload<n>`, may be a `ref` too, but only when they marked it
   "How we draw this" (`style` in `inputs/roles.json`). A picture marked `scene` never is.
 
-`redo` (a folder beside the manifest, the studio's for a sharper version: `studio/rounds.py`)
-holds drafts, `<name>.jpg|webp`. An image with a draft there is painted from it alone, with the
-`REDO` lead (the same picture, finished: nothing added, moved or removed), in the first batch,
-and cached under the key it has without `redo`.
 - A film without a picture `ref` is planned, ordered and cached exactly as before. One old quirk
   stays because of that: a scene listed before the painting it names is keyed without that
   painting's fingerprint.
@@ -5737,6 +5735,12 @@ says who speaks it (`sketch-vo.py`):
        "lines": [{"who": "alex", "text": "..."}, {"who": "ada", "text": "..."}, {"text": "narrator"}]}
 ```
 
+A speaker is one of the film's people (`p1`...) or a character of its project's cast, drawn or
+painted (`studio/validate.py` `_vo`, from `_cast_of`): a series' storyteller can speak in her own
+voice while the narrator keeps his, and an approved voice line is matched in the voice of the
+line's own speaker. Only a film's heads and actors have mouths (`SK.talk`); a character's
+lines carry its `who` and move none.
+
 Every cast voice is checked before anything is spent; a speaker's voice is part of its lines'
 cache key (the narrator's lines keep theirs, so an existing film re-renders nothing); a Gemini
 refusal in a film with a cast takes the backup voice by the speaker's label (the film's takes
@@ -5885,6 +5889,17 @@ editorial, papercut; or `style`), the model, the faces, which faces talk, the mo
 poses, the gates. `faces`, `talk` and `poses` take default names or `{name: "the change"}` for
 new ones (Enrique's poses say which hand holds the paddle). `design` starts from a picture already
 made instead of drawing candidates. The pack is written beside the spec in `<name>/`.
+
+**Animals, and a character already drawn** (2026-11-19, for the Warriors cats on KitCut).
+- `"body": "animal"` takes the defaults' `bodies.animal`. The front figure sits upright and faces
+  the viewer, so its head is the top of the figure as a person's is (`head` 0.40), and the same
+  cutting, gates and face laying work. Its own prompts never mention hands, shoes or clothes, and
+  its poses stand, walk, crouch and lie on four legs. A spec can still name its own poses.
+- `"reference": "<picture>"` (or a list): the candidates are drawn after it, such as a cast
+  sheet or a crop from the comic, so the actor is that character and not one the model invents.
+  It goes into the candidates' fingerprint, so a new reference draws new candidates.
+- Rusty, with 5 faces, 2 talking faces and 3 poses, plans at about $1.08 (21 pictures), up to
+  $2.04 with retakes. No animal pack had been drawn when this was written.
 
 **What it draws** (Enrique, 2026-10-17: 45 pieces, 4 min 19 s, $1.13 with the three design
 candidates, at $0.023 a picture): the base; 8 faces; 4 mouths (small, open, round, wide) and a
@@ -6176,6 +6191,23 @@ project's or else the workspace's (the site's `lib/narrator.js`).
   (`voice.kitcut_voices`); the site offers no other. No `voice`, or one with no voice in it: Claude
   picks, as before.
 - Tests: `test_guard.py` (the pin, the note, the tally), `test_library.py` (the workspace cases).
+
+**ElevenLabs voices named in the prompt** (2026-11-19). A prompt that says "ElevenLabs" and gives
+voice ids is read in those voices, with the studio's own key (`studio/README.md`, "ElevenLabs
+voices named in the prompt").
+- `film.prompt_voices(prompt)` finds them: 20-character ids with a digit or both cases, up to 12,
+  and the model (`EL_MODEL`, the newest, unless the prompt names one of `EL_MODELS`). `Film.create`
+  reads the idea and the text documents attached with it, keeps them as `el_voices` and starts
+  `vo.json` in the first; a person's own ElevenLabs narrator wins.
+- `Film.vo_pins()` pins `tts: elevenlabs`, the model, one take, two at once. Claude casts the ids
+  (`voice`, `cast` by lower-case name, `who` on a character's lines; `agent.voice_note`), and
+  `validate._vo(..., voices=)` takes only those ids. How a line is said goes in an `[audio tag]` at
+  its start; `style` is not read by ElevenLabs.
+- `sketch-vo.py studio_spend` logs each take at list price (`EL_USD_PER_CHAR`, from
+  elevenlabs.io/pricing/api on 2026-11-19: $0.08 per 1K characters for `eleven_v4`), so the
+  film's cost and the day's budget count it.
+- Tests: `test_people.py` (the parser and the check), `test_guard.py` (a film made from such a
+  prompt: its pins, its cast, its note; an actor's line passing).
 
 **Samples for the picker.**
 - `python scripts/voice-samples.py [--model M] [--lang en] [--plan]` records one sentence (from

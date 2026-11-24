@@ -1115,13 +1115,6 @@ def asset(d, kind, name):
 
 
 # ------------------------------------------------------------------ an episode's style
-def read_card(d):
-    """A style's card once it is ready for an episode (seed: the card and its assets), or None."""
-    if not os.path.exists(os.path.join(d, "assets", "used.json")):
-        return None
-    return _read_json(os.path.join(d, "card.json"))
-
-
 def route_of(card):
     """The route an episode is painted on: Gemini only when a team member picked it."""
     r = card.get("route") if card.get("route") in STYLE_ROUTES else "words"

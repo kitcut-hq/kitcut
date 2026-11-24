@@ -170,6 +170,12 @@ You set:
   name or a foreign word it gets wrong, in English-like spelling; the captions keep the word as
   written. One voice reads every line unless a line names someone in `cast`: the style directs that
   voice, it does not give characters voices of their own.
+- `cast` (optional): when the brief or the prompt gives a character a voice of their own, a
+  member of the cast (`SK.cast.<name>`, drawn or painted, kept or made in `cast/` before
+  `vo.json` names it) speaks its lines in it: `"cast": {"olenka": {"voice": "Leda", "style":
+  "..."}}` and `{"who": "olenka", "text": "..."}`. A line without `who` is the narrator, in
+  `voice` and `style`; a project's approved voice line plays for the narrator's lines in `voice`
+  and for a character's in its own.
 - `dry` (optional): `true` when the brief or the prompt asks for a close, dry voice with no room
   or echo (a voice message, one person talking to one person). The narration is then mixed with
   none of the room the music has; leave it out otherwise.

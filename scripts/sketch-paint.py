@@ -65,12 +65,6 @@ style line ("style") goes in front of the prompt beside them when it is set. A m
 no reference paints from the words alone; a model that takes fewer references than it is given
 gets the style pictures first and as many of the image's own as fit.
 
-"redo" (a folder beside the manifest, set by the studio for a sharper version: studio/rounds.py)
-holds drafts, <name>.jpg or .webp: an image with a draft there is painted from it alone, told to
-paint that exact picture again at its finish -- the same composition, people, objects and colours
--- so a film's camera moves still fit it. It is cached under the key it would have without
-"redo", so once the studio takes "redo" away the sharper painting is the image's own.
-
 Images are cached by a fingerprint of backend, model, style, prompt and reference (a project
 picture's own content, and the style pictures'), so a rerun paints only what changed. Each image
 painted appends its cost to images/spend.jsonl, and a run
@@ -137,15 +131,6 @@ STYLE_AND_REF = (
 )
 ORDINAL = {2: "second", 3: "third", 4: "fourth", 5: "fifth"}
 MAX_STYLE_REFS = 4
-# a sharper version of a picture ("redo"): its draft, painted again at a higher quality. Told only
-# to keep the characters, a model is free to move them; the camera moves were written for where
-# things stand in the draft
-REDO = (
-    "The attached picture is a rough draft of this exact picture. Paint the same picture again, "
-    "finished: keep its composition, framing, camera angle, every person, object and colour, "
-    "where each stands and how big it is, and its drawing style. Only make it cleaner and more "
-    "detailed; add, move or remove nothing. "
-)
 # several references ("ref": [...]): one character or group in each
 MAX_REFS = 4
 KEEP_REFS = (
@@ -356,14 +341,12 @@ def paint_openrouter(
     aspect="16:9",
     transparent=False,
     style_ref=None,
-    redo=None,
 ):
     """One picture from an OpenRouter image model; `ref` (a JPEG, PNG or WebP path, or a list of
     them) goes in as reference pictures when the model takes them (refs_max), and is dropped when
     not; `style_ref`, a style picture or a list of them, goes in before it
-    (ref_lead), as many as the model takes. `redo`: the picture's own draft, sent alone in their
-    place (REDO). `transparent` asks for a transparent background (sent only where the model has
-    it)."""
+    (ref_lead), as many as the model takes. `transparent` asks for a transparent background (sent
+    only where the model has it)."""
     import httpx
 
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
@@ -371,7 +354,7 @@ def paint_openrouter(
         raise RuntimeError("OPENROUTER_API_KEY is not set (put it in .env)")
     caps = model_caps(model)
     body = {"model": model, "prompt": prompt, **pick_params(caps, quality, aspect, transparent)}
-    pics, lead = ([redo], REDO) if redo else ref_lead(ref, style_ref, refs_max(caps, model))
+    pics, lead = ref_lead(ref, style_ref, refs_max(caps, model))
     if pics and takes_refs(caps, model):
         body["input_references"] = [
             {"type": "image_url", "image_url": {"url": data_url(p)}} for p in pics
@@ -589,18 +572,6 @@ def main():
                 sys.exit("paint.style_ref %r is not a picture beside the manifest" % asked)
         if len(style_ref) == 1:  # one picture: sent and keyed as it always was
             style_ref = style_ref[0]
-    drafts = {}  # a sharper version's drafts ("redo"): {image name: its draft}
-    if spec.get("redo"):
-        base = os.path.realpath(m["_dir"])
-        rd = os.path.realpath(os.path.join(base, str(spec["redo"])))
-        if not rd.startswith(base + os.sep):
-            sys.exit("paint.redo %r is not a folder beside the manifest" % spec["redo"])
-        for im in images:
-            for e in (".jpg", ".webp"):
-                p = os.path.join(rd, im["name"] + e)
-                if os.path.isfile(p) and os.path.realpath(p).startswith(rd + os.sep):
-                    drafts[im["name"]] = p
-                    break
     # each style picture's own content: a new one paints afresh
     style_fp = None
     if style_ref:
@@ -701,7 +672,6 @@ def main():
                     for r, f in zip(refs_of(im.get("ref")), files[im["name"]], strict=True)
                 ]
                 ref = ref[0] if isinstance(im.get("ref"), str) else ref or None
-                redo = drafts.get(im["name"])
                 t, err = time.time(), None
                 for attempt in range(3):
                     try:
@@ -715,10 +685,9 @@ def main():
                                 shape,
                                 alpha,
                                 style_ref,
-                                redo=redo,
                             )
                         elif backend == "gemini":
-                            data, meta = paint_gemini(prompt, model, redo or ref, aspect)
+                            data, meta = paint_gemini(prompt, model, ref, aspect)
                         else:
                             data, meta = paint_openrouter(
                                 prompt,
@@ -727,7 +696,6 @@ def main():
                                 spec.get("quality"),
                                 aspect,
                                 style_ref=style_ref,
-                                redo=redo,
                             )
                         break
                     except Exception as e:  # noqa: BLE001 -- image services drop requests; retry
@@ -747,10 +715,8 @@ def main():
 
             # a project picture is never painted: an image made from pictures alone goes first,
             # so a scene painted from it (a cast sheet from pic_<name>) has it to work from
-            # a picture repainted from its own draft needs nothing painted first
-            first = pics | set(drafts)
-            done, refs = [], [im for im in todo if not im.get("ref") or im["name"] in first]
-            later = [im for im in todo if im.get("ref") and im["name"] not in first]
+            done, refs = [], [im for im in todo if not im.get("ref") or im["name"] in pics]
+            later = [im for im in todo if im.get("ref") and im["name"] not in pics]
             for batch in (refs, later):  # the references first: the others are painted from them
                 with ThreadPoolExecutor(max_workers=4) as ex:
                     for name, path, w, h, meta, sec in ex.map(one, batch):

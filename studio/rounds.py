@@ -173,13 +173,13 @@ def wide(notes):
     return sum(1 for n in notes if n.get("kind") == "film")
 
 
-def limits(length, notes, whole=0):
+def limits(length, notes, whole=0, model=None):
     """A round's allowance: Claude's working time by its notes, half the film's budget. A note on
     the whole film (`whole` of them) is not one change but one in every shot: 12 minutes for four
     notes, one of them "keep Dad out of the wide views and do not jump between close and far",
     reframed a 210-second film and stopped before the last shots were looked at; the version
     went out with a character blinking out of one of them (fhkoaw.r1, 2026-10-09)."""
-    lim = films.limits(length)
+    lim = films.limits(length, model)  # the round's own model: a Fable round may spend twice
     work = min((25 + (10 if whole else 0)) * 60, 8 * 60 + 60 * notes + WHOLE_S * whole)
     return lim | {
         "claude_s": work,
@@ -189,9 +189,19 @@ def limits(length, notes, whole=0):
     }
 
 
-def reserve(film, notes, auth):
+def claude_of(rec):
+    """The Claude model and effort a round was asked with (kitcut.ai's Edit film menus, paid
+    plans): {"model"?, "effort"?}, only what is valid; {} for the studio's own."""
+    c = (rec.get("round") or {}).get("claude") or {}
+    return {
+        **({"model": c["model"]} if c.get("model") in films.CLAUDE_MODELS else {}),
+        **({"effort": c["effort"]} if c.get("effort") in films.EFFORTS else {}),
+    }
+
+
+def reserve(film, notes, auth, model=None):
     """What a round may still spend, held against the day's budget (server.reserve, halved)."""
-    lim = limits(film.length, notes)
+    lim = limits(film.length, notes, model=model)
     return lim["reserve_usd"] if auth == "api" else 0.005 * film.length
 
 
@@ -200,101 +210,49 @@ def version_of(rec):
     return int(rec.get("version") or 1)
 
 
-def words(rec):
-    """May a round change what is said? Not in a person's own ElevenLabs voice yet (its pass to
-    their account is for the film's making, and has run out), and not where nothing is said."""
-    if (rec.get("narrator") or {}).get("source") == "elevenlabs":
-        return {"can": False, "why": "own_voice"}
+def words(rec, fresh=False):
+    """May a round change what is said, or record a line again? Not where nothing is said. In a
+    person's own ElevenLabs voice only with a fresh pass to it (`fresh`: the site mints one, as
+    for a translation, and sends it as the round's `voice`; the film's making's has run out):
+    without one the answer is own_voice with `with_pass`, so the site knows to send one."""
     if rec.get("narration") is False:
         return {"can": False, "why": "no_voice"}
+    if (rec.get("narrator") or {}).get("source") == "elevenlabs" and not fresh:
+        return {"can": False, "why": "own_voice", "with_pass": True}
     return {"can": True}
+
+
+VOICE_PASS = "round-voice.json"  # in the film's temp/: the pass a round was asked with (0600)
+
+
+def keep_pass(film, narrator):
+    """Keep the fresh pass to the film's own ElevenLabs voice a round was asked with in the
+    film's temp/ (never in the record), for copy_of to give the round's copy. Raises RoundError
+    when the film is not told in that voice."""
+    own = film.record().get("narrator") or {}
+    if own.get("source") != "elevenlabs":
+        raise RoundError(
+            409, "This film is not told in an ElevenLabs voice of its own.", "own_voice"
+        )
+    if (narrator or {}).get("voice") != own.get("voice"):
+        raise RoundError(
+            409, "The voice asked with is not the one this film is told in.", "own_voice"
+        )
+    os.makedirs(film.path("temp"), exist_ok=True)
+    p = film.path("temp", VOICE_PASS)
+    fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with open(fd, "w", encoding="utf-8") as f:
+        json.dump({"grant": narrator["grant"]}, f)
+
+
+def can_voice(work):
+    """Whether a round's copy may record: its record allows it, with the pass it was given."""
+    return words(work.record(), fresh=work.own_voice() is not None)["can"]
 
 
 def rounds_today(rec):
     today = datetime.now().date().isoformat()
     return sum(1 for t in rec.get("round_days") or [] if str(t).startswith(today))
-
-
-# ------------------------------------------------------------------ a sharper version
-DRAFTS = "drafts"  # the round's copy of each painting as it was: what it is repainted from
-PAINT_S = 300  # a sharper version's painting: this, and a minute a picture (tools.TIMEOUT's 300)
-
-
-def _paint_of(film):
-    try:
-        with open(film.path("paint.json"), encoding="utf-8") as f:
-            got = json.load(f)
-        return got if isinstance(got, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
-def pictures(film, rec=None):
-    """How carefully a finished film's pictures were painted, and what it may be repainted at:
-    {"quality": "low"|"medium"|"high"|None, "can": [the levels above it]}. Only a painter with
-    the setting (film.QUALITY_MODELS) has a quality: the film's own paintings, else its collage
-    cut-outs. A film painted before qualities (None) was painted at the model's own, about
-    medium. Nothing for a drawn film, one made in scenes, or one with a round being made."""
-    rec = rec or film.record()
-    paint = _paint_of(film) if films.paint_kinds(film.caps) else {}
-    cuts = paint.get("cutouts") if isinstance(paint.get("cutouts"), dict) else None
-    if paint.get("model") in films.QUALITY_MODELS:
-        q = paint.get("quality")
-    elif cuts and cuts.get("model", films.CUTOUTS_PINNED["model"]) in films.QUALITY_MODELS:
-        q = cuts.get("quality")
-    else:
-        return {"quality": None, "can": []}
-    q = q if q in films.QUALITIES else None
-    busy = (rec.get("round") or {}).get("state") in ACTIVE or film.mode == "scenes"
-    at = films.QUALITIES.index(q or "medium")
-    return {"quality": q, "can": [] if busy else list(films.QUALITIES[at + 1 :])}
-
-
-def sharpen(work, quality):
-    """The round's copy made ready to be repainted at `quality`: each painting as it stands goes
-    to drafts/, and the copy's pins say the quality (the film's paintings and its cut-outs, where
-    their painter has it) and redo (sketch-paint.py), so the guard puts both into paint.json and
-    every picture is painted again from its own draft. The names of the pictures, in order."""
-    paint, d = _paint_of(work), work.path(DRAFTS)
-    os.makedirs(d, exist_ok=True)
-    names = []
-    for im in paint.get("images") or []:
-        name = im.get("name") if isinstance(im, dict) else None
-        for e in (".jpg", ".webp"):
-            src = work.path("images", "%s%s" % (name, e)) if isinstance(name, str) else None
-            if src and os.path.isfile(src):
-                shutil.copyfile(src, os.path.join(d, name + e))
-                names.append(name)
-                break
-    rec = work.record()
-    pins = dict(rec.get("pins") or {})
-    want = dict(pins.get("paint") or {})
-    if want.get("model", paint.get("model")) in films.QUALITY_MODELS:
-        want["quality"] = quality
-    cuts = want.get("cutouts") or paint.get("cutouts")
-    if isinstance(cuts, dict) and cuts.get("model") in films.QUALITY_MODELS:
-        want["cutouts"] = dict(cuts, quality=quality)
-    want["redo"] = DRAFTS
-    work.update(pins=dict(pins, paint=want))
-    return names
-
-
-def unsharpen(work):
-    """After the repaint: redo leaves paint.json and its pins, and the drafts go. The paintings
-    are cached under the keys they have without it (sketch-paint.py), so the version's next round
-    finds them and paints nothing again."""
-    rec = work.record()
-    pins = dict(rec.get("pins") or {})
-    pins["paint"] = {k: v for k, v in (pins.get("paint") or {}).items() if k != "redo"}
-    work.update(pins=pins)
-    paint = _paint_of(work)
-    if "redo" in paint:
-        paint.pop("redo")
-        films._write_json(work.path("paint.json"), paint)
-    shutil.rmtree(work.path(DRAFTS), ignore_errors=True)
-
-
-QUALITY_WORDS = {"low": "Draft", "medium": "Standard", "high": "High"}
 
 
 def public(rec):
@@ -304,15 +262,13 @@ def public(rec):
     return {
         "version": version_of(rec),
         "versions": rec.get("versions") or [],
-        "round": {k: r.get(k) for k in ("id", "n", "state", "now", "started_at", "sharpen")}
+        "round": {k: r.get(k) for k in ("id", "n", "state", "now", "started_at")}
         if r.get("state") in ACTIVE
         else None,
         "words": words(rec),
         "limits": {"rounds_left": max(0, PER_DAY - rounds_today(rec))},
         # the round last asked for, however it ended, with Claude's answer to each note
-        "last": {
-            k: r.get(k) for k in ("id", "n", "state", "error", "summary", "answers", "sharpen")
-        }
+        "last": {k: r.get(k) for k in ("id", "n", "state", "error", "summary", "answers")}
         if r.get("id")
         else None,
     }
@@ -375,9 +331,10 @@ def orphans():
 
 
 # ------------------------------------------------------------------ the notes, checked
-def clean_notes(film, notes):
+def clean_notes(film, notes, fresh=False):
     """The notes as the studio keeps them: [{id, kind, t, t2, x, y, w, h, line, was, words, text}],
-    times inside the film. Raises RoundError for what cannot be a round."""
+    times inside the film. Raises RoundError for what cannot be a round. `fresh`: the round
+    comes with a pass to the film's own ElevenLabs voice (words)."""
     rec = film.record()
     if not isinstance(notes, list) or not notes:
         raise RoundError(400, "Send the notes: a list of at least one.")
@@ -426,7 +383,7 @@ def clean_notes(film, notes):
             said = str(raw.get("words") or "").strip()[:NOTE_MAX]
             if said and said != ln["text"]:
                 n["words"] = said
-            if not words(rec)["can"]:
+            if not words(rec, fresh)["can"]:
                 raise RoundError(
                     409, "The words of this film cannot be changed in a round yet.", "words"
                 )
@@ -584,8 +541,8 @@ async def prepare(film):
         fresh.update({k: cur[k] for k in ("at", "summary", "round") if cur.get(k) is not None})
     vs = sorted([v for v in vs if v.get("n") != n] + [fresh], key=lambda v: v["n"])
     rec = film.update(version=n, versions=vs)
-    # the film's document says what its pages need without asking: its words and its pictures
-    told = {"version": n, "versions": vs, "words": words(rec), "pictures": pictures(film, rec)}
+    # the film's document says what its pages need without asking: its words
+    told = {"version": n, "versions": vs, "words": words(rec)}
     await agent.save(film.id, told)
     return rec
 
@@ -620,13 +577,21 @@ def copy_of(film, rid, notes):
         with contextlib.suppress(OSError):
             shutil.copy2(film.path("outputs", name), os.path.join(d, "outputs", name))
     _ours(d)
+    if (film.record().get("round") or {}).get("voice"):  # asked with a pass to its own voice
+        with contextlib.suppress(OSError):
+            os.makedirs(os.path.join(d, "temp"), exist_ok=True)
+            shutil.copy2(film.path("temp", VOICE_PASS), os.path.join(d, "temp", "voice.json"))
     for parts in SPENT:
         with contextlib.suppress(OSError):
             os.remove(os.path.join(d, *parts))
     work = films.Film(d)
     rec = dict(film.record())
+    chosen = claude_of(rec)  # the round's own model and effort, never the film's
     for k in ("server", "media", "media_rev", "share", "unbrand", "round", "versions", "version"):
         rec.pop(k, None)
+    for k in ("model", "effort"):  # the film's own (made with Fable): not the round's to inherit
+        rec.pop(k, None)
+    rec.update(chosen)
     for k in ("claude_session", "session", "waiting", "resume", "listed", "hidden"):
         rec.pop(k, None)
     rec.update(
@@ -944,6 +909,9 @@ VOICE = (
     "(never add, remove or reorder lines), keep it about as long as it was, then `voice` with "
     "retake_line. Cues placed on words follow the new recording; look at any cue on a word you "
     "changed.\n"
+    "- A line whose words stay but whose recording is wrong (bad sound, a noise, a slip, the "
+    "wrong tone or pace): leave vo.json as it is and `voice` with retake_line -- a new take of "
+    "the same words in the same voice. That is a change: answer the note done.\n"
     "- This round has %(runs)d recordings, and every `voice` call is one. Before the first, count "
     "the lines the notes need said differently -- a note that removes or renames something "
     "needs every line that names it -- and keep a recording for each of them. A line fits its "
@@ -953,7 +921,8 @@ VOICE = (
 )
 NO_VOICE = (
     "- The narration stays as recorded: this film's words cannot be changed in a round, and "
-    "there is no `voice` tool. A note that asks for other words gets `note` with done false.\n"
+    "there is no `voice` tool. A note that asks for other words, or for a line to be recorded "
+    "again, gets `note` with done false.\n"
 )
 ANSWER = (
     "Before you stop: these notes have no `note` yet: %s. Call `note` for each now (done or "
@@ -968,7 +937,7 @@ def ask(work, notes, frames, lim):
         "length": work.length,
         "minutes": lim["claude_s"] // 60,
         "notes": notes_text(notes, timeline(work), frames),
-        "voice": (VOICE % {"runs": lim["voice_runs"]}) if words(work.record())["can"] else NO_VOICE,
+        "voice": (VOICE % {"runs": lim["voice_runs"]}) if can_voice(work) else NO_VOICE,
     }
 
 
@@ -1088,14 +1057,15 @@ def start(
     auth="api",
     src=None,
     hand=None,
-    sharpen=None,
+    voice=None,
+    claude=None,
 ):
     """Make this finished film's next version from these notes; the round's job. Asked again
     with the same key, the round already asked for. Raises RoundError for what cannot be one.
     `src`: the version the notes were written on (it must be the film now). `hand`: files
     changed by hand instead of notes (clean_hand), which are not one of its maker's rounds of
-    the day. `sharpen`: a quality instead of notes -- every picture painted again at it from
-    its own draft, with no Claude (pictures, sharpen); one of its maker's rounds."""
+    the day. `voice`: a fresh pass to the film's own ElevenLabs voice (server.narrator_of), so the
+    round may record (words): kept in the film's temp/, never in the record."""
     rec = film.record()
     if rec.get("state") != "done" or not rec.get("ok"):
         raise RoundError(409, "This film is not finished.", "state")
@@ -1126,19 +1096,21 @@ def start(
         raise RoundError(
             429, "This film has had its %d rounds of changes for today." % PER_DAY, "rounds"
         )
-    if sharpen is not None:
-        if sharpen not in films.QUALITIES:
-            raise RoundError(400, "sharpen is one of %s." % ", ".join(films.QUALITIES[1:]))
-        if sharpen not in pictures(film, rec)["can"]:
-            raise RoundError(
-                409,
-                "This film's pictures cannot be painted again at %s quality."
-                % QUALITY_WORDS[sharpen],
-                "sharpen",
-            )
-        return _begin(film, sched, [], key, client, member, priority, auth, sharpen=sharpen)
-    notes = clean_notes(film, notes)
-    return _begin(film, sched, notes, key, client, member, priority, auth)
+    notes = clean_notes(film, notes, fresh=voice is not None)
+    if voice is not None:
+        keep_pass(film, voice)
+    return _begin(
+        film,
+        sched,
+        notes,
+        key,
+        client,
+        member,
+        priority,
+        auth,
+        voice=voice is not None,
+        claude=claude,
+    )
 
 
 def _begin(
@@ -1154,10 +1126,17 @@ def _begin(
     asked=None,
     k=None,
     hand=None,
-    sharpen=None,
+    voice=False,
+    claude=None,
 ):
     rec = film.record()
     k = k or (rec.get("rounds") or 0) + 1
+    # the round's own Claude model and effort ({"model"?, "effort"?}; claude_of reads them back)
+    claude = {
+        k2: v
+        for k2, v in (claude or {}).items()
+        if (k2 == "model" and v in films.CLAUDE_MODELS) or (k2 == "effort" and v in films.EFFORTS)
+    }
     rid, n = (
         "%s.r%d" % (film.id, k),
         max([version_of(rec)] + [v.get("n", 0) for v in rec.get("versions") or []]) + 1,
@@ -1184,7 +1163,8 @@ def _begin(
             "notes": notes,
             "now": "Waiting for a free studio",
             **({"hand": hand} if hand else {}),
-            **({"sharpen": sharpen} if sharpen else {}),
+            **({"voice": True} if voice else {}),
+            **({"claude": claude} if claude else {}),
         },
     )
     _set_mark(film.id)
@@ -1194,7 +1174,7 @@ def _begin(
         "n": n,
         "state": "queued",
         "client": client,
-        "reserve": reserve(film, len(notes), auth),
+        "reserve": reserve(film, len(notes), auth, claude.get("model")),
         "cost_usd": 0,
         "stopped": False,
         "task": None,
@@ -1241,7 +1221,8 @@ def resume(film, sched):
         asked=r.get("asked"),
         k=rec.get("rounds"),
         hand=r.get("hand"),
-        sharpen=r.get("sharpen"),
+        voice=bool(r.get("voice")),
+        claude=r.get("claude"),
     )
 
 
@@ -1321,20 +1302,14 @@ async def _run(job, film, sched):
     fid, rid, n = film.id, job["rid"], job["n"]
     r0 = film.record().get("round") or {}
     notes, auth, hand = r0.get("notes") or [], r0.get("auth") or "api", r0.get("hand")
-    sharp = r0.get("sharpen")
-    first = (
-        "Taking the changed files"
-        if hand
-        else "Painting the pictures again"
-        if sharp
-        else "Reading your notes"
-    )
-    lim = limits(film.length, len(notes), wide(notes))
+    first = "Taking the changed files" if hand else "Reading your notes"
+    lim = limits(film.length, len(notes), wide(notes), model=claude_of(film.record()).get("model"))
     log = film.path(KEPT, "r%s.events.jsonl" % rid.rsplit(".r", 1)[-1])
     os.makedirs(os.path.dirname(log), exist_ok=True)
     t0, meter, clock = time.time(), agent.Meter(), Clock()
     said = {"at": 0.0, "now": None}
-    state = Round(notes, words(film.record())["can"], lambda text: tell_now(text, force=True))
+    can = words(film.record(), fresh=bool(r0.get("voice")))["can"]
+    state = Round(notes, can, lambda text: tell_now(text, force=True))
     work = None
 
     def verdicts():
@@ -1438,10 +1413,9 @@ async def _run(job, film, sched):
             **({"member": r0["member"]} if r0.get("member") else {}),
             "key": r0.get("key"),
             **({"by": "hand"} if hand else {}),
-            **({"sharpen": sharp} if sharp else {}),
             "host": store.HOST,
-            "model": agent.MODEL,
-            "effort": EFFORT,
+            "model": claude_of(rec0).get("model") or agent.MODEL,
+            "effort": claude_of(rec0).get("effort") or EFFORT,
             "length": rec0.get("length"),
             "look": rec0.get("look"),
             "release": films.RELEASE,
@@ -1455,11 +1429,10 @@ async def _run(job, film, sched):
     watch = asyncio.get_running_loop().create_task(_watch(job, fid))
     try:
         peers.hold_own()
-        # a hand's files and a sharper version take no turn with Claude: they wait only for the
-        # machine, as a render does
+        # a hand's files take no turn with Claude: they wait only for the machine, as a render does
         turn = (
             contextlib.nullcontext()
-            if hand or sharp
+            if hand
             else sched["claude"].hold(1, rid, on_wait, priority=r0.get("priority", 0))
         )
         async with turn:
@@ -1474,7 +1447,7 @@ async def _run(job, film, sched):
             emit(
                 {
                     "type": "stage",
-                    "name": "hand" if hand else "sharpen" if sharp else "claude",
+                    "name": "hand" if hand else "claude",
                     "text": first,
                 }
             )
@@ -1499,20 +1472,6 @@ async def _run(job, film, sched):
                     raise RoundError(
                         409, "These files do not make a film: %s" % str(e)[:300]
                     ) from None
-            elif sharp:
-                state.summary = "Sharper pictures: every picture painted again at %s quality." % (
-                    QUALITY_WORDS[sharp]
-                )
-                names = await asyncio.to_thread(sharpen, work, sharp)
-                try:
-                    await t.check()
-                    # every picture at once, each from its own draft: longer than one repaint
-                    await t.paint(timeout=PAINT_S + 60 * len(names))
-                except toolbox.ToolError as e:
-                    raise RoundError(
-                        409, "The pictures could not be painted again: %s" % str(e)[:300]
-                    ) from None
-                await asyncio.to_thread(unsharpen, work)
             else:
                 try:
                     await t.check()  # a film from before today's studio may not run on it
@@ -1539,7 +1498,9 @@ async def _run(job, film, sched):
                         if auth != "login" or attempt == 2:
                             raise RuntimeError("Claude could not be reached: %s" % e) from None
                         auth = "api"
-                        job["reserve"] = reserve(film, len(notes), auth)
+                        job["reserve"] = reserve(
+                            film, len(notes), auth, claude_of(film.record()).get("model")
+                        )
                         emit({"type": "fallback", "from": "login", "to": "api", "why": str(e)})
                     except agent.apikey.CreditOut as e:
                         # the credit key's month ran out: the round starts over on the paid key
@@ -1590,7 +1551,7 @@ async def _run(job, film, sched):
                 summary=state.summary,
             )
             return
-        if not hand and not sharp and not any(v["state"] == "done" for v in state.verdicts.values()):
+        if not hand and not any(v["state"] == "done" for v in state.verdicts.values()):
             await over(
                 "unchanged",
                 "Claude could not make any of the changes asked for.",
@@ -1652,8 +1613,6 @@ async def _run(job, film, sched):
         if await asyncio.to_thread(digest, film) != before:
             raise RuntimeError(MOVED)
         entry = await asyncio.to_thread(commit, film, work, urls, rev, n, state.summary, rid)
-        if sharp:  # what the film is painted at now (its document's paint_quality, below)
-            film.update(paint_quality=sharp)
         if hand:
             await asyncio.to_thread(shutil.rmtree, hand["dir"], True)
         work = None  # its files are the film's now
@@ -1677,8 +1636,6 @@ async def _run(job, film, sched):
                 "words": words(rec),
                 "media_rev": rec.get("media_rev"),
                 **({"media": rec.get("media")} if urls else {}),
-                "pictures": pictures(film, rec),
-                **({"paint_quality": sharp} if sharp else {}),
             },
             final=True,
         )
@@ -1968,7 +1925,7 @@ async def _by_hand(args):
     for i, n in enumerate(notes, 1):
         n.setdefault("id", "n%d" % i)
     rec = film.record()
-    lim = limits(film.length, len(notes), wide(notes))
+    lim = limits(film.length, len(notes), wide(notes), model=claude_of(film.record()).get("model"))
     plan = {
         "film": film.id,
         "version": version_of(rec),

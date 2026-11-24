@@ -132,7 +132,10 @@ def vo_timeline(m):
         return {"lines": []}
     with open(p, encoding="utf-8") as f:
         tl = json.load(f)
-    if m.get("heads") or m.get("actors"):  # each line's speaker and the mouth its audio moves
+    # each line's speaker and the mouth its audio moves: for heads and actors, and for any film
+    # whose lines name their speaker -- a cast drawn in code (a project's cats, read with
+    # SK.talk('rusty')) had no speakers and no mouths until 2026-11-19, so nobody's mouth moved
+    if m.get("heads") or m.get("actors") or any(L.get("who") for L in tl.get("lines") or []):
         return {"lines": _heads.voice_lines(m, tl)}
     return {
         "lines": [{"start": L["start"], "end": L["end"], "words": L["words"]} for L in tl["lines"]]

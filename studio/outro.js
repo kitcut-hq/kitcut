@@ -9,7 +9,8 @@
      Claude never sees it, so a branded film is told to keep that corner clear: film.MARK_BOX,
      film.mark_note -- move the mark and that box moves with it.
    - The closing, `secs` (3) after the film: the film's last frame turns into a tilted snapshot
-     on the film's own ground, and beside it the logo, "Make your own film" and kitcut.ai. The
+     on KitCut's midnight, and beside it the logo, "Make your own film" (aquamarine) and kitcut.ai (amber)
+     -- the logo's own colours, the same on every film. The
      film is held at its end underneath (every frame is a pure function of t, so holding it is
      drawing it at its end). Its sound (a chime, "Make yours at KitCut AI") is the tail's audio.
 */
@@ -18,6 +19,8 @@
   const F = SK._film; if (!F) return;
   const O = { line: 'Make your own film', url: 'kitcut.ai', secs: 3, ...(SK.OUTRO || {}) };
   const { S, E, clamp, tw, pop } = SK;
+  // the closing's words wear the logo's two colours, whatever the film's palette
+  const KC_AMBER = '#ffb52e', KC_AQUA = '#66f1c2';
   const W = SK.W, H = SK.H, D = F.duration;
   const hold = (t) => Math.min(t, D - 1 / 120);
   const draw = F.draw, cam = F.camera, own = F.overlay;
@@ -78,10 +81,18 @@
     c.restore();
   }
 
+  // the closing's ground is KitCut's midnight, whatever the film's own: a soft glow behind the logo
+  // (#2a2a52) fading to the edges (#0e0e25). The logo's amber and aquamarine are too bright to read
+  // on a light film's paper (about 1.1-1.8:1); on this they are 9-12:1
+  function ground() {
+    const r = ctx().createRadialGradient(W * .745, H * .45, 0, W * .745, H * .45, Math.hypot(W, H) * .6);
+    r.addColorStop(0, '#2a2a52'); r.addColorStop(1, '#0e0e25'); return r;
+  }
+
   /* ---------------------------------------------------------------- the closing: a snapshot */
   function closing(u, img) {
-    const C = SK.C, c = ctx(), k = E.inOut(clamp(u / .7));
-    c.save(); c.fillStyle = C.paper; c.fillRect(0, 0, W, H); c.restore();
+    const c = ctx(), k = E.inOut(clamp(u / .7));
+    c.save(); c.fillStyle = ground(); c.fillRect(0, 0, W, H); c.restore();
     const s = 1 - .52 * k, rot = -.07 * k, cx = W / 2 + (W * .29 - W / 2) * k, cy = H / 2 + 10 * k, b = 22 * k / s;
     c.save(); c.translate(cx, cy); c.rotate(rot); c.scale(s, s);
     c.shadowColor = 'rgba(0,0,0,.25)'; c.shadowBlur = 40 * k; c.shadowOffsetY = 14 * k;
@@ -90,8 +101,8 @@
     c.restore();
     const x = W * .745, lp = pop(u, .6, .5);
     if (lp > 0) SK.at(x, H / 2 - 190, 0, lp, () => logo(0, 0, 230));
-    SK.txt(O.line, x, H / 2 + 20, { size: 70, col: C.textSoft ?? C.inkSoft, p: tw(u, .9, 1.4, E.lin) });
-    SK.txt(O.url, x, H / 2 + 135, { size: 128, col: C.accentText ?? C.orangeDk, p: tw(u, 1.2, 1.8, E.lin) });
-    SK.ink(S.line(x - 200, H / 2 + 205, x + 200, H / 2 + 198, -6), { w: 8, col: C.accent ?? C.orange, seed: 78, p: tw(u, 1.75, 2.05) });
+    SK.txt(O.line, x, H / 2 + 20, { size: 70, col: KC_AQUA, p: tw(u, .9, 1.4, E.lin) });
+    SK.txt(O.url, x, H / 2 + 135, { size: 128, col: KC_AMBER, p: tw(u, 1.2, 1.8, E.lin) });
+    SK.ink(S.line(x - 200, H / 2 + 205, x + 200, H / 2 + 198, -6), { w: 8, col: KC_AMBER, seed: 78, p: tw(u, 1.75, 2.05) });
   }
 })();

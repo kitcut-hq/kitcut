@@ -118,9 +118,11 @@ class Pool:
 
     @contextlib.asynccontextmanager
     async def hold(self, weight=1, who="", on_wait=None, clock=None, priority=0):
-        waited = await self.acquire(weight, who, on_wait, priority)
-        if clock is not None:
-            clock.paused += waited
+        # the wait is off the clock while it lasts, not only once it ends: a film still in line
+        # when its working time ran out was stopped for time it never had (studio-20261110-
+        # 131121-ifgn4m: 8 min behind a 5-min film's final render, cut at "20 min" with 12 worked)
+        with clock.waiting() if clock is not None else contextlib.nullcontext():
+            waited = await self.acquire(weight, who, on_wait, priority)
         try:
             yield waited
         finally:
@@ -167,13 +169,28 @@ class Sched:
 
 
 class Clock:
-    """A film's Claude time: wall time minus what it spent waiting for the machine."""
+    """A film's Claude time: wall time minus what it spent waiting for the machine, the wait
+    under way included. Waits that overlap (two tools in line at once) count once."""
 
     def __init__(self):
         self.t0, self.paused = time.time(), 0.0
+        self._open, self._since = 0, 0.0
+
+    @contextlib.contextmanager
+    def waiting(self):
+        if not self._open:
+            self._since = time.time()
+        self._open += 1
+        try:
+            yield
+        finally:
+            self._open -= 1
+            if not self._open:
+                self.paused += time.time() - self._since
 
     def active(self):
-        return time.time() - self.t0 - self.paused
+        now = time.time()
+        return now - self.t0 - self.paused - (now - self._since if self._open else 0.0)
 
     def wall(self):
         return time.time() - self.t0
