@@ -1,0 +1,22 @@
+{
+  "_comment": "Example for scripts/page-tour.py: the large sheet of a 16:9 phone demo (card 1160x850 beside the phone; phone-sheet.py flies it out). Paths are from the repo root. A blank chrome the card's size in the viewer's own grey. Start on the whole page; each stop's width >= 2000 page px keeps 7.5-pt type at ~20 px with its block in view (a closer zoom, 42 px type, lost the labels). Labels name where the values came from, not the field names. Run --plan first: it prints each stop's type size.",
+  "page": "projects/<id>/assets/form_filled.png",
+  "chrome": "projects/<id>/temp/blank1160x850.png",
+  "viewport": [0, 0, 1160, 850],
+  "bg": "#EDEFF2",
+  "start": {"s": 0.1841, "x": 267, "y": 20},
+  "focus_y": 0.5,
+  "page_px_per_pt": 5.5556,
+  "keep_circles": [],
+  "lead": 0.5,
+  "style": {"label_size": 30},
+  "stops": [
+    {"rect": [100, 656, 1694, 1356], "width": 2000, "move": 0.75, "hold": 1.3,
+     "marks": [{"rect": [111, 711, 1689, 1006], "label": "Agency"},
+               {"rect": [378, 1050, 1689, 1339], "label": "Client"}]},
+    {"rect": [1144, 1622, 3311, 2933], "width": 2492, "move": 0.8, "hold": 1.6,
+     "marks": [{"rect": [2911, 1644, 3289, 2933], "label": "Every limit"}]},
+    {"move": 0.8, "hold": 0.6}
+  ],
+  "out": "projects/<id>/temp/sheet.mp4"
+}

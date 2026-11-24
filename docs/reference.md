@@ -1607,6 +1607,79 @@ A film with dozens of overlays renders slowly -- acord-commercial's 45 ran at
 0.23x realtime -- so settle rects with the sheet and timing with `--list`
 before spending the encode.
 
+**Callouts on a vertical film (fixed 2026-11-24).** Callouts are placed to the
+canvas pixel, but image-overlay reads margins in its preset's canvas units
+(1920x1080) and scales each axis to the frame. On a 16:9 film the two agree; on
+a 1080x1920 film every box landed ~1.8x lower than its field. edl-cut now
+converts the margins into the preset's units before handing them over.
+
+### Bars beside a picture that does not fill the canvas: `"bg": "blur"`
+
+A phone screen on a 9:16 film is narrower than 9:16, so the fit leaves bars. A
+flat colour there read as unfinished. `"bg": "blur"` on a source fills them
+with the picture itself, scaled to cover, blurred and dimmed (the Mister Blocks
+look). `"bg_blur": {"radius": 10, "brightness": -0.08, "saturation": 1.1}`
+tunes it. An accent zoom acts on the composite, bars and all, as it does on a
+padded segment. Not for `screen` sources (those sit in a drawn phone body).
+
+## A launch kit: phone reel, desk demo, gallery (`step-captions.py`, `page-tour.py`, `phone-sheet.py`, `pdf-fields.py`)
+
+Product Hunt asks for a short vertical video, a landscape demo and 3-5 gallery
+images. Built for the Instafill launch (2026-11): a letter photographed on a
+desk, the product's agent fills a form from it, the filled PDF opens on the
+phone. The procedure, the words and the owner's verdicts are the `launch-kit`
+skill; here is what each script does. Examples: `config/launch-kit/`.
+
+**`step-captions.py`: step cards as full-canvas PNGs.** A spec of captions
+(`id`, `kicker`, `text`) and a style; each card is a dark rounded box with a
+hard offset shadow, heavy words, `*accent*` words in the accent colour, a mono
+kicker pill above. `balance` splits a caption wider than `one_line_max` into
+the two most even lines (Mister Blocks stacks a phrase as a block); `|` forces
+the break where the sense is, because the evenest split is not always the best
+reading ("Flat PDF? It / makes it fillable"). `cx` centres the card off-middle
+(the empty half of a 16:9 frame). Badges are accent pills at a corner, with two
+drawn triangles for a fast-forward (the mono font has no glyph). Each PNG
+carries a 2-alpha pixel in two corners so the overlay keeps the full canvas and
+places the card where it is drawn. `outdir` is beside the spec. `--list` prints
+every caption's lines and card width without writing.
+
+**`page-tour.py`: a readable page inside the real viewer.** A phone recording
+of a filled PDF is honest and unreadable: a one-page form at full-page zoom,
+and a thumb's pinch is jerky. This renders the tour the thumb was trying to
+make on a high-resolution page render, composited into a still of the real
+viewer (`chrome`, `viewport`), opening on the recording's own framing
+(`start`), so the cut into it is invisible. Each stop: `rect` (page px), `width`
+(page px across the viewport there), `move`, `hold`, `marks` with labels; a
+stop without `rect` returns to the start. Zoom eases in log space, so a 3x zoom
+does not race at its start. `keep_circles` puts floating app UI (a chat
+bubble) back on top. `--plan` prints each stop's time and the size 7.5-pt type
+reaches: keep it near 20 px with its block in view (stops >= 2000 page px wide
+on a 1160 px viewport); at 42 px the labels and the context were lost. Paths
+are from the repo root.
+
+**`phone-sheet.py`: the 16:9 middle.** The real screen track in a drawn phone
+body on the left over the blurred, slowly drifting desk; the right half is left
+for big captions (edl-cut burns them in). At `sheet_from` the page grows out of
+the phone's screen (from the screen's centre at the page's on-phone size, ease-
+out cubic, `fly` seconds, alpha ramping in) into a large sheet on the right,
+which is `page-tour.py`'s output at the card's size. A soft shadow is the only
+decoration: a magnifier card with a beam beside the phone was rejected as two
+objects showing the same UI. `sheet_from` must come from the rendered phone
+track (ffprobe), not from summing the EDL: edl-cut frame-rounds each segment
+(44.70 s rendered vs 44.82 s summed). The section's first 4 frames decode
+blank, so the film's EDL takes it from 0.15 s. `--plan`, `--still T` (one frame
+via a select filter), or the MP4. Paths are beside the spec.
+
+**`pdf-fields.py`: the filled page with its fields in blue.** Widget rects
+from the PDF itself; each filled field (a checked box, a non-empty text) is
+tinted a light blue, multiplied under the page so the values stay black. PDF
+viewers tint fields blue, so the picture says "a fillable form, filled" with no
+label; amber boxes over the same page read as unclear decoration. `--page-png`
+tints a corrected render of the same page instead of drawing the PDF; `--all`
+tints empty fields too; `--list` prints every widget's rect, type and value --
+which is also how you map a gallery's "this input filled this band of the form"
+to real coordinates.
+
 ## Tightening one recording that is already composited
 
 `screencast-cut.py` needs two tapes. Most screen recorders hand you one — screen,
@@ -6835,6 +6908,14 @@ everything in `temp/` regenerates in seconds.
 
 ## Gotchas worth knowing
 
+- **PowerShell `Get-Content -Raw` + `Set-Content` corrupts UTF-8 source.** Windows PowerShell 5.1
+  reads a BOM-less UTF-8 file as the ANSI code page and writes it back that way, so a quick
+  search-and-replace turned "→" in a Python file into "â†’", which then rendered on a gallery
+  image (2026-11-24). Edit with the Edit tool or Python (`open(..., encoding="utf-8")`); to
+  repair, `text.encode("cp1252").decode("utf-8")`.
+- **An Android system picker draws a black frame before its first real one** and a black bar
+  as it closes. Cut a screen recording's picker segment from its first drawn frame to just
+  before the close (`--frame` both ends).
 - **A cache that lives as long as the process grows with the batch, not with the film.** The
   studio server makes one film's pictures and moves on; `share.py --missing` ran 55 films in
   one process, `_thumb.load_still` kept every decoded still (2,196, 13.7 GB), and two films being

@@ -1276,6 +1276,46 @@ def build(
         )
         a, b = s["f0"] / fps, (s["f0"] + s["n"]) / fps
         mine = [z for z in zooms if z["b"] > a and z["a"] < b]
+        if src.get("bg") == "blur" and not scr:
+            # `"bg": "blur"`: the bars beside a picture that does not fill the
+            # canvas (a phone screen on a 9:16 film is narrower than 9:16) are
+            # the picture itself, scaled to cover, blurred and dimmed -- the
+            # Mister Blocks look. A flat colour there read as unfinished.
+            bl = src.get("bg_blur", {})
+            parts.append(
+                "[%s]%ssetpts=%s,fps=%g,trim=end_frame=%d,setpts=PTS-STARTPTS,split[bga%d][fga%d]"
+                % (cur, crop, pts, fps, s["n"], k, k)
+            )
+            parts.append(
+                "[bga%d]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,"
+                "boxblur=%d:2,eq=brightness=%g:saturation=%g[bgb%d]"
+                % (
+                    k,
+                    cw // 4,
+                    ch // 4,
+                    cw // 4,
+                    ch // 4,
+                    int(bl.get("radius", 10)),
+                    float(bl.get("brightness", -0.08)),
+                    float(bl.get("saturation", 1.1)),
+                    k,
+                )
+            )
+            parts.append(
+                "[fga%d]scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos[fgb%d]"
+                % (k, cw, ch, k)
+            )
+            # an accent zoom acts on the composite, bars and all, exactly as
+            # it acts on a padded segment
+            zc = ""
+            if mine:
+                zp, U = zoom_expr(mine, s["f0"], fps, canvas)
+                zc = ",scale=%d:%d:flags=lanczos,%s" % (cw * U, ch * U, zp)
+            parts.append(
+                "[bgb%d]scale=%d:%d,setsar=1[bgc%d];[bgc%d][fgb%d]overlay=(W-w)/2:(H-h)/2%s,"
+                "setsar=1,format=yuv420p[v%d]" % (k, cw, ch, k, k, k, zc, k)
+            )
+            continue
         if mine:
             zp, U = zoom_expr(mine, s["f0"], fps, area)
             # zoompan crops on whole input pixels; at 2x the step is half a
@@ -1704,6 +1744,16 @@ def main():
     if img_specs:
         preset = m.get("overlay_preset", "config/overlays/end-card.json")
         pdoc = json.load(open(_env.resolve(preset), encoding="utf-8"))
+        # Callouts are placed to the CANVAS pixel, but image-overlay reads
+        # margins in its preset's canvas units (1920x1080) and scales each axis
+        # to the frame. On a 16:9 film the two agree; on a 1080x1920 one every
+        # box landed ~1.8x lower than its field (instafill-ph-launch, draft 1).
+        pc = pdoc.get("canvas", {"width": 1920, "height": 1080})
+        kx = float(pc["width"]) / canvas[0]
+        ky = float(pc.get("height", 1080)) / canvas[1]
+        for sp in call_specs:
+            sp["layout"]["margin_x_px"] = sp["layout"]["margin_x_px"] * kx
+            sp["layout"]["margin_y_px"] = sp["layout"]["margin_y_px"] * ky
         for i, sp in enumerate(img_specs):
             at, _ = _imgoverlay().resolve_window(sp, pdoc, total / fps)
             if at >= total / fps:

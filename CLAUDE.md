@@ -879,6 +879,10 @@ which cannot encode the glyphs at all.
 | `scripts/narration-check.py` | is a film's narration its word-for-word script (L01... lines, the spoken words in quotes)? Against vo.json, the timeline or the finished film's captions; `_narration.py` is the rule, which the studio also holds vo.json to on every save (`validate.narration_script`) |
 | `scripts/showreel.py` | a reel of finished films: one at a time with a caption, then 2x2, 3x3 around the logo, 4x4, a card; every cut on a beat and the music arranged from the same acts (`config/showreel/`, three styles); `--raw` the short cut. KitCut's launch reel is `projects/kitcut-launch/` |
 | `scripts/edl-cut.py` | a film from hand-chosen ranges of a few silent takes, with an elapsed counter driven by SOURCE time so it stays true over a sped-up wait |
+| `scripts/step-captions.py` | Mister Blocks step cards (kicker pill, 2-6 heavy words in two even lines, `*accent*`) as full-canvas PNGs for `image_overlays`; the `launch-kit` skill |
+| `scripts/page-tour.py` | a smooth, readable camera tour over one document page inside a still of the real viewer, with highlighted, labelled blocks |
+| `scripts/phone-sheet.py` | the 16:9 middle of a phone demo: the phone on the left, the filled page flying out of its screen into a large toured sheet |
+| `scripts/pdf-fields.py` | a filled fillable PDF as a picture with every filled field tinted blue, rects from the PDF's own widgets |
 | `scripts/image-bench.py` | rank image models with checkable prompts: pictures through OpenRouter under a cap, OCR, blind packets for two Claude judges and a third on disputes, scores and labelled grids; spec and judges' rules in `config/bench/`, docs/reference.md "Ranking image models" |
 | `scripts/llm-race.py` | race language models on the same tasks (OpenRouter, or a local llama.cpp server it starts under the GPU lock): every streamed piece with its arrival time, the bill, the check; `race.json` is what a benchmark film replays |
 | `scripts/video-race.py` | race video models on the same prompts (OpenRouter video API): each job's timeline, bill, file, refusals, OCR and Whisper checks |
