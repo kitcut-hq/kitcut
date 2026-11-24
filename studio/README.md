@@ -30,7 +30,8 @@ python studio/test_share.py                     # a film's share page words and 
 python studio/test_outro.py                     # the Free plan's mark and closing, on a right-to-left film too
 python studio/test_voroom.py                    # the voice's room, and vo.json "dry": a voice with none
 python studio/test_paintref.py                  # a painting made from a project's picture ("ref": "pic_<name>")
-python studio/test_characters.py                # painted characters in the cast, kept paintings, @name in a prompt
+python studio/test_characters.py                # painted characters and places in the cast, kept paintings, @name in a prompt
+python studio/test_assets.py                    # one scene or character: its versions, pictures, going back to one
 ```
 
 `serve.ps1` writes the tunnel URL to `STUDIO_HOME\url.txt` and to MongoDB `kitcut.studio_hosts`.

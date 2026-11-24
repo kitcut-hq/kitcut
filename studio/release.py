@@ -70,6 +70,7 @@ TESTS = (
     "test_actors.py",  # a project's actor packs: put in, refused, seeded, prompted, drawn
     "test_paintref.py",  # a painting made from a project's picture: refused, ordered, cached
     "test_characters.py",  # painted characters: put in, seeded, kept, refused; @name in a prompt
+    "test_assets.py",  # a scene or character alone: its versions, pictures, going back to one
     "test_templates.py",  # a film remade from a template: the version, the API, the first message, a render
     "test_localize.py",  # a finished film in another language: what is carried, refused, asked, checked
     "test_shortcut.py",  # a finished film cut into a vertical Short: the rules, the API, a real cut

@@ -370,12 +370,124 @@ def mentions():
     check(any("@dad" in o and '"cast_dad"' in o for o in out), "and painted from them all", out)
 
 
+def places():
+    """A project's painted places (its Scenes): put in, seeded, told, kept, capped on their own."""
+    pic = picture("kitchen.png", (1280, 720), (240, 230, 200))
+    check(
+        refused(
+            lambda: library.add_character(CL, P1, "kitchen", "A kitchen", pic, "room"), 400, "kind"
+        ),
+        "a kind that is no place is refused",
+    )
+    check(
+        refused(
+            lambda: library.add_character(CL, P1, "mom", "A kitchen", pic, "place"),
+            409,
+            "character called mom",
+        ),
+        "a place never takes a character's name",
+    )
+    before = len(library._live_painted(library.load((CL, P1)), None))
+    e = library.add_character(CL, P1, "kitchen", "The family kitchen, yellow tiles", pic, "place")
+    check(
+        e["kind"] == "place" and e["painted"] and e["version"] == 1 and e["thumb"],
+        "a ready-made place joins the project, painted",
+        e,
+    )
+    idx = library.load((CL, P1))
+    check(
+        len(library._live_painted(idx, None)) == before
+        and set(library._live_painted(idx, "place")) == {"kitchen"},
+        "and counts as a place, not as one of the characters",
+    )
+    check(
+        refused(
+            lambda: library.add_character(CL, P1, "kitchen", "Kitchen", pic),
+            409,
+            "scene called kitchen",
+        ),
+        "nor does a character take a place's name",
+    )
+    f = episode("Breakfast in the kitchen")
+    got = {c["name"]: c for c in f.record()["library"].get("painted") or []}
+    check(
+        got.get("kitchen", {}).get("kind") == "place"
+        and got["kitchen"]["file"] == "inputs/cast_kitchen.png"
+        and "kind" not in got.get("mom", {}),
+        "an episode gets it in inputs/, marked a place",
+        got.get("kitchen"),
+    )
+    note = library.note(f)
+    head, _, tail = note.partition("The project's characters, as pictures")
+    check(
+        "The project's places, as pictures" in head
+        and "- cast_kitchen: The family kitchen" in head
+        and "cast_kitchen" not in tail.split("Whenever one of them")[0]
+        and '"kind": "place"' in note,
+        "its note: the places apart from the characters, and how to keep a new one",
+        note,
+    )
+    cast = validate._cast_of(f)
+    check(cast["places"] == ["kitchen"], "the check knows which are places", cast)
+    images = [
+        {"name": "hall", "prompt": "a hall", "keep": True, "kind": "place", "about": "The hall"},
+        {"name": "kitchen", "prompt": "at night", "keep": True, "about": "The kitchen at night"},
+        {"name": "scene1", "prompt": "breakfast", "ref": ["cast_kitchen", "cast_mom"]},
+    ]
+
+    def problems(ims, c=cast):
+        return validate._paint({"backend": "muse", "images": ims}, 30, ["paintings"], f.dir, c)
+
+    check(
+        problems(images) == [],
+        "a kept place, a place's next version, a scene set in one",
+        problems(images),
+    )
+    out = problems([{"name": "x", "prompt": "a", "kind": "place"}])
+    check(any('kind is "place"' in o for o in out), "kind without keep is refused", out)
+    out = problems([{"name": "x", "prompt": "a", "keep": True, "about": "X", "kind": "prop"}])
+    check(any('kind is "place"' in o for o in out), "and any other kind", out)
+    full = dict(cast, painted=["c%d" % i for i in range(library.CHARACTERS)], places=[])
+    out = problems([images[0]], full)
+    check(out == [], "a full cast of characters still takes a new place", out)
+    many = ["p%d" % i for i in range(library.PLACES)]
+    out = problems([images[0]], dict(cast, painted=many, places=many))
+    check(
+        any("holds %d painted places" % library.PLACES in o for o in out),
+        "places have a cap of their own",
+        out,
+    )
+    check(
+        validate.PLACES == library.PLACES, "the check and the library hold the same cap of places"
+    )
+    paint(f, images)
+    for n in ("hall", "kitchen", "scene1"):
+        painted(f, n, (30, 60, 90))
+    out = finish(f)
+    idx = library.load((CL, P1))["cast"]
+    check(
+        sorted(out.get("painted") or []) == ["hall", "kitchen"]
+        and idx["hall"].get("kind") == "place"
+        and idx["hall"].get("from_film") == f.id
+        and idx["kitchen"]["version"] == 2
+        and idx["kitchen"].get("kind") == "place",
+        "a finished episode's kept place joins the scenes; a place's next version stays a place",
+        (out, {n: idx.get(n) for n in ("hall", "kitchen")}),
+    )
+    listed = {c["name"]: c for c in library.listing(CL, P1)["cast"]}
+    check(
+        listed["hall"]["kind"] == "place" and listed["mom"]["kind"] is None,
+        "the listing says which members are places",
+    )
+
+
 def main():
     characters()
     f = seeded()
     checks(f)
     kept()
     mentions()
+    places()
     print("\n%s" % ("all passed" if not FAILS else "%d FAILED" % len(FAILS)))
     shutil.rmtree(HOME, ignore_errors=True)
     sys.exit(1 if FAILS else 0)
