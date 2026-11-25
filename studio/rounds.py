@@ -96,8 +96,8 @@ OWN = (
 SPENT = (("audio", "vo", "spend.jsonl"), ("images", "spend.jsonl"), ("rigs", "spend.jsonl"))
 ACTIVE = ("queued", "running", "finishing")
 KINDS = ("moment", "spot", "stretch", "line", "film")
-MAX_NOTES = 20
-NOTE_MAX = 500  # characters of a note, and of a line as it should be said
+MAX_NOTES = None  # a round takes as many notes as its maker has (it took 20 until 2026-11-24)
+NOTE_MAX = None  # a note, and a line as it should be said, as long as its maker writes it (500 until 2026-11-24)
 PER_DAY = int(os.environ.get("STUDIO_ROUNDS_PER_DAY") or 5)  # rounds a film may have in a day
 TRIES = 2  # how often a round is started again after its server went away
 KEEP = 3  # versions whose files are kept beside the film's own; older ones stay watchable online
@@ -467,8 +467,6 @@ def clean_notes(film, notes, fresh=False):
     rec = film.record()
     if not isinstance(notes, list) or not notes:
         raise RoundError(400, "Send the notes: a list of at least one.")
-    if len(notes) > MAX_NOTES:
-        raise RoundError(400, "That is %d notes; a round takes up to %d." % (len(notes), MAX_NOTES))
     length, lines = float(film.length), timeline(film)
     out, seen = [], set()
     for raw in notes:
@@ -2382,6 +2380,9 @@ async def _run(job, film, sched):
         )
         print("film %s: version %d (%s)" % (fid, n, rid), flush=True)
         _after(film)
+        import who  # noqa: PLC0415
+
+        who.ensure(film, sched)  # who is on screen and speaking in it, for its notes page
     except asyncio.CancelledError:
         if job["stopped"] or os.path.exists(_mark(fid) + ".stop"):
             with contextlib.suppress(Exception):

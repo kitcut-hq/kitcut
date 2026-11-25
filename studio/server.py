@@ -203,6 +203,7 @@ import fromfilm  # noqa: E402 -- a finished film made the start of a project
 import ideas  # noqa: E402 -- three ideas for a finished film's episode 2 (Make it a series?)
 import live as nowline  # noqa: E402 -- `live` is this module's own (its films in the making)
 import rounds  # noqa: E402
+import who  # noqa: E402
 import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
@@ -3067,6 +3068,7 @@ async def versions(req):
         )
     try:
         rec = await rounds.prepare(f)
+        who.ensure(f, SCHED)  # who is on screen and speaking, for the notes page (who.py)
     except Exception as e:  # noqa: BLE001 -- the film plays whether or not its notes open
         print(
             "film %s: its versions could not be read: %s" % (f.id, e), file=sys.stderr, flush=True
