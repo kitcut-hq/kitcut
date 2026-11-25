@@ -955,6 +955,7 @@ def bodies(check):
         "and its first message says where each kind of change goes",
     )
     check(library.body_rules(Film.create("no body", 5, "drawn", client="u:alice")) == "", "a film without a body hears nothing of one")
+    check(library.cast_rules(B) == "", "a series with a body is told by BODY_RULES, not twice")
 
 
 GARDEN = """SK.cast.garden = { about: 'The garden and its fence', kind: 'place',
@@ -974,6 +975,12 @@ def behind_series(check):
     write(A, "film.js", "const CAST = SK.cast, G = CAST.garden;\n" + scene("G.draw(0, 0); SK.cast.fox.draw(0, 200);"))
     finish(A)
     check(library.behind(A) == [], "a film just made is not behind its series")
+    check(
+        all(x in library.cast_rules(A) for x in ("saved to the series", "goes in film.js")),
+        "a round on an episode of a series without a body is told its cast/ changes are the series'",
+    )
+    alone = Film.create("alone", 5, "drawn")
+    check(library.cast_rules(alone) == "", "a film with no library is told nothing of one")
     check(library.used(A) == ["fox", "garden"], "a member drawn through CAST.garden is used")
     # the project's garden changes (the Scenes tab's editor, another episode): a new version
     B = episode("Rusty and the new fence", project=P)
