@@ -2167,6 +2167,24 @@ async def library_versions(req):
     return web.json_response(got)
 
 
+async def library_behind(req):
+    """The project's finished episodes that draw this scene or character in an older version
+    than the library's (library.behind_films): for its page's "Update episodes"."""
+    got = await asyncio.to_thread(
+        library.behind_films, client_of(req), project_of(req), req.match_info["name"]
+    )
+    return web.json_response({"films": got})
+
+
+async def film_behind(req):
+    """What this finished film draws in an older version than its series has now
+    (library.behind): for its Versions tab."""
+    f, no = _own_done(req)
+    if no is not None:
+        return no
+    return web.json_response({"behind": await asyncio.to_thread(library.behind, f)})
+
+
 async def library_picture(req):
     """A version's picture, full size: a painted member's own file, a drawn one's render."""
     p = await asyncio.to_thread(
@@ -3676,6 +3694,7 @@ def make_app(token):
             web.get("/api/library/brand/{kind}/{name}", brand_asset),
             web.get("/api/library/{name}/thumb.png", library_thumb),
             web.get("/api/library/{name}/versions", library_versions),
+            web.get("/api/library/{name}/behind", library_behind),
             web.get("/api/library/{name}/edits", edits_list),
             web.post("/api/library/{name}/edits", edits_make),
             web.get(r"/api/library/{name}/edits/{k:\d{1,6}}", edits_get),
@@ -3697,6 +3716,7 @@ def make_app(token):
             web.post("/api/films/{id}/listed", set_listed),
             web.post("/api/films/{id}/unbrand", unbrand_film),
             web.get("/api/films/{id}/versions", versions),
+            web.get("/api/films/{id}/behind", film_behind),
             web.post("/api/films/{id}/versions", versions_make),
             web.post("/api/films/{id}/versions/stop", versions_stop),
             web.post("/api/films/{id}/versions/{n}/current", versions_use),

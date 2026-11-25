@@ -99,6 +99,26 @@ def scenes_over_s():
 
 
 CAST_USE = re.compile(r"\bcast\s*(?:\.\s*([a-z][a-z0-9_]*)|\[\s*['\"]([a-z][a-z0-9_]*)['\"]\s*\])")
+# the cast under another name: `CAST = SK.cast` (then CAST.garden), or `const { garden } = SK.cast`
+CAST_ALIAS = re.compile(r"\b([A-Za-z_$][\w$]*)\s*=\s*(?:window\.)?SK\.cast\b(?!\s*[.\[])")
+CAST_TAKEN = re.compile(r"\{([^{}]*)\}\s*=\s*(?:window\.)?SK\.cast\b(?!\s*[.\[])")
+
+
+def cast_used(js):
+    """The cast members a piece of film code names: SK.cast.x, cast['x'], and through a name it
+    gave the cast (CAST.x, const { x } = SK.cast). Until 2026-11-25 only the first two were
+    seen: Warrior Cats' episode 1 drew its garden as CAST.garden, so nothing knew it used it."""
+    js = js or ""
+    names = {a or b for a, b in CAST_USE.findall(js)}
+    for alias in set(CAST_ALIAS.findall(js)) - {"cast"}:
+        pat = r"(?<![\w$.])%s\s*(?:\.\s*([a-z][a-z0-9_]*)|\[\s*['\"]([a-z][a-z0-9_]*)['\"]\s*\])"
+        names |= {x or y for x, y in re.findall(pat % re.escape(alias), js)}
+    for inside in CAST_TAKEN.findall(js):
+        for part in inside.split(","):
+            n = part.split(":")[0].strip()
+            if re.fullmatch(r"[a-z][a-z0-9_]*", n):
+                names.add(n)
+    return names
 # film.js's first line, `// For: <who it is for>; <its mood>`: the audience the film is made for
 FOR_LINE = re.compile(
     r"^[ \t]*//[ \t]*for:[ \t]*(\S[^\r\n]*?)[ \t]*\r?$", re.MULTILINE | re.IGNORECASE
@@ -1185,7 +1205,7 @@ class Film:
             rec = self.record()
             d["people"] = len(rec.get("people") or [])
             d["character_style"] = rec.get("character_style")
-        cast = sorted({a or b for a, b in CAST_USE.findall(js)})
+        cast = sorted(cast_used(js))
         if cast:
             d["cast"] = cast
         # what tells two films apart at a glance and in their first second: the colours it set

@@ -80,7 +80,7 @@ import locks
 import stylekit
 from film import (
     clean_rules,
-    CAST_USE,
+    cast_used,
     HOME,
     KIT,
     PROJECT_ID,
@@ -357,6 +357,119 @@ def body_rules(film):
     }
 
 
+
+# ------------------------------------------------------------------ an episode behind its series
+# An episode keeps the copies of the cast it was made with (seed copies by value), so a scene or a
+# character changed in the project afterwards (the Scenes tab's editor, another episode, a hand)
+# does not reach it by itself. Until 2026-11-25 nothing said so: Warrior Cats' garden got its
+# woven fence and clay pot (garden v3, v4) the afternoon two episodes were being made and changed,
+# and both kept the old wooden fence through every later version without anyone being told.
+# behind() says which members an episode draws in an older version than its series has now;
+# rounds.py brings them up to date in every round of changes, and the site shows the rest.
+
+
+def _bytes_hash(path):
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()[:16]
+
+
+def _versions_of(lib, name, e):
+    """{hash: n} of the versions of a member the library still holds."""
+    md = os.path.join(dir_of(lib), "cast", name)
+    out = {}
+    try:
+        files = os.listdir(md)
+    except OSError:
+        return out
+    for fn in files:
+        m = re.match(r"^v(\d+)\.(\w+)$", fn)
+        if not m:
+            continue
+        p = os.path.join(md, fn)
+        if e.get("painted"):
+            if m.group(2) in PICTURE_EXT:
+                out[_bytes_hash(p)] = int(m.group(1))
+        elif m.group(2) == "js":
+            code = _read(p)
+            if code:
+                out[_hash(code)] = int(m.group(1))
+    return out
+
+
+def behind(film, lib=None, idx=None):
+    """The members this film draws in an older version than its library has now, by name:
+    [{"name", "kind", "painted", "have": its version (None: a copy the film changed itself),
+    "now": the library's}]. [] for a film without a library."""
+    lib = lib or lib_of(film.record())
+    if not lib:
+        return []
+    idx = idx or load(lib)
+    drawn = set(used(film)) if os.path.isdir(film.path("cast")) else set()
+    out = []
+    for name in sorted(drawn | set(painted_used(film))):
+        e = idx["cast"].get(name)
+        if not e or e.get("deleted"):
+            continue
+        if e.get("painted"):
+            mine = next(
+                (film.path("inputs", "cast_%s.%s" % (name, x)) for x in PICTURE_EXT
+                 if os.path.exists(film.path("inputs", "cast_%s.%s" % (name, x)))),
+                None,
+            )
+            if not mine:
+                continue
+            h = _bytes_hash(mine)
+            vs = _versions_of(lib, name, e)
+            if vs.get(h) == e["version"]:
+                continue
+            have = vs.get(h)
+        else:
+            code = _read(film.path("cast", name + ".js"))
+            if not code or _hash(code) == e.get("hash"):
+                continue
+            have = _versions_of(lib, name, e).get(_hash(code))
+        if have is not None and have >= e["version"]:
+            continue
+        out.append(
+            {
+                "name": name,
+                "kind": e.get("kind") or None,
+                "painted": bool(e.get("painted")),
+                "have": have,
+                "now": e["version"],
+            }
+        )
+    return out
+
+
+def behind_films(client, project, name):
+    """The finished episodes of a project that draw this member in an older version than the
+    library's: [{"film", "title", "have", "now"}], oldest first."""
+    lib = owner(client, project)
+    if not lib or not project:
+        return []
+    idx = load(lib)
+    out = []
+    for f in Film.all():
+        rec = f.record()
+        if f.state != "done" or (rec.get("project") or {}).get("id") != project:
+            continue
+        if not clients.same(rec.get("client"), client):
+            continue
+        b = next((x for x in behind(f, lib, idx) if x["name"] == name), None)
+        if b:
+            out.append(
+                {
+                    "film": f.id,
+                    "title": rec.get("title") or rec.get("prompt", "")[:80],
+                    "created": rec.get("created"),
+                    "have": b["have"],
+                    "now": b["now"],
+                }
+            )
+    return sorted(out, key=lambda x: (x.get("created") or "", x["film"]))
+
+
 def rebase(film):
     """After keep(): the film's record says, of each member whose copy is now the library's
     newest, that it has that version -- so the next thing that changes it (a round of changes)
@@ -427,7 +540,7 @@ def used(film):
     """The members film.js draws, by name, and the ones those draw in turn."""
 
     def named(code):
-        return {a or b for a, b in CAST_USE.findall(code or "")}
+        return cast_used(code)
 
     names = named(_read(film.path("film.js")))
     for n in list(names):  # a member's own file names it too: that is not a use
