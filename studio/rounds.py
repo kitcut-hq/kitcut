@@ -2150,6 +2150,8 @@ async def _run(job, film, sched):
                 shared = await asyncio.to_thread(library.body_rules, work)
                 if shared:  # where each kind of change goes, and that the cast's reaches the series
                     theirs = "\n\n" + shared + BODY_ROUND + theirs
+                else:  # no body: that the cast's changes reach the series all the same
+                    theirs = await asyncio.to_thread(library.cast_rules, work) + theirs
                 say = {
                     "prompt": ask(work, notes, frames, lim, past, theirs),
                     "system": agent.system_prompt(work.look, work.caps),

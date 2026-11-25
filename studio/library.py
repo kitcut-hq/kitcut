@@ -332,6 +332,31 @@ BODY_RULES = (
 )
 
 
+# What a round of changes on an episode is told of its cast when the series has no body (one with a
+# body hears BODY_RULES and rounds.BODY_ROUND): a round's changes to cast/ are saved to the series
+# (agent.keep_cast), so a one-off kept there reaches every later episode. Until 2026-11-25 only a
+# series with a body was told; "Pip wears a party hat in this scene" could have become Pip's hat.
+CAST_RULES = (
+    "\n\nThis episode's characters and places (cast/) are its series': what you change in a file "
+    "in cast/ is saved to the series when this round is done, and every later episode draws it "
+    "that way. So change a character's or a place's own file only for what is true of it "
+    "everywhere (how it looks, its colours and marks, how it moves). What is only this episode's "
+    "-- something worn or held in one scene, where it stands, a pose, the state it is in, a mess "
+    "on the floor -- goes in film.js: drawn there around or over it, or through an option it "
+    "already takes. Never put an episode's one-off into a cast file.\n"
+)
+
+
+def cast_rules(film):
+    """CAST_RULES for a round on a film whose cast is kept in a library and has no body, else ""."""
+    if not lib_of(film.record()) or bodies(film):
+        return ""
+    try:
+        return CAST_RULES if any(n.endswith(".js") for n in os.listdir(film.path("cast"))) else ""
+    except OSError:
+        return ""
+
+
 def bodies(film):
     """The bodies in a film's cast/: ['body_cat', ...]."""
     try:
