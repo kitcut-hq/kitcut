@@ -312,6 +312,7 @@ def main():
         merged(check)
         workspaces(check)
         bodies(check)
+        behind_series(check)
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d failed" % len(bad))
@@ -954,6 +955,58 @@ def bodies(check):
         "and its first message says where each kind of change goes",
     )
     check(library.body_rules(Film.create("no body", 5, "drawn", client="u:alice")) == "", "a film without a body hears nothing of one")
+
+
+GARDEN = """SK.cast.garden = { about: 'The garden and its fence', kind: 'place',
+  draw(x, y, o = {}) { SK.wash(SK.S.rect(x - 400, y - 200, 800, 400), '#%s'); } };
+"""
+
+
+def behind_series(check):
+    """An episode keeps the cast it was made with: a scene changed in the project afterwards is
+    said to be behind, and a round brings it up to date (Warrior Cats' garden, 2026-11-25)."""
+    P = "p-gardengard"
+    A = episode("Rusty at the fence", project=P)
+    library.seed(A)
+    write(A, "cast/garden.js", GARDEN % "6a5")
+    write(A, "cast/fox.js", PIP.replace("SK.cast.pip", "SK.cast.fox"))
+    # the cast under a name of the film's own, as Warrior Cats' episode 1 drew its garden
+    write(A, "film.js", "const CAST = SK.cast, G = CAST.garden;\n" + scene("G.draw(0, 0); SK.cast.fox.draw(0, 200);"))
+    finish(A)
+    check(library.behind(A) == [], "a film just made is not behind its series")
+    check(library.used(A) == ["fox", "garden"], "a member drawn through CAST.garden is used")
+    # the project's garden changes (the Scenes tab's editor, another episode): a new version
+    B = episode("Rusty and the new fence", project=P)
+    library.seed(B)
+    write(B, "cast/garden.js", GARDEN % "a63")
+    write(B, "film.js", scene("SK.cast.garden.draw(0, 0);"))
+    finish(B)
+    got = library.behind(A)
+    check(
+        [(b["name"], b["have"], b["now"]) for b in got] == [("garden", 1, 2)],
+        "the first episode is behind: it draws garden v1, the series has v2 (%s)" % got,
+    )
+    lib = library.lib_of(A.record())
+    check(
+        [(x["film"], x["have"]) for x in library.behind_films(lib[0], P, "garden")] == [(A.id, 1)],
+        "and the garden's page can list it, with the version it has",
+    )
+    check(library.behind_films(lib[0], P, "fox") == [], "a member nobody changed has none behind")
+    # a round on the first episode brings the garden up to date (rounds.bring_up)
+    import rounds
+
+    work = Film.create("its round's copy", 5, "drawn", client=A.record()["client"], project=A.record()["project"])
+    for rel in ("cast/garden.js", "cast/fox.js", "film.js"):
+        write(work, rel, open(A.path(*rel.split("/")), encoding="utf-8").read())
+    work.update(library=A.record().get("library"))
+    got = rounds.bring_up(work)
+    check([(b["name"], b["now"]) for b in got] == [("garden", 2)], "a round lays the newest garden over its copy")
+    check("a63" in open(work.path("cast", "garden.js"), encoding="utf-8").read(), "and the copy draws it")
+    check(library.behind(work) == [], "after which the copy is not behind")
+    # a copy the episode changed itself is its own: never replaced
+    write(work, "cast/garden.js", GARDEN % "123")
+    check([b["have"] for b in library.behind(work)] == [None], "an episode's own change is not a version of the series'")
+    check(rounds.bring_up(work) == [] and "123" in open(work.path("cast", "garden.js"), encoding="utf-8").read(), "and a round keeps it")
 
 
 if __name__ == "__main__":

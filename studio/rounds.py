@@ -136,6 +136,15 @@ JOBS = {}  # film id -> the round being made here
 # change nothing else. An episode keeps its own copy of the cast (library.seed copies by value),
 # so this is how a scene or character changed in the project reaches an episode already made.
 REFRESH_NOTE = "refresh"
+# a round on an episode whose series changed some of its cast since: the newest are in its copy
+BROUGHT = (
+    "\n\nSince this episode was made, its series changed some of what it draws. This round's copy "
+    "already has their newest versions, in place of the ones it had:\n%s\n"
+    "They are part of this version whatever the notes say. After the notes, `stills` of every "
+    "shot each is in, and look: does it sit right (where characters stand on a changed scene, "
+    "their size, what they lean on)? Fix the staging in film.js where it does not; never put an "
+    "old version back. Say in your summary, in a short sentence, that the episode now has them.\n"
+)
 # after library.BODY_RULES, in a round: its changes to the cast do not stay in this film
 BODY_ROUND = (
     "\nWhat you change in cast/ (a character's file or the body) is saved to the series when "
@@ -254,6 +263,18 @@ def lay_over(work, names):
             got["drawn"].append(n)
     if man is not None:
         films._write_json(work.manifest, man)
+    return got
+
+
+def bring_up(work):
+    """The members a round's copy draws in an older version than its series has now (library.
+    behind), laid over with the newest -- the ones the episode never changed itself (have: None
+    is its own copy, kept). [{name, have, now}] as brought."""
+    import library
+
+    got = [b for b in library.behind(work) if b["have"] is not None]
+    if got:
+        lay_over(work, [b["name"] for b in got])
     return got
 
 
@@ -1214,6 +1235,7 @@ class Round:
         self.verdicts, self.summary = {}, None  # note id -> {"state", "reply"}
         self.checks = {}  # note id -> {"ok", "sure", "why"}: the second look (looked)
         self.proofs = {}  # note id -> the address of its before and after (proofs)
+        self.brought = []  # members the series changed since, brought up to date (bring_up)
         self.without = ("name_film",) + (() if can_voice else ("voice",))
 
     def missing(self):
@@ -2089,6 +2111,8 @@ async def _run(job, film, sched):
             fresh = await asyncio.to_thread(digest, work)
             if r0.get("refresh"):  # after `fresh`: the members laid over are this round's change
                 await asyncio.to_thread(lay_over, work, r0["refresh"])
+            elif not hand:  # what the series changed since: the newest is this version's too
+                state.brought = await asyncio.to_thread(bring_up, work)
             t = toolbox.Tools(work, sched, emit, clock)
             t.priority, t.round, t.pulse = r0.get("priority", 0), state, agent.Pulse()
             if hand:
@@ -2117,6 +2141,10 @@ async def _run(job, film, sched):
                 rules = films.clean_rules(r0.get("rules")) or films.rules_of(rec0)
                 if rules:
                     theirs = RULES % "\n".join("- " + x for x in rules) + theirs
+                if state.brought:
+                    theirs = BROUGHT % "\n".join(
+                        "- @%s: version %s, was %s" % (b["name"], b["now"], b["have"]) for b in state.brought
+                    ) + theirs
                 import library  # noqa: PLC0415
 
                 shared = await asyncio.to_thread(library.body_rules, work)
