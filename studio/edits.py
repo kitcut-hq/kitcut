@@ -773,7 +773,7 @@ class State:
 
     def problem(self, letter, code):
         """Why a variation's file cannot be the member, or None."""
-        names = re.findall(r"\bSK\.cast\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{", code)
+        names = library.DECLARES.findall(code)
         if names != [self.name]:
             return (
                 "variations/%s.js must register SK.cast.%s, once, and nothing else (it has %s)"
@@ -783,8 +783,8 @@ class State:
                     ", ".join(names) or "none",
                 )
             )
-        if len(code.encode("utf-8")) > library.MAX_BYTES:
-            return "variations/%s.js is over %d bytes" % (letter, library.MAX_BYTES)
+        if len(code.encode("utf-8")) > library.max_bytes(code):
+            return "variations/%s.js is over %d bytes" % (letter, library.max_bytes(code))
         if self.place and library._kind(code) != "place":
             return "variations/%s.js must say kind: 'place' (it is a scene)" % letter
         return None
