@@ -241,8 +241,8 @@ def main():
         check(idx["cast"]["pip"]["films"] == [B.id, A.id], "and gains the film")
         check(os.path.exists(os.path.join(d, "cast", "kite", "v1.js")), "the old version stays")
 
-        # the last KEEP versions only
-        for i in range(library.KEEP + 1):
+        # every version is kept (until 2026-11-25 only the last 5 were)
+        for i in range(6):
             F = Film.create("kite %d" % i, 5, "drawn", client="u:alice")
             library.seed(F)
             write(F, "cast/kite.js", KITE.replace("#d33", "#%03d" % i))
@@ -250,8 +250,8 @@ def main():
             finish(F)
         vs = sorted(os.listdir(os.path.join(d, "cast", "kite")))
         check(
-            len([v for v in vs if v.endswith(".js")]) == library.KEEP,
-            "%d versions kept (%s)" % (library.KEEP, vs),
+            len([v for v in vs if v.endswith(".js")]) == 8,
+            "every version kept, the first too (%s)" % vs,
         )
 
         # ------------------------------------------------ nobody else's

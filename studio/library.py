@@ -2,7 +2,7 @@
 
     STUDIO_HOME\\library\\<sha256(client)[:20]>\\
         index.json                     {"cast": {name: member}, "films": [film ids, newest first]}
-        cast\\<name>\\v1.js v2.js ...   each kept version of a cast member (the last KEEP)
+        cast\\<name>\\v1.js v2.js ...   each version of a cast member
         cast\\<name>\\thumb.png         its latest version drawn alone
         cast.png                        every member on one sheet, named
         films\\<film id>.jpg            a small poster of each film in the memory
@@ -99,7 +99,10 @@ import _sketch  # noqa: E402
 
 ROOT = os.path.join(HOME, "library")
 NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
-KEEP = 5  # versions of a member kept
+# versions of a member kept: 0 is every one. Until 2026-11-25 only the last 5 were, and a
+# character changed often lost the one its maker wanted back (owner: "doesn't make any sense");
+# a drawn version is a few KB of code, a painted one a picture
+KEEP = 0
 SEEDED = 24  # members a film starts with (the most recently used)
 MEMORY = 5  # earlier films a film may look at
 LISTED = 20  # film ids the index remembers
@@ -1484,7 +1487,7 @@ def _contact(lib, idx):
 
 
 def _version_with(d, name, e, h):
-    """The code of the kept version of a member whose hash is h (the last KEEP are kept), or
+    """The code of the kept version of a member whose hash is h (every one is kept), or
     None."""
     if not h:
         return None
@@ -1529,7 +1532,7 @@ def _parses(code, path):
 def merges(film, items):
     """A finished film's members (changes()) whose library version moved on while it was made
     -- another episode changed them, the Pro plan's two at once -- each merged three ways: base,
-    the version this film started from (one of the KEEP kept), onto the library's as it is now.
+    the version this film started from (each one is kept), onto the library's as it is now.
     A clean merge that parses replaces the item's code, with merged_from (the library's hash it
     went onto), for keep() to save while that is still the library's; keep_cast draws it first,
     and one that draws nothing is put back. Anything else is left as it was: keep() keeps it as a
@@ -1629,7 +1632,7 @@ def _keep(film, lib, items, pictures):
         os.makedirs(md, exist_ok=True)
         with open(os.path.join(md, "v%d.js" % v), "w", encoding="utf-8") as f:
             f.write(it["code"])
-        for old in range(1, v - KEEP + 1):
+        for old in range(1, v - KEEP + 1 if KEEP else 1):
             try:
                 os.remove(os.path.join(md, "v%d.js" % old))
             except OSError:
@@ -1855,7 +1858,7 @@ def picture_thumb(client, project, name):
 # ("keep": true on an image in paint.json, _keep_painted). It shares the cast's names, its
 # Remove (delete) and its thumbnails with the drawn members, and is told apart by "painted":
 #
-#     cast\<name>\v1.png v2.jpg ...   each kept version (the last KEEP), any of PICTURE_EXT
+#     cast\<name>\v1.png v2.jpg ...   each version, any of PICTURE_EXT
 #     cast\<name>\thumb.png           its latest version, small
 #
 # Every episode gets each live one as inputs/cast_<name>.<ext> (_seed_painted): a painting is made
@@ -1913,7 +1916,7 @@ def _put_painted(lib, idx, name, src, about, now, **meta):
     md = os.path.join(dir_of(lib), "cast", name)
     os.makedirs(md, exist_ok=True)
     shutil.copyfile(src, os.path.join(md, "v%d.%s" % (v, ext)))
-    for old in range(1, v - KEEP + 1):
+    for old in range(1, v - KEEP + 1 if KEEP else 1):
         for x in PICTURE_EXT:
             with contextlib.suppress(OSError):
                 os.remove(os.path.join(md, "v%d.%s" % (old, x)))

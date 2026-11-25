@@ -1129,7 +1129,7 @@ def limits_doc():
         "library": {
             "characters_per_new_film": library.SEEDED,
             "earlier_films_remembered": library.MEMORY,
-            "versions_kept": library.KEEP,
+            "versions_kept": library.KEEP or "all",
             "project_pictures": library.PICTURES,
             "brand_pictures": brandkit.MAX_PICTURES,
             # a project's style (the Style tab): every one goes with every painting

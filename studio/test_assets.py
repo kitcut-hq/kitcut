@@ -109,15 +109,15 @@ def painted():
     library.seed(f)
     k = {c["name"]: c for c in f.record()["library"]["painted"]}["kitchen"]
     check(k["hash"] == e["hash"], "the next episode gets the restored one", k)
-    for i in range(library.KEEP):
+    for i in range(5):
         library.add_character(
             CL, P1, "kitchen", "The kitchen", picture("k%d.png" % (i + 10), (i * 40, 9, 9)), "place"
         )
     got = assets.info(CL, P1, "kitchen")
     check(
         [v["n"] for v in got["versions"]]
-        == list(range(got["version"], got["version"] - library.KEEP, -1)),
-        "only the last %d versions are held" % library.KEEP,
+        == list(range(got["version"], 0, -1)),
+        "every version is held, the first too",
         got["versions"],
     )
 

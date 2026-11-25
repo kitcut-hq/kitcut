@@ -223,8 +223,8 @@ def main(nolock):
     )
     top = pip.get("version", 0)
     expect(
-        "the last %d versions on disk, each from a different film (%s)" % (library.KEEP, on_disk),
-        on_disk == list(range(top - library.KEEP + 1, top + 1)) and len(drawn_by) == library.KEEP,
+        "every version on disk, each from a different film (%s)" % on_disk,
+        on_disk == list(range(1, top + 1)) and len(drawn_by) == top,
     )
     expect(
         "the index names the latest, and every film",
