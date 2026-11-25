@@ -92,7 +92,7 @@ def info(client, project, name):
     v = int(e["version"])
     versions = [
         {"n": n, "picture": bool(_picture(lib, name, e, n)), "current": n == v}
-        for n in range(v, max(0, v - library.KEEP), -1)
+        for n in range(v, max(0, v - library.KEEP) if library.KEEP else 0, -1)
         if _file(lib, name, e, n)
     ]
     return library._listed(name, e) | {"versions": versions}
@@ -183,7 +183,7 @@ def put_drawn(lib, items, seen, pics, large=None, **meta):
             os.makedirs(md, exist_ok=True)
             with open(os.path.join(md, "v%d.js" % v), "w", encoding="utf-8") as f:
                 f.write(it["code"])
-            for old in range(1, v - library.KEEP + 1):
+            for old in range(1, v - library.KEEP + 1 if library.KEEP else 1):
                 for x in ("js", "png"):
                     with contextlib.suppress(OSError):
                         os.remove(os.path.join(md, "v%d.%s" % (old, x)))
