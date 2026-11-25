@@ -2469,8 +2469,8 @@ def debrand(film):
 
 
 async def keep_cast(film, tools, emit):
-    """After a finished film, the person's library takes in what it made (library.keep): its new
-    and changed cast members, each drawn alone for a thumbnail. None when the film's client has
+    """After a finished film, or a round of changes to one, the person's library takes in what it
+    made (library.keep): its new and changed cast members, each drawn alone for a thumbnail. None when the film's client has
     no library. Never fails the film: what went wrong goes to stderr and the record."""
     if not library.lib_of(film.record()):
         return None
@@ -2496,6 +2496,7 @@ async def keep_cast(film, tools, emit):
             for it, mine in zip(items, own, strict=True)
         ]
         kept = await asyncio.to_thread(library.keep, film, items, pictures)
+        await asyncio.to_thread(library.rebase, film)  # so a later round's change is kept too
         if kept and (kept.get("clashed") or kept.get("sounds_clashed")):
             # its copy stays in its own cast/ (and the project's clashed/); the newer one leads
             print(

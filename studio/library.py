@@ -104,6 +104,7 @@ SEEDED = 24  # members a film starts with (the most recently used)
 MEMORY = 5  # earlier films a film may look at
 LISTED = 20  # film ids the index remembers
 MAX_BYTES = 64 * 1024  # one member's code
+BODY_MAX_BYTES = 192 * 1024  # a body's: every pose, face and ability of a kind of creature, once
 FILES = ("film.js", "vo.json", "score.json", "sfx.json", "sounds.json", "paint.json")
 PICTURES = 9  # a project's pictures: every review render carries them all
 PICTURE_EXT = ("png", "jpg", "webp")
@@ -288,10 +289,106 @@ def _about(code):
     return " ".join(m.group(2).split())[:200] if m else ""
 
 
+# a cast file registers one member: an object of its own, or a sheet on a body
+DECLARES = re.compile(
+    r"\bSK\.cast\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:\{|SK\.cast\.body_[a-z0-9_]+\.make\s*\()"
+)
+
+
 def _kind(code):
-    """'place' for a member that says it is one (kind: 'place': a set the films return to), else
-    None: a character or a thing."""
-    return "place" if re.search(r"\bkind\s*:\s*(['\"`])place\1", code or "") else None
+    """'place' for a member that says it is one (kind: 'place': a set the films return to),
+    'body' for what a kind of creature shares (kind: 'body': SK.cast.body_<kind>.make(sheet), and
+    the characters made with it are sheets on it), else None: a character or a thing."""
+    m = re.search(r"\bkind\s*:\s*(['\"`])(place|body)\1", code or "")
+    return m.group(2) if m else None
+
+
+def max_bytes(code):
+    """The most a member's code may be: a body holds what many characters would each repeat."""
+    return BODY_MAX_BYTES if _kind(code) == "body" else MAX_BYTES
+
+
+# What a series with a body is told, making an episode or changing one: where each kind of change
+# goes. Before bodies, every character was a whole copy of the same drawing code (Warrior Cats,
+# 2026-11: nine cats, 346 KB, 70-87% the same lines), a fix reached one of them, and what a round
+# of changes taught one episode's copy (a gallop, wet fur) no other cat or episode ever had.
+BODY_RULES = (
+    "This series draws %(them)s with a shared body (%(files)s): every pose, face and ability is "
+    "written there once, and each character's own file in cast/ is a sheet on it -- its colours "
+    "and build, and the marks only it has. Keep it so:\n"
+    "- Use a character as always (SK.cast.<name>.sit(o), .walk(o)...). To learn what it can do, "
+    "Read the body's header comment and the comment above each piece (poses, options, what a "
+    "sheet may say); a character's own file is short, Read it whole. Do not read the body's "
+    "drawing code unless you are changing it.\n"
+    "- How ONE character looks or carries itself (a colour, a mark, its build, its own way of "
+    "moving) is changed in its own file: a sheet value, or a mark it draws under the body's "
+    "hook names.\n"
+    "- What ANY of them should be able to do (a new pose, face or option, a fix to how they "
+    "move) is changed in the body, once, with a default that leaves every picture already made "
+    "as it is. It reaches every character and every later episode.\n"
+    "- A new character of this kind is a new sheet file like the others (copy the shortest), "
+    "never a copy of the body. Never copy the body's code into a character's file or film.js.\n"
+    "- film.js is staging only: who is where, doing what, when, and the camera."
+)
+
+
+def bodies(film):
+    """The bodies in a film's cast/: ['body_cat', ...]."""
+    try:
+        names = sorted(n[:-3] for n in os.listdir(film.path("cast")) if n.endswith(".js"))
+    except OSError:
+        return []
+    return [
+        n
+        for n in names
+        if n.startswith("body_") and _kind(_read(film.path("cast", n + ".js"))) == "body"
+    ]
+
+
+def body_rules(film):
+    """BODY_RULES for a film whose cast has a body, else ""."""
+    got = bodies(film)
+    if not got:
+        return ""
+    kinds = [n[len("body_") :] + "s" for n in got]
+    return BODY_RULES % {
+        "them": "its " + (kinds[0] if len(kinds) == 1 else ", ".join(kinds)),
+        "files": ", ".join("cast/%s.js" % n for n in got),
+    }
+
+
+def rebase(film):
+    """After keep(): the film's record says, of each member whose copy is now the library's
+    newest, that it has that version -- so the next thing that changes it (a round of changes)
+    is saved over it too, and is not taken for a change made elsewhere. Until 2026-11 only the
+    making of a film kept its cast: what a round changed stayed in that episode's copy."""
+    rec = film.record()
+    lib = lib_of(rec)
+    if not lib or not os.path.isdir(film.path("cast")):
+        return
+    idx = load(lib)
+    got = dict(rec.get("library") or {})
+    cast = {c["name"]: dict(c) for c in got.get("cast") or []}
+    moved = False
+    for fn in sorted(os.listdir(film.path("cast"))):
+        name = fn[:-3]
+        e = idx["cast"].get(name)
+        if not fn.endswith(".js") or not e or e.get("deleted") or e.get("painted"):
+            continue
+        code = _read(film.path("cast", fn))
+        if not code or _hash(code) != e.get("hash"):
+            continue
+        if (cast.get(name) or {}).get("hash") != e["hash"]:
+            cast[name] = {
+                **(cast.get(name) or {"name": name}),
+                "about": e.get("about", ""),
+                **({"kind": e["kind"]} if e.get("kind") else {}),
+                "hash": e["hash"],
+            }
+            moved = True
+    if moved:
+        got["cast"] = list(cast.values())
+        film.update(library=got)
 
 
 def load(lib):
@@ -872,7 +969,11 @@ def note(film):
         seen = "in %d film%s" % (n, "" if n == 1 else "s") if n else "not used yet"
         return "- %s%s: %s (%s)" % (
             c["name"],
-            " (a place)" if c.get("kind") == "place" else "",
+            " (a place)"
+            if c.get("kind") == "place"
+            else " (a body: not a character, the characters are drawn with it)"
+            if c.get("kind") == "body"
+            else "",
             c.get("about") or "no description",
             seen,
         )
@@ -895,6 +996,8 @@ def note(film):
             ),
         ]
         out += [member(c) for c in own]
+        if body_rules(film):
+            out += ["", body_rules(film)]
     if brought:
         out += [
             "" if out else None,
@@ -1100,7 +1203,7 @@ def changes(film):
         if not fn.endswith(".js") or not NAME.match(name):
             continue
         code = _read(film.path("cast", fn))
-        if not code or not code.strip() or len(code.encode("utf-8")) > MAX_BYTES:
+        if not code or not code.strip() or len(code.encode("utf-8")) > max_bytes(code):
             continue
         h = _hash(code)
         if had.get(name) != h:

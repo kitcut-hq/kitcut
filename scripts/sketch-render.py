@@ -145,12 +145,15 @@ def vo_timeline(m):
 def cast_scripts(m):
     """ "cast": "cast" -- a folder of cast members, each its own script between the props and
     film.js (Sketch Studio: a person's recurring characters, studio/library.py). Each runs in its
-    own function scope and names itself in an error. "" for a manifest without one."""
+    own function scope and names itself in an error. "" for a manifest without one.
+    A body (body_<kind>.js: what a kind of creature shares, SK.cast.body_<kind>.make(sheet)) runs
+    before the others, whatever its name: the characters made with it call it as they load."""
     if not m.get("cast"):
         return ""
     d = _sketch.rel(m, m["cast"])
     out = ["<script>\nSK.cast = SK.cast || {};\n</script>"]
-    for n in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+    names = os.listdir(d) if os.path.isdir(d) else []
+    for n in sorted(names, key=lambda n: (not n.startswith("body_"), n)):
         if re.fullmatch(r"[a-z][a-z0-9_]{0,30}\.js", n):
             out.append(
                 "<script>\n(function () {\n%s\n})();\n//# sourceURL=cast/%s\n</script>"

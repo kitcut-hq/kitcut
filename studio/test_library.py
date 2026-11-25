@@ -311,6 +311,7 @@ def main():
         projects(check)
         merged(check)
         workspaces(check)
+        bodies(check)
     finally:
         shutil.rmtree(HOME, ignore_errors=True)
     print("%d failed" % len(bad))
@@ -894,6 +895,65 @@ def workspaces(check):
     F.update(state="done")
     check(F.record().get("member") == "u:erin", "the film knows who asked")
     check(clients.same(F.record()["client"], "o:erin"), "and its owner, by either name")
+
+
+BODY = """SK.cast.body_bird = { about: 'The bird body every bird of the series is drawn with', kind: 'body',
+  make(sheet) {
+    function sit(o = {}) { SK.wash(SK.S.ellC(0, -60, 50 * (sheet.size || 1), 70), sheet.col); if (sheet.hop) hop(); }
+    function hop() {}
+    return { about: sheet.about, sheet, sit, draw(x, y, o = {}) { SK.at(x, y, 0, o.s || 1, () => sit(o)); } };
+  } };
+"""
+# a name that sorts before the body's: the body still loads first
+AVA = """SK.cast.ava = SK.cast.body_bird.make({ name: 'ava', about: 'Ava, a small blue bird', col: '#39c' });
+"""
+
+
+def bodies(check):
+    """A body: what a kind of creature shares, the characters sheets on it (2026-11)."""
+    P = "p-birdsbirds"
+    A = episode("Ava the bird wakes up", project=P, client="u:alice")
+    library.seed(A)
+    write(A, "cast/body_bird.js", BODY)
+    write(A, "cast/ava.js", AVA)
+    write(A, "film.js", scene("SK.cast.ava.draw(0, 200);"))
+    r = render(A.manifest, [1], "temp/check")
+    check(r.returncode == 0, "a body loads before the characters made with it (%s)" % r.stderr[-200:])
+    check(library._kind(BODY) == "body" and library._kind(AVA) is None, "a body says it is one")
+    check(library.DECLARES.findall(AVA) == ["ava"], "a sheet on a body registers its character")
+    check(library.max_bytes(BODY) > library.max_bytes(AVA), "a body may be larger than a member")
+    check(library.bodies(A) == ["body_bird"], "a film's bodies are found in its cast")
+    check(library.used(A) == ["ava", "body_bird"], "a film that draws a character uses its body")
+    kept = finish(A)
+    check(sorted(kept["saved"]) == ["ava", "body_bird"], "a finished film keeps both")
+    idx = library.load(library.lib_of(A.record()))
+    check(idx["cast"]["body_bird"].get("kind") == "body", "the library knows the body is one")
+    # a round of changes to the same film: what it changes in the cast is kept too
+    library.rebase(A)
+    had = {c["name"]: c["hash"] for c in A.record()["library"]["cast"]}
+    check(had == {n: idx["cast"][n]["hash"] for n in ("ava", "body_bird")}, "the film has what it kept")
+    write(A, "cast/body_bird.js", BODY.replace("function hop() {}", "function hop() { SK.at(0, -8, 0, 1, () => {}); }"))
+    kept = finish(A)
+    library.rebase(A)
+    idx = library.load(library.lib_of(A.record()))
+    check(
+        kept["saved"] == ["body_bird"] and not kept.get("clashed") and idx["cast"]["body_bird"]["version"] == 2,
+        "what a round changed in the body is the series' next version, not a clash",
+    )
+    # the next episode gets both, and is told how the series is built
+    B = episode("Ava learns to hop", project=P, client="u:alice")
+    got = library.seed(B)
+    check(
+        sorted(c["name"] for c in got["cast"]) == ["ava", "body_bird"]
+        and "hop() { SK.at" in open(B.path("cast", "body_bird.js"), encoding="utf-8").read(),
+        "the next episode is seeded with the body as the round left it",
+    )
+    said = library.note(B)
+    check(
+        "shared body (cast/body_bird.js)" in said and "a body: not a character" in said and "its birds" in said,
+        "and its first message says where each kind of change goes",
+    )
+    check(library.body_rules(Film.create("no body", 5, "drawn", client="u:alice")) == "", "a film without a body hears nothing of one")
 
 
 if __name__ == "__main__":

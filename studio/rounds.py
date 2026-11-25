@@ -136,6 +136,13 @@ JOBS = {}  # film id -> the round being made here
 # change nothing else. An episode keeps its own copy of the cast (library.seed copies by value),
 # so this is how a scene or character changed in the project reaches an episode already made.
 REFRESH_NOTE = "refresh"
+# after library.BODY_RULES, in a round: its changes to the cast do not stay in this film
+BODY_ROUND = (
+    "\nWhat you change in cast/ (a character's file or the body) is saved to the series when "
+    "this round is done, and every later episode gets it: so a fix a note asks for that is true "
+    "of the character everywhere (how it looks, how it moves) belongs there, and one that is "
+    "only this shot's (where it stands, what it does now) belongs in film.js.\n"
+)
 REFRESH = (
     "The project's maker changed %(what)s since this film was made, and wants this film to use "
     "%(them)s as %(they)s now. The new %(versions)s already in this folder%(where)s. Make the "
@@ -2110,6 +2117,11 @@ async def _run(job, film, sched):
                 rules = films.clean_rules(r0.get("rules")) or films.rules_of(rec0)
                 if rules:
                     theirs = RULES % "\n".join("- " + x for x in rules) + theirs
+                import library  # noqa: PLC0415
+
+                shared = await asyncio.to_thread(library.body_rules, work)
+                if shared:  # where each kind of change goes, and that the cast's reaches the series
+                    theirs = "\n\n" + shared + BODY_ROUND + theirs
                 say = {
                     "prompt": ask(work, notes, frames, lim, past, theirs),
                     "system": agent.system_prompt(work.look, work.caps),
@@ -2380,6 +2392,10 @@ async def _run(job, film, sched):
         )
         print("film %s: version %d (%s)" % (fid, n, rid), flush=True)
         _after(film)
+        # what the round changed in the cast is the series' now, as a film's is when it finishes:
+        # until 2026-11 it stayed in this episode's copy, and no other episode ever had it
+        with contextlib.suppress(Exception):
+            await agent.keep_cast(film, toolbox.Tools(film, sched, lambda ev: None), lambda ev: None)
         import who  # noqa: PLC0415
 
         who.ensure(film, sched)  # who is on screen and speaking in it, for its notes page

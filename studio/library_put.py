@@ -21,7 +21,6 @@ member that changed between the plan and the write is refused, never written ove
 """
 
 import os
-import re
 import sys
 import glob
 import json
@@ -33,7 +32,7 @@ import assets  # noqa: E402
 import library  # noqa: E402
 from film import Film  # noqa: E402
 
-DECLARES = re.compile(r"\bSK\.cast\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\{")
+DECLARES = library.DECLARES
 
 
 def find(project):
@@ -58,8 +57,8 @@ def read_member(path):
         sys.exit("%s: declares %s; a cast file registers one lowercase member" % (path, names))
     if os.path.basename(path) != names[0] + ".js":
         sys.exit("%s: registers %s, so it is %s.js" % (path, names[0], names[0]))
-    if len(code.encode("utf-8")) > library.MAX_BYTES:
-        sys.exit("%s: over %d bytes" % (path, library.MAX_BYTES))
+    if len(code.encode("utf-8")) > library.max_bytes(code):
+        sys.exit("%s: over %d bytes" % (path, library.max_bytes(code)))
     h = library._hash(code)
     return {
         "name": names[0],
