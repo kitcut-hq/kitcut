@@ -3,7 +3,8 @@
 version -- the same film, the same page, the same link.
 
     GET  /api/films/<id>/versions                the film's versions, and how a round stands
-    POST /api/films/<id>/versions                {"key", "from", "notes": [...]}: make the next one
+    POST /api/films/<id>/versions                {"key", "from", "notes": [...], "length"?}: make
+                                                 the next one (at another length when asked)
     POST /api/films/<id>/versions/stop           stop the round being made
     POST /api/films/<id>/versions/<n>/current    version n is the film again (no rendering)
 
@@ -99,6 +100,9 @@ KINDS = ("moment", "spot", "stretch", "line", "film")
 MAX_NOTES = None  # a round takes as many notes as its maker has (it took 20 until 2026-11-24)
 NOTE_MAX = None  # a note, and a line as it should be said, as long as its maker writes it (500 until 2026-11-24)
 PER_DAY = int(os.environ.get("STUDIO_ROUNDS_PER_DAY") or 5)  # rounds a film may have in a day
+# A round asked to make the film another length (`length`, whole seconds): kitcut.ai holds it to
+# the account's longest film; the studio only keeps it a length a film can be.
+LENGTH_MIN, LENGTH_MAX = 5, 1800
 TRIES = 2  # how often a round is started again after its server went away
 KEEP = 3  # versions whose files are kept beside the film's own; older ones stay watchable online
 SUMMARY_MAX = 600  # characters of what a hand says its files change
@@ -356,10 +360,12 @@ def claude_of(rec):
     }
 
 
-def reserve(film, notes, auth, model=None):
-    """What a round may still spend, held against the day's budget (server.reserve, halved)."""
-    lim = limits(film.length, notes, model=model)
-    return lim["reserve_usd"] if auth == "api" else 0.005 * film.length
+def reserve(film, notes, auth, model=None, length=None):
+    """What a round may still spend, held against the day's budget (server.reserve, halved).
+    length: the one the round is asked to make the film, when it is longer."""
+    secs = max(film.length, int(length or 0))
+    lim = limits(secs, notes, model=model)
+    return lim["reserve_usd"] if auth == "api" else 0.005 * secs
 
 
 # ------------------------------------------------------------------ what the film's record says
@@ -1062,9 +1068,8 @@ score.json, sfx.json%(extra)s, and the recording's timeline in audio/vo/timeline
 copy of the engine is in engine/ (when it differs from the reference above, the film's copy is \
 what runs). Read film.js first.
 
-Length: %(length)d seconds: the film still ends where it ends (if a line you change needs a \
-little more, the studio lengthens the film and says so). Your working time: about \
-%(minutes)d minutes (waiting for the machine is not counted).
+%(length)s Your working time: about %(minutes)d minutes (waiting for the machine is not \
+counted).
 
 The notes (also in notes/notes.md):
 
@@ -1124,6 +1129,99 @@ not show what was asked comes back to you. So judge by the frame, not by the cod
 - Last, `summary`: one short paragraph, in plain words, of what is different in this version.
 - Do not render the film; the studio does that when you are done.
 """
+# What a round is told of the film's length: the same as before (KEEP), or another its maker
+# asked for (LONGER, SHORTER), which the studio has already set (set_length). The time goes in or
+# comes out where the notes say: the owner's 15 more seconds for a song after a character's last
+# line (2026-11-26) are a song there, not 15 still seconds at the end.
+LENGTH_KEEP = (
+    "Length: %d seconds: the film still ends where it ends (if a line you change needs a "
+    "little more, the studio lengthens the film and says so)."
+)
+LENGTH_MOVES = (
+    " Move everything after that point by the same time: in film.js (shots, cues, anything "
+    "timed by the clock), score.json and sfx.json, and the narration with it -- in vo.json the "
+    "first line after that point gets a `pause` (seconds of quiet before it, on top of the usual "
+    "gap) or its `start` moved, then `voice` (lines already recorded are laid out again, not "
+    "recorded again)%s. The notes' times are the film's as it was before. Then `stills` across "
+    "the seconds you changed and the film's last seconds, and look: the film ends with its "
+    "ending, at %d s. Answer the notes that asked for the time saying where it went."
+)
+LENGTH_LONGER = (
+    "Length: its maker asked for this film to run %(to)d seconds now, %(diff)d seconds longer "
+    "than the %(was)d it ran, and the studio has made it %(to)d seconds long already (SK.film "
+    "plays to that length whatever `duration` film.js names). Put the new seconds where the "
+    "notes ask for them -- a song after a line, a scene added, a moment held: stretch or add "
+    "that shot there -- never as empty or still seconds at the end, unless a note asks for "
+    "time at the end itself. When no note says where, put them where the story has room and "
+    "say where."
+)
+LENGTH_SHORTER = (
+    "Length: its maker asked for this film to run %(to)d seconds now, %(diff)d seconds shorter "
+    "than the %(was)d it ran, and the studio has made it %(to)d seconds long already. Take the "
+    "time out where the notes say -- a shot cut or shortened, a pause taken out, words cut -- "
+    "never by cutting the ending off. When no note says where, take it where the film drags and "
+    "say where. The narration must end before the film does, or the studio lengthens the film "
+    "again to fit it."
+)
+NO_VOICE_MOVES = (
+    " (without a `voice` tool the narration stays where it is: make or take the time where no "
+    "line is said, and say so where that is not where a note asked)"
+)
+
+
+def length_text(work, was=None):
+    """The round's paragraph on the film's length: `was` is what the film ran before the round
+    set another (None: it keeps its length)."""
+    to = int(work.length)
+    if was is None or int(was) == to:
+        return LENGTH_KEEP % to
+    said = LENGTH_LONGER if to > was else LENGTH_SHORTER
+    moves = LENGTH_MOVES % ("" if can_voice(work) else NO_VOICE_MOVES, to)
+    return said % {"to": to, "was": int(was), "diff": abs(to - int(was))} + moves
+
+
+def clean_length(length, now):
+    """A round's `length` as asked: whole seconds, or None when it keeps the film's (`now`).
+    Raises RoundError for one a film cannot be."""
+    if length is None:
+        return None
+    if isinstance(length, bool) or not isinstance(length, (int, float)) or length != int(length):
+        raise RoundError(400, "length must be whole seconds.", "length")
+    length = int(length)
+    if not LENGTH_MIN <= length <= LENGTH_MAX:
+        raise RoundError(
+            400, "length must be %d to %d seconds." % (LENGTH_MIN, LENGTH_MAX), "length"
+        )
+    return None if length == int(now) else length
+
+
+def set_length(work, seconds):
+    """The round's copy made `seconds` long before Claude starts: its manifest (what the picture
+    is rendered to and the sound mixed to), the narration's timeline, and its record's `length`,
+    the length it is asked for -- so a recording that ends sooner does not bring the film back
+    to the old one (tools.fit_length), and one that runs on still lengthens it."""
+    work.update(length=int(seconds))
+    work.run_to(int(seconds))
+    p = work.path("audio", "vo", "timeline.json")
+    with contextlib.suppress(OSError, ValueError):
+        with open(p, encoding="utf-8") as f:
+            tl = json.load(f)
+        tl["duration"] = float(seconds)
+        films._write_json(p, tl)
+
+
+def length_said(was, now):
+    """The sentence a round's answer ends with when the film's length changed, else ''."""
+    if int(was) == int(now):
+        return ""
+    return "The film is %s now (it was %s)." % (_span(now), _span(was))
+
+
+def _span(s):
+    s = int(s)
+    return "%d:%02d long" % (s // 60, s % 60) if s >= 60 else "%d seconds long" % s
+
+
 VOICE = (
     "- A line that should be said differently: change that line's text in vo.json in place "
     "(never add, remove or reorder lines), keep it about as long as it was, then `voice` with "
@@ -1213,13 +1311,13 @@ ANSWER = (
 )
 
 
-def ask(work, notes, frames, lim, earlier="", project=""):
+def ask(work, notes, frames, lim, earlier="", project="", was=None):
     extra = "".join(", " + n for n in work.editable() if n not in films.EDITABLE)
     return ASK % {
         "earlier": earlier,
         "project": project,
         "extra": extra,
-        "length": work.length,
+        "length": length_text(work, was),
         "minutes": lim["claude_s"] // 60,
         "notes": notes_text(notes, timeline(work), frames),
         "voice": (VOICE % {"runs": lim["voice_runs"]}) if can_voice(work) else NO_VOICE,
@@ -1681,8 +1779,10 @@ def start(
     claude=None,
     refresh=None,
     rules=None,
+    length=None,
 ):
-    """Make this finished film's next version from these notes; the round's job. `rules`: its
+    """Make this finished film's next version from these notes; the round's job. `length`: the
+    whole seconds its maker asked the film to run now (clean_length; None keeps its length). `rules`: its
     project's standing rules as they are now (the film's record has them as they were when it
     was made). `refresh`:
     instead of notes, the names of its project's scenes and characters to bring the film up to
@@ -1722,6 +1822,7 @@ def start(
         raise RoundError(
             429, "This film has had its %d rounds of changes for today." % PER_DAY, "rounds"
         )
+    length = clean_length(length, film.length)
     if refresh is not None:
         refresh, notes = refresh_notes(film, refresh)
     else:
@@ -1741,6 +1842,7 @@ def start(
         claude=claude,
         refresh=refresh,
         rules=rules,
+        length=length,
     )
 
 
@@ -1761,6 +1863,7 @@ def _begin(
     claude=None,
     refresh=None,
     rules=None,
+    length=None,
 ):
     rec = film.record()
     k = k or (rec.get("rounds") or 0) + 1
@@ -1802,6 +1905,7 @@ def _begin(
             **({"claude": claude} if claude else {}),
             **({"refresh": list(refresh)} if refresh else {}),
             **({"rules": films.clean_rules(rules)} if rules else {}),
+            **({"length": int(length)} if length else {}),
         },
     )
     _set_mark(film.id)
@@ -1811,7 +1915,7 @@ def _begin(
         "n": n,
         "state": "queued",
         "client": client,
-        "reserve": reserve(film, len(notes), auth, claude.get("model")),
+        "reserve": reserve(film, len(notes), auth, claude.get("model"), length),
         "cost_usd": 0,
         "stopped": False,
         "task": None,
@@ -1861,6 +1965,8 @@ def resume(film, sched):
         voice=bool(r.get("voice")),
         claude=r.get("claude"),
         refresh=r.get("refresh"),
+        rules=r.get("rules"),
+        length=r.get("length"),
     )
 
 
@@ -1941,8 +2047,10 @@ async def _run(job, film, sched):
     r0 = film.record().get("round") or {}
     notes, auth, hand = r0.get("notes") or [], r0.get("auth") or "api", r0.get("hand")
     first = "Taking the changed files" if hand else "Reading your notes"
+    # the length its maker asked for (None: the film's own); a longer film is more to make
+    was, to = film.length, (None if hand else r0.get("length"))
     lim = limits(
-        film.length,
+        max(was, int(to or 0)),
         len(notes),
         wide(notes),
         model=claude_of(film.record()).get("model"),
@@ -2106,6 +2214,8 @@ async def _run(job, film, sched):
             if hand and before != hand["base"]:  # it changed between the asking and its turn
                 raise RoundError(409, STALE % version_of(film.record()), "stale")
             work = await asyncio.to_thread(copy_of, film, rid, notes)
+            if to:  # before anything is drawn or said: Claude works on the film at its new length
+                await asyncio.to_thread(set_length, work, to)
             # the copy as it starts, not the film: a copy differs from its film where the studio
             # itself made it differ (the Free plan's closing is taken off its manifest)
             fresh = await asyncio.to_thread(digest, work)
@@ -2153,7 +2263,7 @@ async def _run(job, film, sched):
                 else:  # no body: that the cast's changes reach the series all the same
                     theirs = await asyncio.to_thread(library.cast_rules, work) + theirs
                 say = {
-                    "prompt": ask(work, notes, frames, lim, past, theirs),
+                    "prompt": ask(work, notes, frames, lim, past, theirs, was=was),
                     "system": agent.system_prompt(work.look, work.caps),
                     "effort": EFFORT,
                     "budget_usd": lim["budget_usd"],
@@ -2349,6 +2459,10 @@ async def _run(job, film, sched):
         )
         if bad:
             raise RuntimeError(bad)
+        # the round's answer says the length the film runs now when it is not what it was
+        grew = length_said(was, work.length)
+        if grew and grew not in (state.summary or ""):
+            state.summary = ("%s %s" % (state.summary or "", grew)).strip()
         emit({"type": "stage", "name": "online", "text": "Putting version %d online" % n})
         tell_now("Putting version %d online" % n, force=True)
         rev = (film.record().get("media_rev") or 0) + 1
@@ -2371,7 +2485,9 @@ async def _run(job, film, sched):
         # meanwhile would be swapped out under a version that never saw it (KI-061)
         if await asyncio.to_thread(digest, film) != before:
             raise RuntimeError(MOVED)
-        entry = await asyncio.to_thread(commit, film, work, urls, rev, n, state.summary, rid)
+        entry = await asyncio.to_thread(
+            commit, film, work, urls, rev, n, state.summary, rid, asked=to
+        )
         if hand:
             await asyncio.to_thread(shutil.rmtree, hand["dir"], True)
         work = None  # its files are the film's now
@@ -2589,14 +2705,19 @@ def _done(film):
         os.remove(film.path(KEPT, SWAP))
 
 
-def commit(film, work, urls, rev, n, summary, rid):
+def commit(film, work, urls, rev, n, summary, rid, asked=None):
     """The round's version takes the film's place: its files, then the record. The film's own
-    go to versions/v<cur>/. Returns the new version's entry."""
+    go to versions/v<cur>/. Returns the new version's entry. asked: the length its maker asked
+    this round to make the film, which is the film's asked-for length from now on (and each
+    version keeps its own, so going back to one brings its length back: use)."""
     rec = film.record()
     cur = version_of(rec)
     vs = list(rec.get("versions") or [])
     if not any(v.get("n") == cur for v in vs):  # a film whose notes were never opened on the site
         vs.append(entry_of(film, cur))
+    runs = work.record().get("runs") if asked else None  # before the copy's record goes
+    if asked:
+        vs = [dict(v, asked=v.get("asked") or film.asked) if v.get("n") == cur else v for v in vs]
     # what each tool spent on the film so far goes on in its file, the round's after it
     for parts in SPENT:
         old, new = film.path(*parts), work.path(*parts)
@@ -2622,8 +2743,12 @@ def commit(film, work, urls, rev, n, summary, rid):
         summary=summary,
         rid=rid,
     )
+    if asked:
+        entry["asked"] = int(asked)
     vs = sorted([v for v in vs if v.get("n") != n] + [entry], key=lambda v: v["n"])
     fields = {"version": n, "versions": prune(film, vs, n), "direction": film.direction()}
+    if asked:
+        fields.update(length=int(asked), runs=runs)
     if urls:
         fields.update(media={k: v for k, v in urls.items() if k != "strip"}, media_rev=rev)
     film.update(**fields)
@@ -2673,6 +2798,9 @@ def use(film, n):
     with contextlib.suppress(OSError):
         os.rmdir(src)
     fields = {"version": n, "media_rev": want.get("rev") or 0}
+    if want.get("asked"):  # made at another length than the film is asked for now (commit)
+        ran = round(float(want.get("duration") or want["asked"]))
+        fields.update(length=int(want["asked"]), runs=ran if ran != int(want["asked"]) else None)
     m = {k: v for k, v in (want.get("media") or {}).items() if k != "strip"}
     if m:
         fields["media"] = m
