@@ -96,6 +96,13 @@ the day's budget still holds.
                                  {"project", "subject"?}, files in parts as the brand's
                                  (.../style/files...), GET .../style/{kind}/{name}. X-Team: 1 (the
                                  site's KITCUT_TEAM) is what lets the asker paint and pick Gemini
+    GET  /api/films/{id}/frames  the film's own client: ?version=N (left out, the one it shows)
+                                 and from, to, count (or every seconds): a contact sheet of its
+                                 frames, each stamped m:ss.s; or at=t: one frame at full size.
+                                 &format=png|jpeg. X-Version, X-Times, X-Duration, X-Step say
+                                 what it is (look.py)
+    GET  /api/films/{id}/audio   the film's own client: ?version, from, to, window: mean and peak
+                                 dBFS a window and the narration lines said in it, as JSON
     GET  /api/films/{id}/lines   the asker's finished film's narration lines, each with its key
                                  and whether its project has it approved; .../lines/{i}.mp3
     GET  /api/films/{id}         ?since=N  ->  {"status": queued|running|done|error|cancelled,
@@ -167,6 +174,7 @@ import re
 import sys
 import hmac
 import json
+import math
 import hashlib
 import time
 import errno
@@ -204,6 +212,7 @@ import ideas  # noqa: E402 -- three ideas for a finished film's episode 2 (Make 
 import live as nowline  # noqa: E402 -- `live` is this module's own (its films in the making)
 import rounds  # noqa: E402
 import who  # noqa: E402
+import look  # noqa: E402 -- a film's frames and sound, looked at from here (get_film_frames)
 import unbrand  # noqa: E402
 import share  # noqa: E402
 import canon  # noqa: E402
@@ -2937,6 +2946,111 @@ async def film_line_audio(req):
     )
 
 
+# ------------------------------------------------------------------ looking at a film (look.py)
+LOOKS = asyncio.Semaphore(2)  # ffmpeg seeks a few at a time: the films being made come first
+
+
+def _num(req, name, kind=float):
+    """A query number, None when it is not given; a bad one is a 400 for the asker."""
+    v = req.query.get(name, "").strip()
+    if not v:
+        return None
+    try:
+        x = kind(v)
+    except ValueError:
+        raise web.HTTPBadRequest(
+            text=json.dumps({"error": "%s must be a number" % name}),
+            content_type="application/json",
+        ) from None
+    if isinstance(x, float) and not math.isfinite(x):
+        raise web.HTTPBadRequest(
+            text=json.dumps({"error": "%s must be a number" % name}),
+            content_type="application/json",
+        )
+    return x
+
+
+def _look_film(req):
+    """The finished film of a looking route, for its own client (else not found)."""
+    f = own_film(req)
+    rec = f.record()
+    if rec.get("state") != "done" or not rec.get("ok"):
+        raise web.HTTPConflict(
+            text=json.dumps({"reason": "state", "error": "This film is not finished."}),
+            content_type="application/json",
+        )
+    return f
+
+
+def _look_error(e):
+    body = {"error": e.text}
+    if e.reason:
+        body["reason"] = e.reason
+    return web.json_response(body, status=e.status)
+
+
+async def film_frames(req):
+    """A film's version looked at without downloading it: a contact sheet of its frames over a
+    stretch (from, to, and count or every), each stamped with its time, or one frame at full size
+    (at). JPEG unless format=png. What it shows is in the headers: X-Version (and X-Current: 1
+    when that is the one the film shows), X-Times (the moments, comma-separated seconds),
+    X-Duration, X-Step."""
+    f = _look_film(req)
+    n = _num(req, "version", int)
+    at = _num(req, "at")
+    a, b, every = _num(req, "from"), _num(req, "to"), _num(req, "every")
+    count = _num(req, "count", int)
+    fmt = "png" if req.query.get("format", "").lower() == "png" else "jpeg"
+    try:
+        async with LOOKS:
+            v = await asyncio.to_thread(look.version, f, n)
+            if at is not None:
+                data, t = await asyncio.to_thread(look.still, v, at, fmt)
+                got, step = [t], 0
+            else:
+                ts, step = look.times(v["duration"], a, b, count, every)
+                data, got = await asyncio.to_thread(look.sheet, v, ts, fmt)
+    except look.LookError as e:
+        return _look_error(e)
+    return web.Response(
+        body=data,
+        content_type="image/png" if fmt == "png" else "image/jpeg",
+        headers={
+            "Cache-Control": "private, no-cache",
+            "X-Version": str(v["n"]),
+            "X-Current": "1" if v["current"] else "0",
+            "X-Versions": ",".join(map(str, v["versions"])),
+            "X-Times": ",".join("%g" % t for t in got),
+            "X-Duration": "%g" % v["duration"],
+            "X-Step": "%g" % step,
+        },
+    )
+
+
+async def film_audio(req):
+    """A film's version listened to without downloading it: the loudness of its sound a window
+    (mean and peak dBFS) from `from` to `to`, and which narration lines are said in each."""
+    f = _look_film(req)
+    n = _num(req, "version", int)
+    a, b, w = _num(req, "from"), _num(req, "to"), _num(req, "window")
+    try:
+        async with LOOKS:
+            v = await asyncio.to_thread(look.version, f, n)
+            got = await asyncio.to_thread(look.levels, v, a, b, w)
+    except look.LookError as e:
+        return _look_error(e)
+    return web.json_response(
+        {
+            "id": f.id,
+            "version": v["n"],
+            "current": v["current"],
+            "versions": v["versions"],
+            "duration": v["duration"],
+            **got,
+        }
+    )
+
+
 async def hide(req):
     """Take a film out of the gallery, or put it back: {"hidden": true|false}. Its page and its
     link keep working. Only from this machine (the operator's call, not a visitor's)."""
@@ -3709,6 +3823,8 @@ def make_app(token):
             web.delete("/api/library/{name}", library_delete),
             web.get("/api/films/{id}", status),
             web.get("/api/films/{id}/lines", film_lines),
+            web.get("/api/films/{id}/frames", film_frames),
+            web.get("/api/films/{id}/audio", film_audio),
             web.get("/api/films/{id}/lines/{i}.mp3", film_line_audio),
             web.post("/api/films/{id}/cancel", cancel),
             web.post("/api/films/{id}/delete", delete),
