@@ -826,6 +826,15 @@ ROUND makes all of it into the film's next VERSION -- the same film, page and li
 - **A filmstrip per version** (`rounds.make_strip`, `outputs/strip.jpg`, online beside the rest):
   24 small frames in a row, each sought in the web copy rather than the film decoded. The
   site's notes page cannot read a video's pixels off another host, so it cannot make its own.
+- **Looking at a version without downloading it** (`look.py`, 2026-11-26; kitcut.ai's
+  `get_film_frames` and `get_film_audio`). `GET /api/films/{id}/frames?version&from&to&count|every`
+  is a contact sheet (JPEG, or `format=png`) of up to 24 frames, 1568 px wide, each stamped m:ss.s;
+  `?at=t` one frame at full size; the headers (`X-Version`, `X-Times`, `X-Duration`, `X-Step`) say
+  what it shows. `GET /api/films/{id}/audio?version&from&to&window` is the sound's mean and peak
+  dBFS a window (0.5-30 s, at most 240 windows) with the narration lines said in each. A version is
+  its kept files when they are here, else its copy online, which ffmpeg seeks by ranges: every
+  frame is sought, never the film decoded, and only the range's sound is read. The film's own
+  client only; two at a time. `test_look.py` covers it.
 - **By hand:** `ops.sh notes <film-id> <notes.json>` (followed to the end, Claude's answers
   printed), `ops.sh versions <film-id>`, `ops.sh version <film-id> <n>`; beside the server,
   `python studio/rounds.py <film-id> --notes notes.json [--plan]`.
