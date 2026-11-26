@@ -386,19 +386,18 @@ def tts_model():
 # shorten it, and went out with "We're at the car." faded out under its last word. Its owner: "the
 # end is cut too, the phrase is cut ... we need to soften the hard stop. It's okay if we go beyond
 # the 4 min or any other set timer."
-GROW = 0.25  # of the length asked for ...
-GROW_MIN_S = 10  # ... and at least this, so a 15 s film may finish its sentence too
 TAIL_S = 1.5  # what a film keeps after its last word: the word rings, the picture and music close
 SHORT_MAX_S = 180  # YouTube takes a vertical film up to three minutes as a Short
 
 
 def may_run_to(asked, frame=None):
-    """The longest a film asked for at `asked` seconds may run (whole seconds). A vertical film
-    that was asked for inside YouTube's Short limit stays inside it."""
-    top = int(asked + max(GROW_MIN_S, GROW * asked))
+    """The longest a film asked for at `asked` seconds may run (whole seconds), or None: no
+    limit. A film runs as long as its narration needs (the owner, 2026-11-26: "remove those
+    limits", after episode 2 of Warrior Cats grew past a quarter over what was asked); only a
+    vertical film asked for inside YouTube's Short limit stays inside it."""
     if frame == "9:16" and asked <= SHORT_MAX_S:
-        top = min(top, SHORT_MAX_S)
-    return max(int(asked), top)
+        return max(int(asked), SHORT_MAX_S)
+    return None
 
 
 # The Claude models a film may be made with (kitcut.ai's model picker, paid plans; the site charges

@@ -503,15 +503,16 @@ docs/studio-scenes-plan.md.
    (`agent.narration_words`). But after every recording, and once more before the final mix, the
    studio makes the film as long as its narration needs: a last word that ends within 0.8 s of
    the end (under the closing fade) or past it lengthens the film to 1.5 s after that word
-   (`TAIL_S`), up to a quarter over what was asked and ten seconds at least (`GROW`,
-   `GROW_MIN_S`; a vertical film asked for inside YouTube's three minutes stays inside them). A
+   (`TAIL_S`), however long that is (until 2026-11-26 it stopped a quarter over what was asked;
+   the owner: "remove those limits"). Only a vertical film asked for inside YouTube's three
+   minutes stays inside them (`film.may_run_to` returns 180 for it, None for every other). A
    narration recorded shorter again brings the film back; it never goes below what was asked.
    Only past that allowance is Claude told to cut words. The manifest's `duration` is what
    changes; the record keeps `length` (what was asked: credits, limits) and gets `runs` (what it
    became). `SK.film` plays to the manifest's length whatever `duration` film.js names
    (`SK.LENGTH`, set by the page: `sketch/engine.js`), so the fade-out follows the real end. A
    template's film keeps its template's length. A line may ask for quiet before it
-   (`{"text": ..., "pause": 1.5}`: `sketch-vo.py`, `validate.MAX_PAUSE_S`), which is how a gag
+   (`{"text": ..., "pause": 1.5}`: `sketch-vo.py`; any length since 2026-11-26), which is how a gag
    gets a beat without words, and a film may have a narration line for every 3 s (it was every
    5: `film.limits`). Before this, the length was fixed: Leo episode 11 (odoais) went out with
    its last line faded under its last word and 59 lines merged into 48 with no pause anywhere

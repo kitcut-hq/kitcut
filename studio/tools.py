@@ -167,7 +167,7 @@ def fit_length(film):
     top = may_run_to(asked, rec.get("frame"))
     # under the fade: the mix's own (0.6 s) and the picture's take the last word with them
     need = asked if ends <= asked - FADE_S else math.ceil(ends + TAIL_S)
-    to = min(max(asked, need), top)
+    to = max(asked, need) if top is None else min(max(asked, need), top)
     if to == now and float(tl.get("duration") or now) == float(now):
         return None
     film.run_to(to)
@@ -191,11 +191,17 @@ def grown_note(got):
     if got["now"] > got["was"]:
         return (
             "\n\nThe narration ends at %.2f s, so the film is now %d s long (it was asked for at"
-            " %d s; a film runs a little longer rather than lose its last words, up to %d s). The"
+            " %d s; a film runs longer rather than lose its last words%s). The"
             " picture, the music and the cues run to %d s: SK.film plays to the film's real"
             " length whatever `duration` film.js names, so look at the last seconds (`stills`)"
             " and let the ending end there."
-            % (got["ends"], got["now"], got["asked"], got["top"], got["now"])
+            % (
+                got["ends"],
+                got["now"],
+                got["asked"],
+                "" if got["top"] is None else ", up to %d s" % got["top"],
+                got["now"],
+            )
         )
     return (
         "\n\nThe narration now ends at %.2f s, so the film is %d s long again (it had grown to"

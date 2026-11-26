@@ -1608,10 +1608,10 @@ async def main():
         # closing fade, or a little past the end, lengthens the film instead of losing its words
         check(
             (films.may_run_to(240), films.may_run_to(15), films.may_run_to(60, "9:16"))
-            == (300, 25, 75)
+            == (None, None, 180)
             and films.may_run_to(170, "9:16") == 180
-            and films.may_run_to(170) == 212,
-            "a film may run a quarter over what was asked (ten seconds at least), a Short to 180 s",
+            and films.may_run_to(200, "9:16") is None,
+            "a film runs as long as its narration needs; only a Short stays inside 180 s",
         )
         lay((1, 50), (50.5, 58))
         check(tools_mod.fit_length(late_film) is None, "a narration that fits changes nothing")
@@ -1620,7 +1620,7 @@ async def main():
         with open(late_film.path("audio", "vo", "timeline.json"), encoding="utf-8") as f:
             grown_tl = json.load(f)
         check(
-            got == {"was": 60, "now": 63, "asked": 60, "ends": 60.58, "top": 75}
+            got == {"was": 60, "now": 63, "asked": 60, "ends": 60.58, "top": None}
             and late_film.length == 63
             and late_film.asked == 60
             and late_film.record().get("length") == 60
@@ -1648,12 +1648,10 @@ async def main():
         far = tools_mod.fit_length(late_film)
         over = tools_mod.narration_over(late_film)
         check(
-            far["now"] == 75
-            and late_film.length == 75
-            and over["ends"] == 90
-            and over["length"] == 75
-            and "asked for at 60 s may run" in tools_mod.fit_advice(late_film, 0),
-            "past what a film may run to, it is as long as it may be and the words are cut back",
+            far["now"] == 92
+            and late_film.length == 92
+            and over is None,
+            "a narration far past what was asked makes the film as long as it needs, no limit",
         )
         lay((1, 50), (50.5, 58))
         tools_mod.fit_length(late_film)
