@@ -30,9 +30,11 @@ film ("film.js"), fonts
 ([{"file", "family", "weight", "load"}]), images ({"logo": "assets/logo.png"} -> SK.IMG.logo),
 player ({accent, paper, ink, hint, hint_font}), poster_t,
 cover (the video's first frame -- X, iMessage and a phone's player show it before play, and a film
-that opens on bare paper shows there as an empty rectangle: true (default) draws the poster, or a
-livelier later moment when the film ends on paper, as frame 0 -- 1/fps of a second, unseen in
-play; a number is that film time; false keeps the film's own opening),
+that opens on bare paper shows there as an empty rectangle: true (default) keeps the film's own
+opening when it is a picture (_sketch.COVER_OPENING), and only for one that opens on bare paper
+draws the poster, or a livelier later moment, as frame 0 -- players show that frame as the still
+before play, so it must be the film's; a number is that film time; false keeps the film's own
+opening),
 render ({cq, preset, audio_bitrate, encoder, encode}: encode "browser" has the page encode its own
 frames, see --encode),
 web ({cq, preset, maxrate, bufsize, audio_bitrate}: the copy --web makes, over WEB below),
@@ -904,16 +906,26 @@ def choose_cover(m, page):
             scored.append((float(t), ImageStat.Stat(im.convert("L")).stddev[0]))
 
     times = _sketch.cover_candidates(m)
+    drawn = [0.0] + [
+        t for t in times if t != 0.0
+    ]  # the film's own first frame, then the candidates
     try:
         err = Session(page, on_still=save, size=_sketch.frame(m)).run(
-            "stills=" + ",".join("%r" % t for t in times), fatal=False
+            "stills=" + ",".join("%r" % t for t in drawn), fatal=False
         )
     except Exception as e:  # noqa: BLE001 -- the cover is a nicety; the film must still render
         err = "%s: %s" % (type(e).__name__, e)
-    if err or len(scored) != len(times):
-        print("  cover: %.2fs, the poster -- the candidates were not drawn (%s)" % (times[0], err))
-        return times[0]
-    scored.sort(key=lambda s: times.index(s[0]))
+    if err or len(scored) != len(drawn):
+        # unscored, the film's own opening stays: a stranger picture there is worse than a blank one
+        print("  cover: none, the film's own opening -- the stills were not drawn (%s)" % err)
+        return None
+    own = next(c for t, c in scored if t == 0.0)
+    if _sketch.keeps_opening(own):
+        print(
+            "  cover: none, the film's own opening (contrast %.0f: a picture, not bare paper)" % own
+        )
+        return None
+    scored = sorted((s for s in scored if s[0] in times), key=lambda s: times.index(s[0]))
     t = _sketch.pick_cover(scored)
     print(
         "  cover: %.2fs  (%s)"
@@ -1122,7 +1134,7 @@ def main():
             if cv is False
             else "%.2fs of the film, as frame 0" % float(cv)
             if not isinstance(cv, bool)
-            else "the poster, or a livelier moment if the film ends on paper, as frame 0"
+            else "the film's own opening; the poster (or a livelier moment) only if it opens on bare paper"
         )
     )
     if args.plan:

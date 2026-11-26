@@ -283,6 +283,13 @@ def total(m):
 # film that opens on bare paper shows as an empty rectangle there (2026-09-30)
 COVER_AT = (0.5, 0.65, 0.8, 0.92)  # the stand-ins, as fractions of the film (the tail excluded)
 COVER_LIVELIER = 1.4  # a stand-in beats the poster only with this much more contrast
+# A film whose own first frame is a picture keeps it: a cover is only for one that opens on bare
+# paper (an empty rectangle in a link preview). Players do show frame 0 -- YouTube and a phone's
+# player hold it as the still before play -- so a cover over a real opening is a picture that is
+# not in the film: Warrior Cats episode 1 showed its last moment (a mouse dream) there, then a
+# one-frame flash of a title still to be written on (2026-11-26). Contrast (the luminance's
+# standard deviation, 0-255) above this is a real opening: a night garden scores ~34, flat paper 0.
+COVER_OPENING = 12
 
 
 def cover_candidates(m):
@@ -291,6 +298,11 @@ def cover_candidates(m):
     link-preview card uses, so the card and the first frame agree."""
     d = float(m["duration"])
     return [float(m.get("poster_t", d - 1))] + [round(d * k, 3) for k in COVER_AT]
+
+
+def keeps_opening(contrast):
+    """True when a film's own first frame (its contrast) is a picture, so no cover replaces it."""
+    return contrast > COVER_OPENING
 
 
 def pick_cover(scored):
