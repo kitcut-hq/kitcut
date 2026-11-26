@@ -3273,7 +3273,12 @@ async def versions_make(req):
     was = rec.get("round") or {}
     if key and was.get("key") == key:  # the same asking, again: how it stands
         return web.json_response(
-            {"id": f.id, "round": {k: was.get(k) for k in ("id", "n", "state")}}, status=202
+            {
+                "id": f.id,
+                "round": {k: was.get(k) for k in ("id", "n", "state")},
+                **({"length": was["length"]} if was.get("length") else {}),
+            },
+            status=202,
         )
     if f.id in rounds.in_flight() or peer_has("rounds", f.id):
         return web.json_response(
@@ -3330,6 +3335,9 @@ async def versions_make(req):
     # scenes and characters this episode is brought up to (rounds.refresh_notes)
     refresh = body.get("refresh") if hand is None else None
     try:
+        # another length its maker asked for (kitcut.ai holds it to the account's longest film):
+        # whole seconds the film runs to now; a hand's files keep their own
+        length = rounds.clean_length(body.get("length"), f.length) if hand is None else None
         if refresh is not None:
             refresh, notes = rounds.refresh_notes(f, refresh)
         else:
@@ -3350,11 +3358,11 @@ async def versions_make(req):
             return web.json_response({"error": RESTARTING}, status=503)
         refused = await over_limit(
             client,
-            f.length,
+            max(f.length, length or 0),
             auth,
             at_once_of(req),
             peers.peers(),
-            need=rounds.reserve(f, len(notes), auth, claude.get("model")),
+            need=rounds.reserve(f, len(notes), auth, claude.get("model"), length),
             films_day=False,
         )
         if refused:
@@ -3381,11 +3389,18 @@ async def versions_make(req):
                 claude=claude if hand is None else None,
                 refresh=refresh,
                 rules=films.clean_rules(body.get("rules")),
+                length=length,
             )
         except rounds.RoundError as e:
             return _round_error(e)
+    # the length said back, so kitcut.ai knows this studio is making the film that long
     return web.json_response(
-        {"id": f.id, "round": {"id": job["rid"], "n": job["n"], "state": job["state"]}}, status=202
+        {
+            "id": f.id,
+            "round": {"id": job["rid"], "n": job["n"], "state": job["state"]},
+            **({"length": length} if length else {}),
+        },
+        status=202,
     )
 
 

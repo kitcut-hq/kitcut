@@ -499,7 +499,7 @@ async def main():
         "earlier": "",
         "project": "",
         "extra": "",
-        "length": 210,
+        "length": rounds.LENGTH_KEEP % 210,
         "minutes": 18,
         "notes": "1. [the whole film]",
         "voice": rounds.VOICE % {"runs": rounds.limits(210, 4)["voice_runs"]},
@@ -514,7 +514,8 @@ async def main():
         and 'Never answer a note "not changed" because time is short' in told
         and "`stills` once more at every note's own moment" in told
         and "This round has 7 recordings" in told
-        and "shortened BEFORE recording" in told,
+        and "shortened BEFORE recording" in told
+        and "Length: 210 seconds: the film still ends where it ends" in told,
         "a round is told: a note whole or not at all, every changed shot looked at, the "
         "recordings it has and what they are kept for",
     )
@@ -1134,6 +1135,107 @@ async def main():
         check(
             os.path.isdir(os.path.join(rounds.HAND, fid)),
             "and the hand's files are kept, to be put on top of the film as it is now",
+        )
+
+        # ------------------------------------------------ another length, asked for
+        class Copy:  # what length_text reads of a round's copy
+            def __init__(self, length, voice=True):
+                self.length, self.voice = length, voice
+
+        voice_ok = rounds.can_voice
+        rounds.can_voice = lambda w: w.voice
+        try:
+            longer = rounds.length_text(Copy(220), 205)
+            shorter = rounds.length_text(Copy(190, voice=False), 205)
+            same = rounds.length_text(Copy(205), 205)
+        finally:
+            rounds.can_voice = voice_ok
+        check(
+            "run 220 seconds now, 15 seconds longer than the 205" in longer
+            and "never as empty or still seconds at the end" in longer
+            and "`pause`" in longer
+            and "ends with its ending, at 220 s" in longer
+            and "run 190 seconds now, 15 seconds shorter than the 205" in shorter
+            and "never by cutting the ending off" in shorter
+            and "without a `voice` tool the narration stays where it is" in shorter
+            and same == rounds.LENGTH_KEEP % 205,
+            "a round asked for another length is told where the time goes in or comes out",
+        )
+        check(
+            rounds.length_said(205, 220) == "The film is 3:40 long now (it was 3:25 long)."
+            and rounds.length_said(30, 25)
+            == "The film is 25 seconds long now (it was 30 seconds long)."
+            and rounds.length_said(205, 205) == ""
+            and rounds.clean_length(None, 5) is None
+            and rounds.clean_length(5, 5) is None
+            and rounds.clean_length(20.0, 5) == 20,
+            "the round's answer says a new length, and a length the film has is no change",
+        )
+        cur, was_len = f.record().get("version"), f.length
+        for odd, why in (
+            (3, "under a film's least"),
+            (7.5, "not whole seconds"),
+            (True, "not a number"),
+            (99999, "past any film"),
+        ):
+            r = await c.post(
+                url,
+                json={"key": "len-bad", "from": cur, "notes": NOTES[:1], "length": odd},
+                headers=me,
+            )
+            check(
+                r.status == 400 and (await r.json()).get("reason") == "length",
+                "refused: a length %s (%d)" % (why, r.status),
+            )
+        day, rounds.PER_DAY = rounds.PER_DAY, 99
+        try:
+            r = await c.post(
+                url,
+                json={"key": "len", "from": cur, "notes": NOTES[:1], "length": was_len + 3},
+                headers=me,
+            )
+        finally:
+            rounds.PER_DAY = day
+        b = await r.json()
+        rec, _ = await wait_round(f)
+        rd = rec.get("round") or {}
+        check(
+            r.status == 202 and b.get("length") == was_len + 3 and rd.get("state") == "done",
+            "a round asked to make the film longer is made, and says the length back (%s %s: %s)"
+            % (r.status, rd.get("state"), rd.get("error")),
+        )
+        told = SEEN[-1].get("prompt", "") if SEEN else ""
+        entry = next((x for x in rec.get("versions") or [] if x.get("n") == cur + 1), {})
+        got = rounds._probe(f.path("outputs", "film.mp4")) or (0,)
+        # the video runs on past the film by the Free plan's closing, as the version before did
+        prev = next((x for x in rec.get("versions") or [] if x.get("n") == cur), {})
+        tail = float(prev.get("video_s") or 0) - float(prev.get("duration") or 0)
+        check(
+            "run %d seconds now, 3 seconds longer than the %d" % (was_len + 3, was_len) in told
+            and f.length == was_len + 3
+            and rec.get("length") == was_len + 3
+            and entry.get("duration") == was_len + 3
+            and entry.get("asked") == was_len + 3
+            and abs(got[0] - (was_len + 3 + tail)) < 0.5,
+            "Claude was told the new length, and the film runs to it (%s s, video %.2f s)"
+            % (f.length, got[0]),
+        )
+        check(
+            (entry.get("summary") or "").endswith(
+                "The film is %d seconds long now (it was %d seconds long)." % (was_len + 3, was_len)
+            ),
+            "the round's answer says the new length (%s)" % entry.get("summary"),
+        )
+        r = await c.post(url + "/%d/current" % cur, headers=me)
+        back = f.record()
+        check(
+            r.status == 200 and f.length == was_len and back.get("length") == was_len,
+            "going back to the version before brings its length back (%s)" % back.get("length"),
+        )
+        r = await c.post(url + "/%d/current" % (cur + 1), headers=me)
+        check(
+            r.status == 200 and f.length == was_len + 3 and f.record().get("length") == was_len + 3,
+            "and forward again, the longer one",
         )
 
     rounds._ours(HOME)  # the films here carry read-only files, which Windows will not remove
