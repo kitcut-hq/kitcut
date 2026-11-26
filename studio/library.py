@@ -104,7 +104,16 @@ NAME = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
 # a drawn version is a few KB of code, a painted one a picture
 KEEP = 0
 SEEDED = 24  # members a film starts with (the most recently used)
-MEMORY = 5  # earlier films a film may look at
+MEMORY = 5  # earlier films a film may look at (besides the ones it combines)
+# what a film that combines earlier episodes into one is told of them (seed, note)
+COMBINED = (
+    "This episode combines %d of the project's finished episodes into one film, played straight "
+    "through in this order. Their files are the versions the person approved, with every change "
+    "they asked for: Read each one's film.js and vo.json (and score.json) before you write, and "
+    "build from them. Keep their staging, their spoken lines word for word and who says them, and "
+    "the fixes in them; join the scenes so it plays as one film, with no opening, closing or recap "
+    "repeated between them:"
+)
 LISTED = 20  # film ids the index remembers
 MAX_BYTES = 64 * 1024  # one member's code
 BODY_MAX_BYTES = 192 * 1024  # a body's: every pose, face and ability of a kind of creature, once
@@ -680,8 +689,13 @@ def seed(film):
         os.makedirs(into, exist_ok=True)
         shutil.copyfile(os.path.join(d, "cast.png"), os.path.join(into, "cast.png"))
     memory = []
-    for fid in idx["films"]:
-        if len(memory) >= MEMORY:
+    # the episodes this one combines (kitcut.ai's combine_films: the film's record "combine", in
+    # play order) come first and all of them, whatever MEMORY says: they are what it is made from
+    combine = [x for x in film.record().get("combine") or [] if x != film.id]
+    others = 0
+    for fid in combine + [x for x in idx["films"] if x not in combine]:
+        part = fid in combine
+        if not part and others >= MEMORY:
             break
         f = Film.open(fid)
         if f is None or f.id == film.id or f.state != "done":
@@ -709,6 +723,10 @@ def seed(film):
             # a collection tells its films apart by more than a series keeps: what a film made
             # before those were recorded chose is read from its own files
             about["direction"] = f.direction() | about["direction"]
+        if part:
+            about["combined"] = combine.index(fid) + 1
+        else:
+            others += 1
         _write_json(os.path.join(out, "about.json"), about)
         memory.append({"dir": "library/films/" + sub, "poster": bool(poster)} | about)
     got = {"cast": cast, "films": memory}
@@ -1027,9 +1045,12 @@ def note(film):
     project = rec.get("project") or {}
     kept, collection = keeps(project), is_collection(project)
     cast, memory = got.get("cast") or [], got.get("films") or []
+    # the episodes this one combines, in play order (seed): said apart from the earlier ones
+    joined = sorted((m for m in memory if m.get("combined")), key=lambda m: m["combined"])
+    memory = [m for m in memory if not m.get("combined")]
     pics = got.get("pictures") or []
     voice = got.get("voice") or []
-    if not cast and not memory and not project:
+    if not cast and not memory and not joined and not project:
         return ""
     out = []
     if project:
@@ -1157,6 +1178,13 @@ def note(film):
             "cast/<name>.js, keeping what the series' version has:",
         ]
         out += ["- %s: %s" % (c["name"], c["file"]) for c in clashed]
+    if joined:
+        out += ["" if out else None, COMBINED % len(joined)]
+        out += [
+            '%d. %s: "%s" (%s s, %s)'
+            % (m["combined"], m["dir"], m.get("title"), m.get("length"), m.get("look"))
+            for m in joined
+        ]
     if memory and collection:
         out += [
             "" if out else None,
@@ -2365,7 +2393,7 @@ def _timeline(film):
 
 def film_lines(film):
     """A finished film's narration as its person may go through it: [{i, text, start, dur, key,
-    approved, played_approved}]. approved: the line is one of its project's voice lines now;
+    approved, played_approved, who?}]. approved: the line is one of its project's voice lines now;
     played_approved: the film played it from one."""
     lib = lib_of(film.record())
     have = load(lib)["voice"] if lib and lib[1] else {}
@@ -2382,6 +2410,8 @@ def film_lines(film):
                 "key": key,
                 "approved": key in have,
                 "played_approved": bool(L.get("approved")),
+                # who says it: a cast member's name; none for the narrator
+                **({"who": L["who"]} if L.get("who") else {}),
             }
         )
     return out

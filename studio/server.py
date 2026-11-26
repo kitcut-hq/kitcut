@@ -46,7 +46,10 @@ the day's budget still holds.
                                  "project": {id, name, brief, from_account_cast}: an episode of
                                  the site's project, with the project's library (library.py);
                                  its "keep", a list from cast, look, voice, music, is what its
-                                 films share: without one it is a series and keeps them all
+                                 films share: without one it is a series and keeps them all.
+                                 "combine": [film ids] (with a project): an episode made of
+                                 2 to COMBINE_MAX of the project's finished episodes, played
+                                 through in that order; their files are its start (combine_of)
     GET  /api/library            the asker's cast and films; ?project=<id>: that project's, and
                                  its pictures and voice lines. Also GET /api/library/{name}/
                                  thumb.png, DELETE /api/library/{name} (a cast member), each
@@ -1261,6 +1264,37 @@ def template_of(body, local):
     return t, frame, None
 
 
+COMBINE_MAX = 12  # episodes one film may combine
+
+
+def combine_of(want, client, project):
+    """The episodes a new one combines (body "combine": film ids in play order): ([ids], None),
+    ([], None) when it combines none, or (None, why). Each must be the client's own finished
+    episode of the same project: a stranger's film, or another project's, is never read."""
+    if want is None:
+        return [], None
+    if not project:
+        return None, "combine is for an episode of a project"
+    if not isinstance(want, list) or not 2 <= len(want) <= COMBINE_MAX:
+        return None, "combine is a list of 2 to %d film ids" % COMBINE_MAX
+    ids = []
+    for fid in (str(x) for x in want):
+        if not films.ID.match(fid) or fid in ids:
+            return None, "combine: %s is not a film id, or is named twice" % fid[:40]
+        f = films.Film.open(fid)
+        rec = f.record() if f is not None else {}
+        if (
+            f is None
+            or not clients.same(rec.get("client"), client)
+            or (rec.get("project") or {}).get("id") != project["id"]
+        ):
+            return None, "combine: %s is not an episode of this project" % fid
+        if f.state != "done":
+            return None, "combine: %s is not finished" % fid
+        ids.append(fid)
+    return ids, None
+
+
 async def create(req):
     if DRAINING or MODE != "serving":
         return web.json_response({"error": RESTARTING}, status=503)
@@ -1407,6 +1441,11 @@ async def create(req):
     if err:
         return web.json_response({"error": err}, status=400)
     client = client_of(req)
+    # the project's finished episodes this one combines into one, in play order (kitcut.ai's
+    # combine_films): their files are its starting point (library.seed)
+    combine, err = await asyncio.to_thread(combine_of, body.get("combine"), client, project)
+    if err:
+        return web.json_response({"error": err, "reason": "combine"}, status=400)
     # the project's characters the prompt names as @name (library.mentioned): each will be in the
     # film; a near miss (@mum for @mom) is said now, before anything is held or made
     named = []
@@ -1533,6 +1572,8 @@ async def create(req):
             f.update(preview=True)
         if named:  # the characters it must have (library.named_note)
             f.update(characters=named)
+        if combine:  # the episodes it is made from, before its library is given (library.seed)
+            f.update(combine=combine)
         if tpl:  # its code and its own sample, the starting point (templates.seed)
             await asyncio.to_thread(templates.seed, f, tpl)
         uploads.release(uploader, attached + faces)  # the film has its own copies now
