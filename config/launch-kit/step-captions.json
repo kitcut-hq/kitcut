@@ -1,0 +1,36 @@
+{
+  "_comment": "Example for scripts/step-captions.py: a 9:16 reel's step cards in the Mister Blocks grammar (the Instafill Product Hunt reel, 2026-11-24). Copy into projects/<id>/; outdir is beside the spec. 2-6 words a card; '*...*' is the accent, '|' forces the line break. For a 16:9 film beside a phone set canvas [1920,1080], cx 1280 (the empty right half), size 68, bottom 430.",
+  "canvas": [1080, 1920],
+  "outdir": "temp/caps",
+  "style": {
+    "font": "fonts/Inter-VF.ttf",
+    "font_variation": "ExtraBold",
+    "size": 66,
+    "line_h": 80,
+    "kicker_font": "fonts/IBMPlexMono-Bold.ttf",
+    "kicker_size": 26,
+    "pad_x": 40,
+    "pad_y": 22,
+    "bottom": 300,
+    "max_w": 900,
+    "radius": 18,
+    "shadow": 8,
+    "shadow_color": "#000000",
+    "card": "#1A1A1A",
+    "ink": "#FFFFFF",
+    "accent": "#F5A623",
+    "balance": true,
+    "one_line_max": 560
+  },
+  "captions": [
+    {"id": "k0", "kicker": "T H E   P R O B L E M", "text": "A letter full|of *details?*"},
+    {"id": "k0b", "kicker": "T H E   P R O B L E M", "text": "And a form|*to fill?*"},
+    {"id": "k1", "kicker": "S T E P   1", "text": "Just snap the *request.*"},
+    {"id": "k2", "kicker": "S T E P   2", "text": "Open the *Instafill Agent.*"},
+    {"id": "k5b", "kicker": "S T E P   4", "text": "Flat PDF?|It makes it *fillable.*"},
+    {"id": "k8", "kicker": "T H E   R E S U L T", "text": "One photo in.|*A filled form* out."}
+  ],
+  "badges": [
+    {"id": "speed", "text": "8×  ·  REAL WAIT 50 SEC", "fast_forward": true, "top": 40, "right": 40, "size": 26}
+  ]
+}

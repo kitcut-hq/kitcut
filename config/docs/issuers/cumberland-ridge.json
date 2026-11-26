@@ -1,0 +1,17 @@
+{
+  "_comment": "Invented workers' compensation carrier. Plain, green, sans -- a regional mutual's information page.",
+  "name": "Cumberland Ridge Mutual Insurance Company",
+  "tagline": "Workers' Compensation  ·  NAIC 23874",
+  "address": "4400 Harding Place, Suite 300, Nashville, TN 37215",
+  "phone": "(615) 555-0119",
+  "web": "cumberlandridgemutual.com",
+  "mark": "CR",
+  "ink": "#1d2a24",
+  "muted": "#5f6f67",
+  "paper": "#ffffff",
+  "accent": "#2f6b4f",
+  "rule": "#cfd9d3",
+  "band": "#eef4f0",
+  "font_head": "Arial, 'Helvetica Neue', sans-serif",
+  "font_body": "Arial, 'Helvetica Neue', sans-serif"
+}

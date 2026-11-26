@@ -15,6 +15,12 @@ python scripts/make-card.py --list                      # templates, brands, sty
 python scripts/make-card.py --spec projects/<id>/cards/outro.json --png
 ```
 
+Step captions in the Mister Blocks grammar (a kicker pill over 2-6 heavy words)
+are `step-captions.py`, and a launch end card without a white panel (the frame
+in the brand's ink, an underlined accent phrase, a mono URL pill, no https) is
+in the `launch-kit` skill (`examples/end_card.py`). An owner rejected a white
+end block as not fitting the film's colours.
+
 A card is three separable things, and keeping them separate is the whole point:
 
 | | lives in | changing it |

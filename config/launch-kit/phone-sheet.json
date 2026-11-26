@@ -1,0 +1,13 @@
+{
+  "_comment": "Example for scripts/phone-sheet.py (the Instafill 16:9 Desk Demo, variant A, 2026-11-24). Copy into projects/<id>/; paths are beside the spec. phone: the screen track (1080x2400), sheet: page-tour.py's output at the card's size. sheet_from: the section second the filled PDF opens on the phone (read it off the rendered phone track with ffprobe -- edl-cut frame-rounds each segment, so a sum of the EDL is ~0.1 s off). dur: the phone track's real duration.",
+  "bg": "temp/desk_bg.png",
+  "phone": "temp/phone.mp4",
+  "phone_size": [1080, 2400],
+  "sheet": "temp/sheet.mp4",
+  "phone_box": [210, 66, 948],
+  "card": [700, 40, 1160, 850],
+  "sheet_from": 28.3,
+  "fly": 0.7,
+  "dur": 44.7,
+  "out": "temp/middle.mp4"
+}

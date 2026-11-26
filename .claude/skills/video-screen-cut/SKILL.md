@@ -25,6 +25,11 @@ python scripts/edl-cut.py --manifest projects/<id>/edit.json --frame 1:33   # ch
 python scripts/edl-cut.py --manifest projects/<id>/edit.json
 ```
 
+**A phone demo for a launch** (a 9:16 reel, a 16:9 desk demo, a gallery): the
+`launch-kit` skill. It adds step cards (`step-captions.py`), a readable tour of
+the filled page (`page-tour.py`), the 16:9 phone-plus-sheet middle
+(`phone-sheet.py`) and `"bg": "blur"` bars beside a phone screen on 9:16.
+
 The counter is computed from **source** time per film frame, so it is right
 at any speed. Measure its `start`/`end` to the frame: scan a crop's mean
 brightness at 1/60 s for the click, and for the result appearing. If the app

@@ -58,6 +58,11 @@ _TAG = re.compile(r"\{\{([#^/]?)\s*([\w.]+)\s*\}\}|\{\{\{\s*([\w.]+)\s*\}\}\}")
 
 
 def _lookup(ctx, key):
+    # `{{.}}` is the current item of a list of plain values. Splitting "." on
+    # dots gives two empty parts, so without this case `{{.}}` always rendered
+    # empty -- silently: a letter's address block came out blank.
+    if key == ".":
+        return ctx.get(".") if isinstance(ctx, dict) else None
     cur = ctx
     for part in key.split("."):
         if isinstance(cur, dict) and part in cur:
