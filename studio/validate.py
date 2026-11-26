@@ -52,7 +52,6 @@ VO_KEYS = set(VO_PINNED) | {
 # "who": who speaks a line -- one of the film's people (film.CAPS "people") or a character of its
 # project's cast (drawn or painted); "cast" gives each their voice
 VO_LINE_KEYS = {"text", "start", "who", "pause"}
-MAX_PAUSE_S = 15  # the quiet a line may ask for before it: a gag's beat, a sunset without words
 MAX_LINE_CHARS = 300  # and at most film.limits()["lines"] lines
 PAINT_KEYS = set(PAINT_PINNED) | {"style", "images", "cutouts", "style_ref", "quality"}
 # a cut-out (film.CAPS "cutouts") is painted on a canvas of its own shape
@@ -176,8 +175,10 @@ def _vo(d, max_lines, length=60, people=(), characters=(), voices=None):
             out.append("vo.json: line %d is over %d characters" % (i, MAX_LINE_CHARS))
         if set(ln) - VO_LINE_KEYS:
             out.append("vo.json: line %d may only have text (and pause, start, who)" % i)
-        if "pause" in ln and not _num(ln["pause"], 0, MAX_PAUSE_S):
-            out.append("vo.json: line %d pause is seconds, 0-%d" % (i, MAX_PAUSE_S))
+        # the quiet a line asks for before it (a gag's beat, a sunset without words, an opening
+        # in front of the episode): any length (the owner, 2026-11-26: "remove those limits")
+        if "pause" in ln and not _num(ln["pause"], 0, float("inf")):
+            out.append("vo.json: line %d pause is seconds, 0 or more" % i)
         if "who" in ln and not own and ln["who"] not in cast:
             out.append("vo.json: line %d who %r has no voice in cast" % (i, ln["who"]))
         elif "who" in ln and not own and not voices and ln["who"] not in speakers:

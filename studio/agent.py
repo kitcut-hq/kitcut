@@ -348,13 +348,15 @@ def ask(film, recent=()):
     n = film.asked
     text = (
         "Make the film.\n\nLength: %d seconds: what was asked for, and what to write to. If the "
-        "narration as recorded needs a little more, the studio lengthens the film to fit it (to "
-        "%d s at most) rather than cut its last words. Narration: about %d words, ending by "
+        "narration as recorded needs more, the studio lengthens the film to fit it%s rather "
+        "than cut its last words. Narration: about %d words, ending by "
         "about %d s. Your working time: about %d minutes (waiting for the machine is not "
         "counted); keep the last few for the music, the cues and the sound check.\n\nPrompt: %s"
         % (
             n,
-            may_run_to(n, film.record().get("frame")),
+            (lambda top: "" if top is None else " (to %d s at most)" % top)(
+                may_run_to(n, film.record().get("frame"))
+            ),
             narration_words(n),
             n - closing_s(n),
             limits(n)["claude_s"] // 60,
